@@ -755,7 +755,8 @@ async function loadBackup() {
     if (status.last) lines.push("Last: " + fmtDate(status.last.date));
   }
   lines.push(status.card_present ? "Card connected" : "Card not connected");
-  if (status.last_event) lines.push(status.last_event);
+  if (status.last_event) lines.push("Last event: " + status.last_event);
+  state.backupStamp = `${status.commits}|${status.last_event}`;
   document.getElementById("bk-status").replaceChildren(...lines.map((l) => el("div", {}, l)));
   document.getElementById("bk-snapshot").disabled = !status.initialized || !status.card_present;
 
@@ -903,6 +904,16 @@ async function pollCard() {
     await loadLibrary();
   }
   state.cardPresent = present;
+  await refreshBackupIfVisible();
+}
+
+// Reload the backup view when snapshots or events changed while it is shown
+async function refreshBackupIfVisible() {
+  if (!document.getElementById("view-backup").classList.contains("active")) return;
+  try {
+    const status = await api("GET", "/api/backup/status");
+    if (`${status.commits}|${status.last_event}` !== state.backupStamp) await loadBackup();
+  } catch (_) { /* server unreachable */ }
 }
 
 // ---------- start ----------

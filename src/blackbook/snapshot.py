@@ -63,6 +63,9 @@ snapshot_on_connect = true
 
 # Create a snapshot automatically before blackbook writes to the card
 snapshot_before_write = true
+
+# Create a snapshot automatically after blackbook saved or created a patch
+snapshot_after_write = true
 """
 
 GITATTRIBUTES = """\
@@ -85,6 +88,7 @@ class Config:
     exclude: list[str]
     snapshot_on_connect: bool
     snapshot_before_write: bool
+    snapshot_after_write: bool
     minor: list[str]
 
     @classmethod
@@ -98,6 +102,7 @@ class Config:
             exclude=[str(p) for p in merged["exclude"]],
             snapshot_on_connect=bool(merged["snapshot_on_connect"]),
             snapshot_before_write=bool(merged["snapshot_before_write"]),
+            snapshot_after_write=bool(merged["snapshot_after_write"]),
             minor=[str(p) for p in merged["minor"]],
         )
 

@@ -148,10 +148,14 @@ def test_api_backup_flow_and_snapshot_before_write(card: Path, tmp_path: Path, m
         make_wav(card / "Projects" / "Song" / "RC000005.wav")
         assert client.post("/api/build/apply", json=body).status_code == 200
 
-        subjects = [c["subject"] for c in client.get("/api/backup/log").json()]
-        assert subjects[0].startswith("Before creating UserPatches\\OneShots\\Kit: 1 added")
-        changes = client.get("/api/backup/commit", params={"id": client.get("/api/backup/log").json()[0]["id"]}).json()
+        log = client.get("/api/backup/log").json()
+        assert log[1]["subject"].startswith("Before creating UserPatches\\OneShots\\Kit: 1 added")
+        changes = client.get("/api/backup/commit", params={"id": log[1]["id"]}).json()
         assert changes == [{"status": "A", "path": "Projects/Song/RC000005.wav"}]
+        assert log[0]["subject"].startswith("After creating UserPatches\\OneShots\\Kit:")
+        after = {c["path"] for c in client.get("/api/backup/commit", params={"id": log[0]["id"]}).json()}
+        assert "UserPatches/OneShots/Kit/patch.xml" in after
+        assert "snapshot created: After creating" in client.get("/api/backup/status").json()["last_event"]
 
         config = client.get("/api/backup/config").json()["text"]
         assert "include_factory = false" in config

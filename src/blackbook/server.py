@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import threading
+import time
 import tomllib
 from contextlib import asynccontextmanager
 from dataclasses import asdict
@@ -157,9 +158,16 @@ class SnapshotService:
             return
         try:
             commit = repo.snapshot(self.card.root, reason, automatic=True)
-            self.last_event = f"{reason}: " + (commit.subject if commit else "no changes")
+            self.record(reason, commit)
         except (SnapshotError, OSError) as exc:
-            self.last_event = f"{reason} failed: {exc}"
+            self.last_event = f"{time.strftime('%H:%M')} {reason} failed: {exc}"
+
+    def record(self, reason: str, commit) -> None:
+        stamp = time.strftime("%H:%M")
+        if commit:
+            self.last_event = f"{stamp} snapshot created: {commit.subject}"
+        else:
+            self.last_event = f"{stamp} {reason}: no changes since the last snapshot, none created"
 
     def before_write(self, what: str) -> None:
         repo = self.repo
@@ -167,7 +175,19 @@ class SnapshotService:
             return
         if repo.config().snapshot_before_write:
             # A failing snapshot blocks the write
-            repo.snapshot(self.card.root, f"Before {what}", automatic=True)
+            reason = f"Before {what}"
+            self.record(reason, repo.snapshot(self.card.root, reason, automatic=True))
+
+    def after_write(self, what: str) -> None:
+        repo = self.repo
+        if repo is None or not repo.initialized or not repo.config().snapshot_after_write:
+            return
+        try:
+            reason = f"After {what}"
+            self.record(reason, repo.snapshot(self.card.root, reason, automatic=True))
+        except (SnapshotError, OSError) as exc:
+            # The card is already written, a failing snapshot only gets reported
+            self.last_event = f"{time.strftime('%H:%M')} After {what} failed: {exc}"
 
     def watch(self) -> None:
         present = False
@@ -522,8 +542,10 @@ def create_app(
         plan = make_plan(body)
         if not plan.ok:
             raise HTTPException(400, "; ".join(plan.errors))
-        snapshots.before_write(f"{'saving' if plan.mode == 'edit' else 'creating'} {plan.target_ref}")
+        what = f"{'saving' if plan.mode == 'edit' else 'creating'} {plan.target_ref}"
+        snapshots.before_write(what)
         written = builder.apply(card, plan, backup)
+        snapshots.after_write(what)
         return {"ref": plan.target_ref, "written": written}
 
     # ---------- backup ----------
