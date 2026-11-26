@@ -34,6 +34,15 @@ blackbook is free and stays free. If it helps you, you can buy me a coffee on [K
 
 What comes next is in the roadmap at the top. Tell me what you need most.
 
+## Screenshots
+
+| | |
+|---|---|
+| ![Library with patch details, tags and samples](docs/images/library.png) | ![Audio editor with trim, fades, gain, normalize and snap to zero](docs/images/audio-editor.png) |
+| **Library:** factory and user patches, tags, samples per pad | **Audio editor:** cut, fade, normalize, every edge on a zero crossing |
+| ![Pad editor with envelope and LFO graphics](docs/images/pad-editor-env-lfo.png) | ![One-shot builder with pad grid and waveform](docs/images/builder-oneshot.png) |
+| **Pad editor:** envelope and LFO as on the device | **Builder:** 16 pads, start and length on the waveform |
+
 ## Installation and start
 
 > [!IMPORTANT]
