@@ -64,9 +64,8 @@ class ProjectSummary:
 
 class Card:
     def __init__(self, root: Path):
+        # The card may be absent, for example while the blackbox is not in microSD mode
         self.root = root.resolve()
-        if not self.root.is_dir():
-            raise FileNotFoundError(f"card root not found: {root}")
 
     def index_path(self, patch_root: str) -> Path:
         return self.root / patch_root / "patchindex.xml"

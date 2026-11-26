@@ -156,3 +156,12 @@ def test_api_backup_flow_and_snapshot_before_write(card: Path, tmp_path: Path, m
         config = client.get("/api/backup/config").json()["text"]
         assert "include_factory = false" in config
         assert client.put("/api/backup/config", json={"text": "include = ["}).status_code == 400
+
+
+def test_server_starts_without_card(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    app = create_app(tmp_path / "absent", [], tmp_path / "copies")
+    with TestClient(app) as client:
+        assert client.get("/api/card/status").json() == {"present": False}
+        assert client.get("/api/patches").json() == []
+        assert client.get("/api/projects").json() == []

@@ -70,6 +70,8 @@ def serve(argv: list[str]) -> None:
     )
     url = f"http://127.0.0.1:{args.port}/"
     print(f"blackbook running at {url}")
+    if not Path(args.card).is_dir():
+        print(f"card not found at {args.card}, waiting for it (switch the blackbox to microSD mode)")
     if not args.no_browser:
         webbrowser.open(url)
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
