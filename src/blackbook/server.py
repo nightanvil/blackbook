@@ -9,13 +9,15 @@ import sys
 import threading
 import time
 import tomllib
+import xml.etree.ElementTree as ET
 from collections import deque
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -30,6 +32,19 @@ from .snapshot import CONFIG_NAME, SnapshotError, SnapshotRepo, default_target, 
 from .wav import WavError, read_info
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+DAMAGED_XML = (
+    "{name} is empty or damaged. This happens when the card is removed before a save has reached it."
+    " An older version can be restored from the backup."
+)
+
+
+def flush_to_disk() -> None:
+    """Write cached data to all drives so the card can be removed safely."""
+    if hasattr(os, "sync"):
+        os.sync()
 
 
 class Sources:
@@ -286,15 +301,29 @@ def create_app(
 
     app = FastAPI(title="blackbook", lifespan=lifespan)
 
+    @app.middleware("http")
+    async def flush_after_write(request: Request, call_next):
+        response = await call_next(request)
+        if request.method in WRITE_METHODS:
+            await run_in_threadpool(flush_to_disk)
+        return response
+
+    @app.exception_handler(ET.ParseError)
+    async def damaged_xml(_request: Request, _exc: ET.ParseError) -> JSONResponse:
+        return JSONResponse({"detail": DAMAGED_XML.format(name="The XML file")}, status_code=422)
+
     def make_base(body: BuildIn) -> builder.Base | None:
         if not body.base_ref or body.mode == "new":
             return None
         if body.mode not in ("edit", "copy"):
             raise HTTPException(400, f"unknown mode: {body.mode}")
         try:
-            return builder.Base.load(card.patch_dir(body.base_ref), body.mode)
+            base = builder.Base.load(card.patch_dir(body.base_ref), body.mode)
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
+        if not base.text.strip():
+            raise HTTPException(422, DAMAGED_XML.format(name="patch.xml"))
+        return base
 
     def make_plan(body: BuildIn) -> builder.Plan:
         base = make_base(body)
@@ -418,6 +447,8 @@ def create_app(
             track_type, samples = card.patch_samples(ref)
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
+        except ET.ParseError as exc:
+            raise HTTPException(422, DAMAGED_XML.format(name="patch.xml")) from exc
         patch_dir = card.patch_dir(ref)
         preview = patch_dir / "preview.wav"
         root = ref.replace("/", "\\").split("\\")[0]
@@ -451,6 +482,8 @@ def create_app(
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
         text = (patch_dir / "patch.xml").read_bytes().decode("utf-8-sig")
+        if not text.strip():
+            raise HTTPException(422, DAMAGED_XML.format(name="patch.xml"))
         all_cells = patchedit.cells(text)
         track = re.search(r'<track type="(\w+)"', text)
         track_type = track.group(1) if track else ""

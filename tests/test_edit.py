@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from blackbook import builder, patchedit, settings
+from blackbook import builder, patchedit, server, settings
 from blackbook.backup import Backup
 from blackbook.card import Card
 from blackbook.mapping import automap
@@ -264,3 +264,30 @@ def test_edit_adds_cells_for_pad_the_device_never_used() -> None:
     assert all_cells[-1].attrs["filename"] == "New.wav"
     assert '<seqevent pos="0" note="36"/>' in xml
     assert xml.endswith("        </track>\n    </session>\n</document>\n")
+
+
+def test_empty_patch_xml_reports_damage(card: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    patch = build_kit(card, tmp_path)
+    (patch / "patch.xml").write_bytes(b"")
+    app = create_app(card, [], tmp_path / "copies")
+    ref = "UserPatches\\OneShots\\Kit"
+    with TestClient(app) as client:
+        for url in ("/api/patch", "/api/patch/load"):
+            response = client.get(url, params={"ref": ref})
+            assert response.status_code == 422
+            assert "empty or damaged" in response.json()["detail"]
+        body = {"type": "oneshot", "name": "Kit", "tags": [], "pads": [], "base_ref": ref, "mode": "edit"}
+        assert client.post("/api/build/plan", json=body).status_code == 422
+
+
+def test_writes_are_flushed(card: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    calls: list[int] = []
+    monkeypatch.setattr(server, "flush_to_disk", lambda: calls.append(1))
+    app = create_app(card, [], tmp_path / "copies")
+    with TestClient(app) as client:
+        client.get("/api/patches")
+        assert calls == []
+        client.post("/api/build/plan", json={"type": "oneshot", "name": "X", "tags": [], "pads": []})
+        assert calls == [1]

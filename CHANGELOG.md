@@ -9,6 +9,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 - New icon in the top bar, the help, the browser tab and the README.
 
+### Fixed
+
+- After every change to the card, blackbook writes all cached data to the card, so removing it right after a save no longer leaves an empty patch.xml.
+- A patch with an empty or damaged patch.xml shows an explanation instead of "Internal Server Error".
+
 ### Documentation
 
 - README: blackbook updates itself, stated at the top and in Updating. Windows is tested; macOS is not tested and needs feedback from Mac users.
