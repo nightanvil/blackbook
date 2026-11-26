@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>blackbook</title>
-  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="/static/icon-64.png" type="image/png">
+  <link rel="apple-touch-icon" href="/static/icon-512.png">
   <script>
     // Apply the stored theme before the first paint
     let t = "dark";
@@ -16,7 +17,7 @@
 <body>
   <header class="topbar">
     <div class="topinner">
-      <div class="brand"><img src="/static/icon.svg" alt="" class="logo">blackbook <span class="muted sub">blackbox 2 organizer</span><span class="ver muted" id="code-commit"></span></div>
+      <div class="brand"><img src="/static/icon-512.png" alt="" class="logo">blackbook <span class="muted sub">blackbox 2 organizer</span><span class="ver muted" id="code-commit"></span></div>
       <nav>
         <button data-view="library" class="active">Library</button>
         <button data-view="build">Build</button>
@@ -201,7 +202,7 @@
 
   <div class="helpov" id="help" hidden>
     <div class="helpbox" role="dialog" aria-modal="true" aria-label="Help">
-      <div class="helphead"><img src="/static/icon.svg" alt="" class="logo"><strong>blackbook help</strong><span class="grow"></span><button class="iconbtn" id="help-close" type="button" title="Close (Esc)" aria-label="Close">✕</button></div>
+      <div class="helphead"><img src="/static/icon-512.png" alt="" class="logo"><strong>blackbook help</strong><span class="grow"></span><button class="iconbtn" id="help-close" type="button" title="Close (Esc)" aria-label="Close">✕</button></div>
       <div class="helpcols">
         <nav class="helpnav" id="help-nav"></nav>
         <div class="helpbody" id="help-body"></div>

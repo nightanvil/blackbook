@@ -1,4 +1,4 @@
-# <img src="src/blackbook/static/icon.svg" alt="" width="40" align="top"> blackbook
+# <img src="src/blackbook/static/icon-512.png" alt="" width="40" align="top"> blackbook
 
 **blackbook** is an unofficial organizer for the microSD card of the **1010music blackbox 2**. It runs on your computer and opens in your web browser. Nothing is uploaded anywhere.
 
