@@ -111,4 +111,6 @@ blackbook/
 
 In a git checkout the check runs `git fetch` and reports how many commits the upstream branch is ahead; updating stays `git pull`.
 
-To publish a release: raise `version` in `pyproject.toml` and `__version__` in `src/blackbook/__init__.py`, commit, tag `vX.Y.Z` and create a GitHub release from the tag.
+Every user-visible change gets an entry under `[Unreleased]` in [CHANGELOG.md](../CHANGELOG.md) in the same commit (Keep a Changelog: Added, Changed, Fixed, Removed, Documentation).
+
+To publish a release: rename `[Unreleased]` in `CHANGELOG.md` to the new version with the date and add an empty `[Unreleased]` above it, update the comparison links at the end, raise `version` in `pyproject.toml` and `__version__` in `src/blackbook/__init__.py`, commit, tag `vX.Y.Z` and create a GitHub release from the tag with the changelog section as release notes.
