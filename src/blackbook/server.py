@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from . import builder, patchedit, settings
 from .backup import Backup
 from .card import Card, browse
-from .cardpath import resolve_sample_reference
+from .cardpath import INVALID_NAME_CHARS, resolve_sample_reference
 from .mapping import Zone, assign_key_ranges, automap, note_name
 from .patchindex import FACTORY_TAGS
 from .snapshot import CONFIG_NAME, SnapshotError, SnapshotRepo
@@ -27,10 +27,11 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 
 class Sources:
-    """Named roots for sample browsing: the card and optional local libraries."""
+    """Named roots for sample browsing: the card, the local inbox and optional libraries."""
 
-    def __init__(self, card: Card, libraries: list[Path]):
-        self.roots: dict[str, Path] = {"card": card.root}
+    def __init__(self, card: Card, libraries: list[Path], inbox: Path):
+        inbox.mkdir(parents=True, exist_ok=True)
+        self.roots: dict[str, Path] = {"card": card.root, "inbox": inbox.resolve()}
         for i, lib in enumerate(libraries, start=1):
             self.roots[f"lib{i}"] = lib.resolve()
 
@@ -43,6 +44,19 @@ class Sources:
         if path != base and not path.is_relative_to(base):
             raise HTTPException(403, "path outside of source root")
         return path
+
+
+class ImportPrepareIn(BaseModel):
+    root: str
+    path: str = ""
+
+
+def import_name(name: str) -> str:
+    """File name that is valid on FAT32/exFAT and ends with .wav."""
+    base = Path(name.replace("\\", "/")).name
+    stem = Path(base).stem if base.lower().endswith(".wav") else base
+    stem = "".join("_" if c in INVALID_NAME_CHARS or ord(c) < 32 else c for c in stem).rstrip(" .") or "sample"
+    return stem + ".wav"
 
 
 class PadIn(BaseModel):
@@ -169,10 +183,14 @@ class SnapshotService:
 
 
 def create_app(
-    card_root: Path, libraries: list[Path], backup_dir: Path, snapshot_target: Path | None = None
+    card_root: Path,
+    libraries: list[Path],
+    backup_dir: Path,
+    snapshot_target: Path | None = None,
+    inbox_dir: Path | None = None,
 ) -> FastAPI:
     card = Card(card_root)
-    sources = Sources(card, libraries)
+    sources = Sources(card, libraries, inbox_dir or settings.REPO_DIR / ".blackbook" / "inbox")
     backup = Backup(backup_dir, card.root)
     target = snapshot_target or (Path(settings.get("backup_target")) if settings.get("backup_target") else None)
     snapshots = SnapshotService(card, target)
@@ -232,6 +250,56 @@ def create_app(
             spec = builder.MultisampleSpec(body.name.strip(), body.tags, zones, body.track_gain, body.gain)
             return builder.plan_multisample(card, spec, base)
         raise HTTPException(400, f"unknown patch type: {body.type}")
+
+    # ---------- import of files dropped from outside the browser ----------
+
+    def import_folder(root: str, path: str) -> Path:
+        if root not in ("card", "inbox"):
+            raise HTTPException(403, "files can only be imported into the card or the inbox")
+        if root == "card":
+            if not snapshots.card_present():
+                raise HTTPException(409, "card not connected")
+            first = path.strip("/").split("/")[0].casefold()
+            if first in ("patches", ""):
+                raise HTTPException(403, "choose a folder on the card first, factory patches are read only")
+        folder = sources.resolve(f"{root}:{path}")
+        return folder
+
+    @app.post("/api/import/prepare")
+    def import_prepare(body: ImportPrepareIn) -> dict:
+        folder = import_folder(body.root, body.path)
+        if body.root == "card":
+            snapshots.before_write(f"importing into {body.path.strip('/')}")
+        return {"folder": str(folder)}
+
+    @app.post("/api/import")
+    async def import_file(request: Request, root: str, name: str, path: str = "") -> dict:
+        folder = import_folder(root, path)
+        data = await request.body()
+        if len(data) < 12 or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+            raise HTTPException(400, f"{name} is not a WAV file")
+        folder.mkdir(parents=True, exist_ok=True)
+
+        filename = import_name(name)
+        target = folder / filename
+        n = 2
+        while target.exists():
+            if target.read_bytes() == data:
+                break
+            target = folder / f"{Path(filename).stem}_{n}.wav"
+            n += 1
+        if not target.exists():
+            target.write_bytes(data)
+            try:
+                read_info(target)
+            except (WavError, OSError) as exc:
+                target.unlink()
+                raise HTTPException(400, f"{name}: {exc}") from exc
+            if root == "card":
+                backup.record_created(target)
+
+        rel = target.relative_to(sources.roots[root]).as_posix()
+        return {"source": f"{root}:{rel}", "name": target.name}
 
     @app.get("/api/card/status")
     def card_status() -> dict:

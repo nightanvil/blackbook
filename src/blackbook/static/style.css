@@ -174,7 +174,7 @@ td input { width: 60px; padding: 3px 6px; }
 .pad .sample { word-break: break-all; line-height: 1.2; }
 .pad.filled { border-color: #5a4a2a; background: #221d14; }
 .pad.selected { outline: 2px solid var(--accent); }
-.pad.over, .dropzone.over { outline: 2px dashed var(--accent); }
+.pad.over, .dropzone.over, #br-list.over { outline: 2px dashed var(--accent); }
 
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
 .pad-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; align-items: end; }

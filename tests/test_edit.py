@@ -185,3 +185,37 @@ def test_api_load_and_edit(card: Path, tmp_path: Path, monkeypatch) -> None:
         assert client.post("/api/build/apply", json=body).status_code == 200
         again = client.get("/api/patch/load", params={"ref": "UserPatches\\OneShots\\Kit"}).json()
         assert again["pads"][0]["gain"] == -1.5
+
+
+def test_import_dropped_files(card: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    (card / "bb2-stng.mml").write_text("settings")
+    wav = (card / "Samples" / "Pack" / "BD.wav").read_bytes()
+    app = create_app(card, [], tmp_path / "copies", inbox_dir=tmp_path / "inbox")
+    with TestClient(app) as client:
+
+        def upload(root: str, path: str, name: str, data: bytes):
+            return client.post("/api/import", params={"root": root, "path": path, "name": name}, content=data)
+
+        # Inbox: name sanitized, identical content reused, different content gets a suffix
+        first = upload("inbox", "", "Kick:Hard?.WAV", wav).json()
+        assert first == {"source": "inbox:Kick_Hard_.wav", "name": "Kick_Hard_.wav"}
+        assert upload("inbox", "", "Kick:Hard?.wav", wav).json()["name"] == "Kick_Hard_.wav"
+        other = (card / "Samples" / "Pack" / "SD.wav").read_bytes()
+        assert upload("inbox", "", "Kick:Hard?.wav", other).json()["name"] == "Kick_Hard__2.wav"
+
+        # Card: only below a folder other than Patches
+        assert client.post("/api/import/prepare", json={"root": "card", "path": "Samples/New"}).status_code == 200
+        assert upload("card", "Samples/New", "a.wav", wav).json()["source"] == "card:Samples/New/a.wav"
+        assert (card / "Samples" / "New" / "a.wav").read_bytes() == wav
+        assert upload("card", "Patches/OneShots", "a.wav", wav).status_code == 403
+        assert upload("card", "", "a.wav", wav).status_code == 403
+        assert upload("card", "../outside", "a.wav", wav).status_code == 403
+
+        # Only WAV files are accepted
+        assert upload("inbox", "", "notes.wav", b"hello world, no wav").status_code == 400
+
+        # Inbox files can be used as pad sources
+        body = {"type": "oneshot", "name": "Dropped", "tags": [], "pads": [{"slot": 8, "source": first["source"]}]}
+        assert client.post("/api/build/apply", json=body).status_code == 200
+        assert (card / "UserPatches" / "OneShots" / "Dropped" / "Kick_Hard_.wav").is_file()

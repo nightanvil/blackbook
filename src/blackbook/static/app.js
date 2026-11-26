@@ -246,7 +246,9 @@ async function showPatch(ref) {
 
 async function loadBrowser() {
   const select = document.getElementById("br-root");
-  select.replaceChildren(...state.roots.map((r) => el("option", { value: r.id }, r.id === "card" ? "Card" : r.path)));
+  const label = (r) => (r.id === "card" ? "Card" : r.id === "inbox" ? "Inbox" : r.path);
+  select.replaceChildren(...state.roots.map((r) => el("option", { value: r.id }, label(r))));
+  setupBrowserDrop();
   select.value = state.browse.root;
   select.addEventListener("change", () => openFolder(select.value, ""));
   try {
@@ -270,7 +272,7 @@ function renderBrowser() {
   const crumbs = document.getElementById("br-crumbs");
   const parts = path ? path.split("/") : [];
   crumbs.replaceChildren(
-    el("span", { onclick: () => openFolder(root, "") }, root === "card" ? "Card" : root),
+    el("span", { onclick: () => openFolder(root, "") }, root === "card" ? "Card" : root === "inbox" ? "Inbox" : root),
     ...parts.flatMap((part, i) => [" / ", el("span", { onclick: () => openFolder(root, parts.slice(0, i + 1).join("/")) }, part)])
   );
 
@@ -303,14 +305,103 @@ function droppedSources(ev) {
   return raw ? JSON.parse(raw) : [];
 }
 
+// ---------- files dropped from outside the browser ----------
+
+function readEntries(reader) {
+  return new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+}
+
+async function filesFromEntry(entry) {
+  if (entry.isFile) {
+    return new Promise((resolve) => entry.file((f) => resolve([f]), () => resolve([])));
+  }
+  if (!entry.isDirectory) return [];
+  const reader = entry.createReader();
+  const files = [];
+  // readEntries returns the directory content in batches
+  for (let batch = await readEntries(reader); batch.length; batch = await readEntries(reader)) {
+    for (const child of batch) files.push(...(await filesFromEntry(child)));
+  }
+  return files;
+}
+
+// Entries must be taken synchronously inside the drop event, reading happens afterwards
+function externalEntries(ev) {
+  const items = [...(ev.dataTransfer.items || [])].filter((i) => i.kind === "file");
+  const entries = items.map((i) => (i.webkitGetAsEntry ? i.webkitGetAsEntry() : null)).filter(Boolean);
+  return { entries, files: [...ev.dataTransfer.files] };
+}
+
+async function externalWavs({ entries, files }) {
+  const all = entries.length ? (await Promise.all(entries.map(filesFromEntry))).flat() : files;
+  return all.filter((f) => f.name.toLowerCase().endsWith(".wav")).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function uploadFiles(files, root, path) {
+  if (!files.length) {
+    toast("No WAV files in the drop", true);
+    return [];
+  }
+  await api("POST", "/api/import/prepare", { root, path });
+  const sources = [];
+  for (const [i, file] of files.entries()) {
+    toast(`Importing ${i + 1} / ${files.length}: ${file.name}`);
+    const url = `/api/import?root=${encodeURIComponent(root)}&path=${encodeURIComponent(path)}&name=${encodeURIComponent(file.name)}`;
+    const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: file });
+    if (!response.ok) {
+      let detail = response.statusText;
+      try { detail = (await response.json()).detail || detail; } catch (_) { /* ignore */ }
+      toast(detail, true);
+      continue;
+    }
+    sources.push((await response.json()).source);
+  }
+  toast(`Imported ${sources.length} of ${files.length} files`);
+  return sources;
+}
+
 function makeDropTarget(node, onDrop) {
   node.addEventListener("dragover", (ev) => { ev.preventDefault(); node.classList.add("over"); });
   node.addEventListener("dragleave", () => node.classList.remove("over"));
-  node.addEventListener("drop", (ev) => {
+  node.addEventListener("drop", async (ev) => {
     ev.preventDefault();
     node.classList.remove("over");
     const sources = droppedSources(ev);
-    if (sources.length) onDrop(sources);
+    if (sources.length) {
+      onDrop(sources);
+      return;
+    }
+    // Files from the file manager go to the local inbox first and are copied into the patch on save
+    const external = externalEntries(ev);
+    if (!external.files.length) return;
+    try {
+      const uploaded = await uploadFiles(await externalWavs(external), "inbox", "");
+      if (uploaded.length) onDrop(uploaded);
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+}
+
+// Dropping files onto the sample browser imports them into the folder shown there
+function setupBrowserDrop() {
+  const list = document.getElementById("br-list");
+  list.addEventListener("dragover", (ev) => {
+    if (ev.dataTransfer.types.includes("Files")) { ev.preventDefault(); list.classList.add("over"); }
+  });
+  list.addEventListener("dragleave", () => list.classList.remove("over"));
+  list.addEventListener("drop", async (ev) => {
+    if (!ev.dataTransfer.types.includes("Files")) return;
+    ev.preventDefault();
+    list.classList.remove("over");
+    const external = externalEntries(ev);
+    const { root, path } = state.browse;
+    try {
+      await uploadFiles(await externalWavs(external), root, path);
+      await openFolder(root, path);
+    } catch (err) {
+      toast(err.message, true);
+    }
   });
 }
 

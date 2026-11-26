@@ -23,6 +23,17 @@ Existing patches are opened from the library:
 
 Editing changes only the attributes the builder handles: per pad gain, pitch, pan, choke group, reverse, loop mode and sample; per zone key and velocity range. Sequences, modulation sources, envelopes, filters and parameters unknown to blackbook stay byte-identical. A pad whose sample is unchanged keeps its trim and loop points. WAV files are never deleted by an edit; replaced samples stay in the patch folder. Factory patches are never overwritten.
 
+### Files from outside the browser
+
+WAV files and folders can be dragged from the file manager into blackbook:
+
+| Drop target | Result |
+|---|---|
+| pads or zone list of the builder | files are stored in the local inbox `.blackbook/inbox/` and used directly; saving the patch copies them into the patch folder |
+| sample browser | files are imported into the folder shown in the browser, on the card or in the inbox; folders are imported with all WAVs they contain |
+
+Imports onto the card are not possible into the card root and the factory `Patches` folder. A snapshot is taken before the first file is written. File names are adjusted to FAT32/exFAT rules, existing files with identical content are reused, other name collisions get a numeric suffix. Files that are not WAV are rejected.
+
 Playback of samples and previews stops with a second click on the same sample, the Stop button in the header or the Escape key.
 
 ### Types
