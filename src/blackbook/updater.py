@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -101,8 +102,15 @@ def install_zip(data: bytes, root: Path = settings.REPO_DIR) -> list[str]:
             if rel.parts[0] in KEEP or path.is_dir():
                 continue
             target = root / rel
+            data_new = path.read_bytes()
+            if target.is_file() and target.read_bytes() == data_new:
+                continue
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, target)
+            # Write next to the target and swap, so a running start script keeps reading its old file
+            tmp_file = target.with_name(target.name + ".blackbook-update")
+            tmp_file.write_bytes(data_new)
+            shutil.copymode(path, tmp_file)
+            os.replace(tmp_file, target)
             written.append(rel.as_posix())
     return written
 

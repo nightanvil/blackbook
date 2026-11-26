@@ -68,3 +68,11 @@ def test_folder_picker(card: Path, tmp_path: Path, monkeypatch) -> None:
         assert created.status_code == 200 and (tmp_path / "pick" / "new").is_dir()
         assert client.post("/api/fs/mkdir", json={"path": str(tmp_path / "pick"), "name": "../x"}).status_code == 400
         assert client.get("/api/fs/dirs", params={"path": str(card)}).json()["is_card"] is True
+
+
+def test_install_zip_skips_unchanged_files(tmp_path: Path) -> None:
+    (tmp_path / "start.sh").write_text("same")
+    data = release_zip({"start.sh": "same", "README.md": "new", "src/blackbook/__init__.py": "x"})
+    written = updater.install_zip(data, tmp_path)
+    assert "start.sh" not in written and "README.md" in written
+    assert not list(tmp_path.rglob("*.blackbook-update"))

@@ -5,13 +5,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-26
+
 ### Changed
 
 - The backup folder can no longer be inside the blackbook folder, where an update or a new installation could delete it. The folder picker refuses it, and the Backup tab warns about an existing backup there.
+- Updates only replace files that changed, and replace them in one step, so a running start script is not disturbed.
 
 ### Documentation
 
 - README and help explain why the backup must stay outside the blackbook folder.
+- README: short roadmap table at the top.
 
 ## [0.1.0] - 2026-11-26
 
@@ -34,5 +38,6 @@ First public, very early version.
 - Update check against GitHub releases with in-place update and restart prompt.
 - Dark and light theme, built-in help, Ko-fi and GitHub links, running version in the top bar with a restart hint after code changes.
 
-[Unreleased]: https://github.com/nightanvil/blackbook/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/nightanvil/blackbook/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/nightanvil/blackbook/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/nightanvil/blackbook/releases/tag/v0.1.0
