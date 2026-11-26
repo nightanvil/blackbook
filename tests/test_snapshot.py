@@ -253,3 +253,19 @@ def test_backup_inside_program_folder_is_refused(card: Path, tmp_path: Path, mon
         assert refused.status_code == 400 and "blackbook folder" in refused.json()["detail"]
         assert client.get("/api/fs/dirs", params={"path": str(program)}).json()["is_program"] is True
         assert client.put("/api/backup/target", json={"path": str(tmp_path / "outside")}).status_code == 200
+
+
+def test_card_found_after_start(card: Path, tmp_path: Path, monkeypatch) -> None:
+    from blackbook import server
+
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    (card / "bb2-stng.mml").write_text("settings")
+    monkeypatch.setattr(server, "find_cards", lambda: [card])
+    app = create_app(tmp_path / "no-card", [], tmp_path / "copies", detect_card=True)
+    with TestClient(app) as client:
+        for _ in range(50):
+            if client.get("/api/card/status").json()["present"]:
+                break
+            time.sleep(0.05)
+        assert client.get("/api/info").json()["card"] == str(card.resolve())
+    assert settings.get("card_path") == str(card.resolve())

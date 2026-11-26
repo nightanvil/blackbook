@@ -136,7 +136,9 @@ If it says "command not found", install it with the command for your distributio
 
 ### 4. Connect the blackbox
 
-Connect the blackbox 2 over USB and switch it to **microSD mode** (or put its card into a card reader). blackbook finds the card by itself and opens in your browser at <http://127.0.0.1:8765/>.
+blackbook opens in your browser at <http://127.0.0.1:8765/>. If the browser does not open, copy that address from the terminal window into your browser.
+
+Connect the blackbox 2 over USB and switch it to **microSD mode** (or put its card into a card reader). blackbook finds the card by itself, also when you connect it later.
 
 A window with text (the terminal) stays open while blackbook runs. **Keep it open** while you work. To stop blackbook, close that window (or press `Ctrl+C` in it).
 

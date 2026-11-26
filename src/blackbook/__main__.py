@@ -9,7 +9,6 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-import time
 import webbrowser
 from pathlib import Path
 
@@ -56,7 +55,8 @@ def serve(argv: list[str]) -> None:
     parser.add_argument("--no-browser", action="store_true", help="do not open the browser")
     args = parser.parse_args(argv)
 
-    card_path = Path(args.card) if args.card else wait_for_card()
+    detect = not args.card
+    card_path = Path(args.card) if args.card else initial_card()
 
     import uvicorn
 
@@ -67,11 +67,17 @@ def serve(argv: list[str]) -> None:
         [Path(p) for p in args.library],
         Path(args.backup_dir),
         resolve_target(args.backup_target),
+        detect_card=detect,
     )
     url = f"http://127.0.0.1:{args.port}/"
-    print(f"blackbook running at {url}")
-    print(f"card: {card_path}")
-    if not card_path.is_dir():
+    print()
+    print(f"blackbook is running. Open this address in your browser: {url}")
+    if card_path.is_dir():
+        print(f"card: {card_path}")
+    elif detect:
+        print("No blackbox card found yet. Connect the blackbox 2 over USB and switch it to microSD mode")
+        print("(or insert the card into a card reader). blackbook picks it up by itself.")
+    else:
         print(f"card not found at {card_path}, waiting for it (switch the blackbox to microSD mode)")
     print("Keep this window open while you use blackbook. Close it to stop blackbook.")
     if not args.no_browser:
@@ -79,30 +85,21 @@ def serve(argv: list[str]) -> None:
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
 
 
-def wait_for_card() -> Path:
-    """Use the last card if it is mounted, otherwise wait until a card shows up."""
+def initial_card() -> Path:
+    """The last card if it is mounted, else a detected card, else the last path (the server waits for it)."""
     from .carddetect import find_cards, is_card
 
     stored = settings.get("card_path")
     if stored and is_card(Path(stored)):
         return Path(stored)
-    announced = False
-    while True:
-        cards = find_cards()
-        if cards:
-            if len(cards) > 1:
-                print("several cards found, using the first: " + ", ".join(str(c) for c in cards))
-            settings.set_value("card_path", str(cards[0]))
-            return cards[0]
-        if not announced:
-            print("No blackbox card found.")
-            print("Connect the blackbox 2 over USB and switch it to microSD mode (or insert the card into a card reader).")
-            print("Waiting for the card ... (Ctrl+C to cancel)")
-            announced = True
-        try:
-            time.sleep(2)
-        except KeyboardInterrupt:
-            sys.exit(0)
+    cards = find_cards()
+    if cards:
+        if len(cards) > 1:
+            print("several cards found, using the first: " + ", ".join(str(c) for c in cards))
+        settings.set_value("card_path", str(cards[0]))
+        return cards[0]
+    # Placeholder until the card watcher finds a card
+    return Path(stored) if stored else settings.REPO_DIR / ".blackbook" / "no-card"
 
 
 def snapshot(argv: list[str]) -> None:

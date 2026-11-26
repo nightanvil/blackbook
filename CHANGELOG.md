@@ -5,6 +5,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-26
+
+### Changed
+
+- blackbook starts right away, also without a card, and shows the address to open in the browser. A blackbox card that is connected later is picked up by itself.
+
+### Fixed
+
+- Installations from a ZIP show their version next to "blackbook" in the top bar and in the window title. Before, the place stayed empty because there is no git commit to show.
+
 ## [0.1.1] - 2026-11-26
 
 ### Changed
@@ -38,6 +48,7 @@ First public, very early version.
 - Update check against GitHub releases with in-place update and restart prompt.
 - Dark and light theme, built-in help, Ko-fi and GitHub links, running version in the top bar with a restart hint after code changes.
 
-[Unreleased]: https://github.com/nightanvil/blackbook/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/nightanvil/blackbook/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/nightanvil/blackbook/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/nightanvil/blackbook/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/nightanvil/blackbook/releases/tag/v0.1.0

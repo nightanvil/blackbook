@@ -988,10 +988,12 @@ async function showCodeCommit() {
   } catch (_) { return; }
   const box = document.getElementById("code-commit");
   const stale = info.current_commit && info.commit !== info.current_commit;
-  box.textContent = stale ? `${info.commit} restart needed` : info.commit;
+  // Installations from a ZIP have no git commit, they show the version instead
+  const label = info.commit || (info.version ? `v${info.version}` : "");
+  box.textContent = stale ? `${label} restart needed` : label;
   box.title = stale ? `blackbook was updated to ${info.current_commit}. Close the terminal window and start blackbook again.` : "";
   box.className = stale ? "err" : "muted";
-  document.title = info.commit ? `blackbook ${info.commit}` : "blackbook";
+  document.title = label ? `blackbook ${label}` : "blackbook";
   state.suggestedBackup = info.suggested_backup;
   renderBackupBanner(info);
 }

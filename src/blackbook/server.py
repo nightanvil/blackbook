@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from . import builder, patchedit, settings, updater
 from .backup import Backup
 from .card import Card, browse
+from .carddetect import find_cards
 from .cardpath import INVALID_NAME_CHARS, resolve_sample_reference
 from .mapping import Zone, assign_key_ranges, automap, note_name
 from .patchindex import FACTORY_TAGS
@@ -145,9 +146,11 @@ def zone_out(zone: Zone) -> dict:
 class SnapshotService:
     """Holds the configured backup repository and watches for card connection."""
 
-    def __init__(self, card: Card, target: Path | None):
+    def __init__(self, card: Card, target: Path | None, on_card_found=None):
         self.card = card
         self.repo = SnapshotRepo(target) if target else None
+        # Called with the path of a card found by detection; None keeps the configured path
+        self.on_card_found = on_card_found
         self.events: deque[dict] = deque(maxlen=20)
         self._stop = threading.Event()
 
@@ -209,6 +212,12 @@ class SnapshotService:
         while not self._stop.is_set():
             try:
                 now = self.card_present()
+                if not now and self.on_card_found is not None:
+                    cards = find_cards()
+                    if cards:
+                        self.on_card_found(cards[0])
+                        self.event(f"Card found at {cards[0]}")
+                        now = self.card_present()
                 if now and not present:
                     self.auto_snapshot("Card connected", "snapshot_on_connect")
                 present = now
@@ -251,13 +260,22 @@ def create_app(
     backup_dir: Path,
     snapshot_target: Path | None = None,
     inbox_dir: Path | None = None,
+    detect_card: bool = False,
 ) -> FastAPI:
     started_commit = code_commit()
     card = Card(card_root)
     sources = Sources(card, libraries, inbox_dir or settings.REPO_DIR / ".blackbook" / "inbox")
     backup = Backup(backup_dir, card.root)
     target = snapshot_target or (Path(settings.get("backup_target")) if settings.get("backup_target") else None)
-    snapshots = SnapshotService(card, target)
+
+    def use_card(path: Path) -> None:
+        """Point everything at a card that was found after the start."""
+        card.root = path.resolve()
+        sources.roots["card"] = card.root
+        backup.card_root = card.root
+        settings.set_value("card_path", str(card.root))
+
+    snapshots = SnapshotService(card, target, use_card if detect_card else None)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
