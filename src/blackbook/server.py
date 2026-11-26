@@ -233,6 +233,10 @@ def create_app(
             return builder.plan_multisample(card, spec, base)
         raise HTTPException(400, f"unknown patch type: {body.type}")
 
+    @app.get("/api/card/status")
+    def card_status() -> dict:
+        return {"present": snapshots.card_present()}
+
     @app.get("/api/info")
     def info() -> dict:
         return {

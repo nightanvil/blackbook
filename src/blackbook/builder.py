@@ -99,6 +99,11 @@ class Plan:
         return not self.errors
 
 
+def pad_number(slot: int) -> int:
+    """Pad number as shown on the device: pad 1 is bottom left (celldisppos 8), pad 9 top left (celldisppos 0)."""
+    return slot - 7 if slot >= 8 else slot + 9
+
+
 def milli(value: float) -> int:
     """Device values for gain and pitch are stored in thousandths (dB, semitones)."""
     return round(value * 1000)
@@ -200,7 +205,7 @@ def plan_oneshot(card: Card, spec: OneShotSpec, base: Base | None = None) -> Pla
         if not 0 <= slot <= 15:
             errors.append(f"invalid pad {slot}")
             continue
-        info = check_wav(pad.source, f"pad {slot + 1}", errors, warnings)
+        info = check_wav(pad.source, f"pad {pad_number(slot)}", errors, warnings)
         if info:
             infos[pad.source] = info
 
@@ -263,7 +268,7 @@ def plan_oneshot(card: Card, spec: OneShotSpec, base: Base | None = None) -> Pla
         if kept and mode == "copy":
             warnings.append(
                 "pads with missing files are copied as references without file: "
-                + ", ".join(str(s + 1) for s in sorted(kept))
+                + ", ".join(str(pad_number(s)) for s in sorted(kept, key=pad_number))
             )
 
     copies = copies_for(names, infos, base)

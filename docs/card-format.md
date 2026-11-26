@@ -132,6 +132,15 @@ These values also appear in every `project.xml` that uses the WAV. A change of t
 
 A one-shot patch has 16 pads. Each pad is a `saminst` cell with `celldisppos` 0 to 15, followed by a `samasst` cell with the WAV.
 
+The device shows the pads in two rows of eight. Pad 1 is bottom left, numbering continues to the right and then in the upper row:
+
+| Row on the device | Pad numbers | `celldisppos` |
+|---|---|---|
+| top | 9 to 16 | 0 to 7 |
+| bottom | 1 to 8 | 8 to 15 |
+
+Factory patches store the cells in the order 8, 0, 9, 1, ..., 15, 7.
+
 ### Multisample patches
 
 Each WAV is a `samasst` cell with a key and velocity range:
@@ -159,7 +168,13 @@ When saving a patch, the device creates a `preview.wav` in the patch folder: PCM
 
 ### Parameter values
 
-Parameters are integers in device-internal units, for example `gaindb="6800"`, `trkgain="-9200"`, `envsus="1000"`. The conversion to the values shown on the device is not documented.
+Parameters are integers in device-internal units, for example `gaindb="6800"`, `trkgain="-9200"`, `envsus="1000"`.
+
+| Attribute | Unit | Verified |
+|---|---|---|
+| `gaindb` | thousandths of dB (`-6300` = -6.3 dB) | yes, compared with the device display |
+| `pitch` | thousandths of semitones (`2230` = +2.23) | derived from files only |
+| other parameters | unknown | no |
 
 ### Dependencies when renaming
 
@@ -191,7 +206,7 @@ Parameters are integers in device-internal units, for example `gaindb="6800"`, `
 - Tolerance of the device towards changed attribute order, indentation, line endings and a missing BOM
 - Support for user-defined tags
 - Case sensitivity of paths (FAT32 and exFAT are case-insensitive, Linux file systems of a mirror are not)
-- Conversion of parameter values to display values (dB, percent, milliseconds)
+- Conversion of parameter values other than gain to display values
 - Supported WAV formats beyond the factory content (32-bit float, 96 kHz)
 - Use of cue markers in the WAV by the device
 - Maximum length of file and patch names

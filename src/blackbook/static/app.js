@@ -96,6 +96,9 @@ document.addEventListener("keydown", (ev) => {
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 function noteName(n) { return NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 1); }
+// Pad 1 is bottom left (celldisppos 8) and counts to the right and upwards; the top row holds pads 9-16
+function padNumber(slot) { return slot >= 8 ? slot - 7 : slot + 9; }
+const PAD_SLOTS_BY_NUMBER = [8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7];
 function baseName(source) { return source.split("/").pop(); }
 function fmtSeconds(s) { return s ? s.toFixed(2) + " s" : ""; }
 
@@ -212,7 +215,7 @@ async function showPatch(ref) {
       el("td", {}, s.filename, s.source ? null : el("span", { class: "err" }, " (missing)")),
       el("td", { class: "muted" }, isMulti
         ? `${s.root_name}  keys ${noteName(s.key_low)}-${noteName(s.key_high)}  vel ${s.vel_low}-${s.vel_high}`
-        : s.slot != null ? "pad " + (s.slot + 1) : "")
+        : s.slot != null ? "pad " + padNumber(s.slot) : "")
     )
   );
 
@@ -393,14 +396,16 @@ function renderPads() {
           if (pad) play(pad.source);
           renderPads();
         },
-      }, el("span", { class: "num" }, slot + 1), el("span", { class: "sample" }, pad ? (pad.source ? baseName(pad.source) : pad.filename + " (missing)") : ""));
+      }, el("span", { class: "num" }, padNumber(slot)), el("span", { class: "sample" }, pad ? (pad.source ? baseName(pad.source) : pad.filename + " (missing)") : ""));
       makeDropTarget(node, (sources) => {
+        // Several dropped files fill the following pads in pad number order
+        const start = PAD_SLOTS_BY_NUMBER.indexOf(slot);
         sources.forEach((source, i) => {
-          if (slot + i < 16) {
-            const old = state.pads[slot + i];
-            // Replacing the sample keeps the pad settings
-            state.pads[slot + i] = old ? { ...old, source, filename: null } : { source, gain: 0, pitch: 0, pan: 0, choke_group: 0, reverse: false, loop_mode: 0 };
-          }
+          const target = PAD_SLOTS_BY_NUMBER[start + i];
+          if (target === undefined) return;
+          const old = state.pads[target];
+          // Replacing the sample keeps the pad settings
+          state.pads[target] = old ? { ...old, source, filename: null } : { source, gain: 0, pitch: 0, pan: 0, choke_group: 0, reverse: false, loop_mode: 0 };
         });
         state.selectedPad = slot;
         renderPads();
@@ -416,7 +421,7 @@ function renderPadEditor() {
   const slot = state.selectedPad;
   const pad = slot != null ? state.pads[slot] : null;
   if (!pad) {
-    panel.replaceChildren(el("span", { class: "muted" }, slot == null ? "Select a pad." : `Pad ${slot + 1} is empty. Drop a WAV onto it.`));
+    panel.replaceChildren(el("span", { class: "muted" }, slot == null ? "Select a pad." : `Pad ${padNumber(slot)} is empty. Drop a WAV onto it.`));
     return;
   }
   const field = (label, key, attrs) =>
@@ -426,7 +431,7 @@ function renderPadEditor() {
 
   if (!pad.source) {
     panel.replaceChildren(
-      el("strong", {}, `Pad ${slot + 1}: ${pad.filename}`),
+      el("strong", {}, `Pad ${padNumber(slot)}: ${pad.filename}`),
       el("p", { class: "err" }, "The file of this pad is missing on the card. The pad stays unchanged unless you drop a new sample onto it or clear it."),
       el("button", { class: "small", onclick: () => { delete state.pads[slot]; renderPads(); } }, "Clear"));
     return;
@@ -434,7 +439,7 @@ function renderPadEditor() {
 
   panel.replaceChildren(
     el("div", { style: "display:flex;justify-content:space-between;margin-bottom:10px" },
-      el("strong", {}, `Pad ${slot + 1}: ${baseName(pad.source)}`),
+      el("strong", {}, `Pad ${padNumber(slot)}: ${baseName(pad.source)}`),
       el("span", {},
         el("button", { class: "small", onclick: () => play(pad.source) }, "▶"), " ",
         el("button", { class: "small", onclick: () => { delete state.pads[slot]; renderPads(); } }, "Clear"))),
@@ -546,14 +551,17 @@ function renderMode() {
     banner.hidden = true;
     return;
   }
-  const ref = state.baseRef.replaceAll("\\", " / ");
+  const name_ = state.baseRef.split("\\").pop();
   banner.hidden = false;
+  const text = state.mode === "edit"
+    ? [el("strong", {}, `You are editing "${name_}".`), " Saving overwrites this patch on the card. A backup snapshot is made right before."]
+    : [el("strong", {}, `Template: "${name_}".`), " Saving creates a new user patch with the name above. The original stays unchanged."];
   banner.replaceChildren(
-    el("span", { class: "grow" },
-      state.mode === "edit" ? "Editing " : "New patch based on ", el("strong", {}, ref),
-      state.mode === "edit" ? " (saved in place, a snapshot is taken before)" : " (saved as new user patch)"),
-    state.mode === "edit" ? el("button", { class: "small", onclick: () => { state.mode = "copy"; document.getElementById("b-name").value += " copy"; renderMode(); } }, "Save as copy instead") : null,
-    el("button", { class: "small", onclick: resetBuilder }, "Start new patch"));
+    el("span", { class: "grow" }, ...text),
+    state.mode === "edit"
+      ? el("button", { class: "small", title: "Keep the original and save the changes under a new name", onclick: () => { state.mode = "copy"; document.getElementById("b-name").value += " copy"; renderMode(); } }, "Save as new patch instead")
+      : null,
+    el("button", { class: "small", title: "Discard the loaded patch and start with an empty builder", onclick: resetBuilder }, "Close"));
 }
 
 function resetBuilder() {
@@ -587,7 +595,7 @@ async function loadIntoBuilder(ref, mode, switchView = true) {
   if (data.type === "oneshot") {
     state.pads = {};
     data.pads.forEach((p) => { state.pads[p.slot] = p; });
-    state.selectedPad = data.pads.length ? data.pads[0].slot : null;
+    state.selectedPad = data.pads.length ? PAD_SLOTS_BY_NUMBER.find((s) => state.pads[s]) : null;
     renderPads();
   } else {
     state.zones = data.zones;
@@ -777,6 +785,24 @@ document.getElementById("bk-config-save").addEventListener("click", async () => 
   }
 });
 
+// ---------- card connection ----------
+
+async function pollCard() {
+  let present = false;
+  try {
+    present = (await api("GET", "/api/card/status")).present;
+  } catch (_) { /* server unreachable */ }
+  const indicator = document.getElementById("card-state");
+  indicator.textContent = present ? "Card connected" : "Card not connected: switch the blackbox to microSD mode";
+  indicator.className = present ? "ok" : "err";
+  document.getElementById("b-plan").disabled = !present;
+  if (present && state.cardPresent === false) {
+    toast("Card connected again, library reloaded");
+    await loadLibrary();
+  }
+  state.cardPresent = present;
+}
+
 // ---------- start ----------
 
 async function start() {
@@ -787,6 +813,8 @@ async function start() {
   tagChips(document.getElementById("b-tags"), state.buildTags);
   renderPads();
   renderZones();
+  await pollCard();
+  setInterval(pollCard, 4000);
   await loadBrowser();
 }
 

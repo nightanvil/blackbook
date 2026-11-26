@@ -54,7 +54,8 @@ Snapshot without UI, for example from a script or cron job:
 - Every write is reviewed in a dialog first: target folder, copied files, warnings, generated `patch.xml`.
 - Before `patchindex.xml` is modified, the original is copied to `backups/<session>/files/`. `backups/<session>/journal.json` lists every created folder and modified file.
 - Factory patches and factory tags are read only.
-- Gain is stored in thousandths of dB and pitch in thousandths of semitones. This mapping is derived from existing files and not confirmed by 1010music.
+- Gain is stored in thousandths of dB (verified on the device) and pitch in thousandths of semitones (derived from existing files).
+- While the blackbox is not in microSD mode, the card is not available. The header shows the connection state; saving is disabled until the card is back. On reconnection the library reloads and, if configured, a snapshot captures the changes made on the device.
 
 ## Platforms
 

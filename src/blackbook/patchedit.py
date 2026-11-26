@@ -98,7 +98,8 @@ def edit_oneshot(text: str, updates: dict[int, tuple[dict, dict]]) -> tuple[str,
 
     for slot, (inst_values, asst_values) in updates.items():
         if slot not in slots:
-            errors.append(f"pad {slot + 1} has no cell in the base patch")
+            number = slot - 7 if slot >= 8 else slot + 9
+            errors.append(f"pad {number} has no cell in the base patch")
             continue
         inst, asst = slots[slot]
         editor.update_params(inst, inst_values)
