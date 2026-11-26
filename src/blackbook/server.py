@@ -279,6 +279,7 @@ def create_app(
     detect_card: bool = False,
 ) -> FastAPI:
     started_commit = code_commit()
+    started_at = time.time()
     card = Card(card_root)
     sources = Sources(card, libraries, inbox_dir or settings.REPO_DIR / ".blackbook" / "inbox")
     backup = Backup(backup_dir, card.root)
@@ -301,6 +302,7 @@ def create_app(
         snapshots.stop()
 
     app = FastAPI(title="blackbook", lifespan=lifespan)
+    app.state.restart_requested = False
 
     @app.middleware("http")
     async def flush_after_write(request: Request, call_next):
@@ -444,6 +446,8 @@ def create_app(
             "git_available": git_executable() is not None,
             "suggested_backup": str(default_target()),
             "current_commit": code_commit(),
+            "pid": os.getpid(),
+            "started_at": started_at,
         }
 
     @app.get("/api/patches")
@@ -778,10 +782,23 @@ def create_app(
         except (updater.UpdateError, OSError) as exc:
             raise HTTPException(400, f"update failed: {exc}") from exc
 
+    def stop_server() -> None:
+        # The entry point sets stop_server to end uvicorn cleanly; without it the process just ends
+        stop = getattr(app.state, "stop_server", None)
+        if stop is None:
+            os._exit(0)
+        stop()
+
     @app.post("/api/shutdown")
     def shutdown() -> dict:
-        # Leave time for the response, then end the process so the start script finishes
-        threading.Timer(0.5, lambda: os._exit(0)).start()
+        # Leave time for the response, then stop so the start script finishes
+        threading.Timer(0.5, stop_server).start()
+        return {"ok": True}
+
+    @app.post("/api/restart")
+    def restart() -> dict:
+        app.state.restart_requested = True
+        threading.Timer(0.5, stop_server).start()
         return {"ok": True}
 
     @app.post("/api/backup/snapshot")

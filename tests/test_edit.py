@@ -313,3 +313,18 @@ def test_eject_refuses_folder_that_is_no_drive(card: Path, tmp_path: Path, monke
         assert response.status_code == 409
         assert "not a separate drive" in response.json()["detail"]
         assert card.is_dir()
+
+
+def test_restart_and_shutdown_stop_the_server(card: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    monkeypatch.setattr(server.threading, "Timer", lambda _delay, fn: type("T", (), {"start": lambda self: fn()})())
+    app = create_app(card, [], tmp_path / "copies")
+    stops: list[int] = []
+    app.state.stop_server = lambda: stops.append(1)
+    with TestClient(app) as client:
+        info = client.get("/api/info").json()
+        assert info["pid"] > 0 and info["started_at"] > 0
+        client.post("/api/shutdown")
+        assert stops == [1] and not app.state.restart_requested
+        client.post("/api/restart")
+        assert stops == [1, 1] and app.state.restart_requested

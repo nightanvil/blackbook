@@ -60,6 +60,7 @@ body {
 .brand .logo { width: 26px; height: 26px; flex: none; border-radius: 4px; }
 .brand .ver { font-weight: 400; font-size: 11px; opacity: .75; }
 .brand .ver.err { color: var(--err); opacity: 1; }
+.brand .ver.clickable { cursor: pointer; text-decoration: underline dotted; }
 .topbar nav { display: flex; gap: 2px; }
 .topbar nav button { background: none; border: none; color: var(--muted); padding: 7px 14px; position: relative; font-weight: 500; }
 .topbar nav button:hover { color: var(--text); background: none; }

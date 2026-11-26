@@ -1031,8 +1031,12 @@ async function showCodeCommit() {
   // Installations from a ZIP have no git commit, they show the version instead
   const label = info.commit || (info.version ? `v${info.version}` : "");
   box.textContent = stale ? `${label} restart needed` : label;
-  box.title = stale ? `blackbook was updated to ${info.current_commit}. Close the terminal window and start blackbook again.` : "";
-  box.className = stale ? "err" : "muted";
+  box.title = stale ? `blackbook was updated to ${info.current_commit}. Click to restart blackbook.` : "";
+  box.className = stale ? "err clickable" : "muted";
+  box.onclick = stale ? restartServer : null;
+  const pid = document.getElementById("server-pid");
+  pid.textContent = info.pid ? `PID ${info.pid}` : "";
+  pid.title = info.pid ? "Process id of the blackbook server" : "";
   document.title = label ? `blackbook ${label}` : "blackbook";
   state.suggestedBackup = info.suggested_backup;
   renderBackupBanner(info);
@@ -1227,7 +1231,7 @@ async function installUpdate(ev) {
     document.getElementById("update-ok").onclick = async () => {
       try { await api("POST", "/api/shutdown"); } catch (_) { /* already stopping */ }
       document.getElementById("update-dialog").close();
-      document.body.replaceChildren(el("div", { class: "stopped" }, el("h2", {}, "blackbook has stopped"), el("p", {}, "Start it again to use the new version, then reload this page.")));
+      showStopped("Start it again to use the new version, then reload this page.");
     };
     document.getElementById("update-dialog").showModal();
   } catch (err) {
@@ -1236,6 +1240,49 @@ async function installUpdate(ev) {
     button.textContent = "Update now";
   }
 }
+
+// ---------- server control ----------
+
+function showStopped(text) {
+  clearInterval(state.pollTimer);
+  document.body.replaceChildren(el("div", { class: "stopped" }, el("h2", {}, "blackbook has stopped"), el("p", {}, text)));
+}
+
+async function shutdownServer() {
+  const ok = await confirmDialog("Stop blackbook",
+    "blackbook stops and this page no longer works.\n\nTo use blackbook again, start it the same way as before (start.sh, start.bat or start.command).",
+    "Stop");
+  if (!ok) return;
+  try { await api("POST", "/api/shutdown"); } catch (_) { /* already stopping */ }
+  showStopped("Start it again the same way as before, then reload this page.");
+}
+
+async function restartServer() {
+  const ok = await confirmDialog("Restart blackbook",
+    "blackbook stops and starts again. This takes a few seconds, the page reloads by itself.",
+    "Restart");
+  if (!ok) return;
+  let before;
+  try {
+    before = (await api("GET", "/api/info")).started_at;
+    await api("POST", "/api/restart");
+  } catch (err) {
+    toast(err.message, true);
+    return;
+  }
+  clearInterval(state.pollTimer);
+  document.body.replaceChildren(el("div", { class: "stopped" }, el("h2", {}, "Restarting blackbook ..."), el("p", { class: "muted" }, "The page reloads when blackbook is back.")));
+  for (let i = 0; i < 60; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    try {
+      if ((await api("GET", "/api/info")).started_at !== before) { location.reload(); return; }
+    } catch (_) { /* not up yet */ }
+  }
+  showStopped("blackbook did not come back. Start it again the same way as before, then reload this page.");
+}
+
+document.getElementById("restart-btn").addEventListener("click", restartServer);
+document.getElementById("shutdown-btn").addEventListener("click", shutdownServer);
 
 // Reload the backup view when snapshots or events changed while it is shown
 async function refreshBackupIfVisible() {
@@ -1258,7 +1305,7 @@ async function start() {
   renderPads();
   renderZones();
   await pollCard();
-  setInterval(pollCard, 4000);
+  state.pollTimer = setInterval(pollCard, 4000);
   const fresh = await api("GET", "/api/info");
   if (fresh.first_start) showWelcome(fresh);
   checkForUpdate();

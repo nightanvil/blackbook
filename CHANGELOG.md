@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ### Added
 
+- Restart and stop buttons at the top right, so blackbook can be controlled without a terminal window. The version at the top left shows the process id (PID), and the red "restart needed" hint restarts blackbook when clicked.
 - Eject button at the top right: writes everything to the card and ejects it through the operating system, so the blackbox can be unplugged or leave microSD mode safely.
 
 ### Changed

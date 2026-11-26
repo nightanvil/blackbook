@@ -12,6 +12,7 @@
 | Editor bridge | launches external editors, generates Reaper projects, watches for changed WAVs |
 | Snapshot service | git backup of the card: mirror, commit, history, diff, restore, card connection watcher |
 | Eject | flushes all writes and ejects the card through the operating system: `udisksctl` (fallback `gio`) on Linux, `diskutil` on macOS, volume lock, dismount and eject via the Windows API |
+| Server control | `/api/shutdown` ends uvicorn cleanly, `/api/restart` does the same and starts blackbook again with the same arguments: `os.execv` on Linux and macOS (same PID), a child process in the same console on Windows |
 | Settings | local settings of the installation in `.blackbook/settings.json` |
 | Writer | applies a change plan to the card |
 | API | FastAPI endpoints for the frontend |

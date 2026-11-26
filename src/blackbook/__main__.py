@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 import sys
 import webbrowser
 from pathlib import Path
@@ -82,7 +83,26 @@ def serve(argv: list[str]) -> None:
     print("Keep this window open while you use blackbook. Close it to stop blackbook.")
     if not args.no_browser:
         webbrowser.open(url)
-    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
+    server = uvicorn.Server(
+        uvicorn.Config(app, host="127.0.0.1", port=args.port, log_level="warning", timeout_graceful_shutdown=5)
+    )
+    app.state.stop_server = lambda: setattr(server, "should_exit", True)
+    server.run()
+    if app.state.restart_requested:
+        restart(argv)
+
+
+def restart(argv: list[str]) -> None:
+    """Start blackbook again with the same arguments, in the same terminal window."""
+    print()
+    print("Restarting blackbook ...")
+    command = [sys.executable, "-m", "blackbook", *argv]
+    if "--no-browser" not in argv:
+        command.append("--no-browser")
+    if os.name == "nt":
+        # Windows has no exec: run the new instance as a child and pass on its exit code
+        sys.exit(subprocess.call(command))
+    os.execv(sys.executable, command)
 
 
 def initial_card() -> Path:

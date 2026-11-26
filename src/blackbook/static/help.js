@@ -17,7 +17,8 @@
       html: `
 <p class="note"><b>This is a very, very, very early version.</b> Expect rough edges and missing pieces. Please try it, and tell me what you would like blackbook to do: every idea and every bug report helps. <a href="${repo}/issues" target="_blank" rel="noopener noreferrer">Ideas and feedback</a></p>
 <p><b>blackbook</b> organizes the microSD card of the 1010music <b>blackbox 2</b>: browse and tag patches, build one-shot and multisample patches, edit your own patches and keep a versioned backup of the card.</p>
-<p>blackbook runs on your computer. The page you see is served by the small program in the terminal window, nothing is uploaded anywhere. Keep that window open while you work, close it to stop blackbook.</p>
+<p>blackbook runs on your computer. The page you see is served by the small program in the terminal window, nothing is uploaded anywhere. Keep that window open while you work.</p>
+<p>At the top right, the <b>round arrow</b> restarts blackbook and the <b>power button</b> stops it. Both work also when there is no terminal window. After a restart the page reloads by itself; after a stop, start blackbook again the same way as before. <b>PID</b> at the top left is the process id of blackbook, for the task manager. When the version at the top left turns red ("restart needed"), click it to restart.</p>
 <h3>What you need</h3>
 <ul>
   <li>The blackbox 2 connected over USB and switched to <b>microSD mode</b>, or its card in a card reader. blackbook finds the card by itself.</li>
