@@ -85,51 +85,55 @@ Any editor that edits WAVs destructively and saves in place (for example Audacit
 
 ## 3. Backup with diff and delta
 
-Versioned backups of the card, stored outside the card, with comparison between any two states.
+Versioned backups of the card in a local git repository outside the card. Git stores every file content once (deduplication), so a snapshot only adds what changed (delta). The repository has no remote.
 
-### Storage format
+### Backup folder
 
 ```
-<backup directory>/
-├── objects/
-│   └── ab/cdef0123...       file content, named by SHA-256
-└── snapshots/
-    └── 2026-11-26T19-30-00.json
+<backup folder>/
+├── .git/                    history of all snapshots
+├── .gitattributes           card files are stored byte-identical
+├── blackbook-backup.toml    configuration
+└── card/                    mirror of the backed up card paths at the latest snapshot
 ```
 
-- Every file content is stored exactly once. A snapshot only stores content that is missing from the object store (delta).
-- A snapshot is a manifest with path, size, modification time and hash of every file.
-- `.wav.pk` files are excluded.
-- Changed files are detected via size and modification time, and via hash in case of doubt. FAT32 stores modification times with a resolution of 2 seconds.
+The folder is chosen in the Backup view or via `--backup-target`. The choice is stored in `.blackbook/settings.json` of the installation.
 
-### Triggers
+### Configuration
 
-- manual
-- automatic before every write by blackbook
-- optional when a card is inserted
+`blackbook-backup.toml` in the backup folder:
 
-### Diff
+| Key | Default | Meaning |
+|---|---|---|
+| `include` | `Projects`, `UserPatches`, `Samples`, `Patches/patchindex.xml`, `bb2-stng.mml` | card paths that are backed up |
+| `include_factory` | `false` | also back up the factory `Patches` folder (about 8 GB) |
+| `exclude` | `*.pk`, `.Trash-*`, `System Volume Information`, ... | file and folder name patterns that are skipped |
+| `snapshot_on_connect` | `true` | snapshot when the card is connected while blackbook runs |
+| `snapshot_before_write` | `true` | snapshot before blackbook writes to the card |
 
-Comparison between two snapshots or between a snapshot and the current card:
+The configuration is part of every snapshot.
 
-| Level | Content |
-|---|---|
-| Files | added, deleted, modified, moved (same hash, different path) |
-| XML | text diff and structural diff: changed attributes per track and cell, changed tags |
-| WAV | length, format, channels, optional waveform overlay |
-| Summary | per project and patch: changes since the previous snapshot |
+### Snapshot
+
+1. Included card files are compared with the mirror by size and modification time. Files with equal size and a time difference above 2 seconds (FAT32 resolution) are compared by SHA-256.
+2. New and changed files are copied, files missing on the card are removed from the mirror.
+3. A commit is created. Subject: reason and counts (`Card connected: 3 added, 1 modified, 0 deleted`). Body: changed files per project, patch or sample folder.
+
+Triggers: button in the Backup view, `blackbook snapshot`, card connection, before every write of blackbook. A snapshot without changes creates no commit.
+
+### History and diff
+
+The Backup view lists all snapshots. A snapshot shows its changed files grouped by project, patch or sample folder with status added, modified or deleted. XML, `.mml` and `.toml` files show a line diff.
 
 ### Restore
 
-- complete snapshot
-- single project or patch including referenced WAVs
-- single file
+| Scope | Action |
+|---|---|
+| file | restores the file from the snapshot; a deleted file from the snapshot before |
+| folder (project, patch, sample folder) | "Restore state": folder as in the snapshot; "Restore before": folder as before the snapshot |
+| everything | all backed up paths as in the snapshot |
 
-Before a restore, a snapshot of the current state is created automatically.
-
-### Retention
-
-Configurable rule, for example every snapshot of the last 7 days and one per week after that. Objects no longer referenced by any snapshot are removed during cleanup.
+Within the restored scope the card matches the snapshot exactly: files that do not exist in the snapshot are deleted. Before every restore a snapshot of the current state is created, after it a snapshot with the subject `Restore <scope> from <commit>`.
 
 ## 4. Organization
 

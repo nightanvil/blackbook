@@ -13,6 +13,7 @@
       <button data-view="library" class="active">Library</button>
       <button data-view="build">Build</button>
       <button data-view="projects">Projects</button>
+      <button data-view="backup">Backup</button>
     </nav>
     <div id="card-path" class="muted"></div>
   </header>
@@ -103,6 +104,31 @@
     <!-- Projects -->
     <section id="view-projects" class="view">
       <div id="proj-list" class="table-wrap"></div>
+    </section>
+
+    <!-- Backup -->
+    <section id="view-backup" class="view">
+      <aside class="backup-side">
+        <div class="label">Backup folder</div>
+        <div class="target-row">
+          <input id="bk-target" placeholder="/path/to/backup folder">
+          <button id="bk-target-save">Set</button>
+        </div>
+        <div id="bk-status" class="muted"></div>
+        <div class="label">Snapshot</div>
+        <div class="target-row">
+          <input id="bk-message" placeholder="Reason (optional)">
+          <button id="bk-snapshot" class="primary">Snapshot now</button>
+        </div>
+        <div class="label">History</div>
+        <div id="bk-log" class="list compact"></div>
+        <details class="config">
+          <summary class="label">Configuration (blackbook-backup.toml)</summary>
+          <textarea id="bk-config" spellcheck="false"></textarea>
+          <button id="bk-config-save">Save configuration</button>
+        </details>
+      </aside>
+      <div id="bk-detail" class="detail"><p class="muted">Select a snapshot.</p></div>
     </section>
   </main>
 

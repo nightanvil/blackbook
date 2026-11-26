@@ -1,0 +1,158 @@
+from __future__ import annotations
+
+import os
+import time
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+from blackbook import settings
+from blackbook.server import create_app
+from blackbook.snapshot import SnapshotRepo
+
+from .conftest import make_wav
+
+
+@pytest.fixture
+def repo(tmp_path: Path) -> SnapshotRepo:
+    return SnapshotRepo(tmp_path / "backup")
+
+
+def touch_later(path: Path) -> None:
+    """Move the modification time forward beyond the FAT tolerance."""
+    stamp = time.time() + 10
+    os.utime(path, (stamp, stamp))
+
+
+def test_first_snapshot_respects_include_and_exclude(card: Path, repo: SnapshotRepo) -> None:
+    (card / "Projects" / "Song" / "RC000001.wav.pk").write_bytes(b"cache")
+    (card / ".Trash-1000").mkdir()
+    (card / ".Trash-1000" / "x.wav").write_bytes(b"x")
+    (card / "bb2-stng.mml").write_text("settings")
+
+    commit = repo.snapshot(card, "Initial")
+    assert commit is not None
+    assert commit.subject.startswith("Initial: ")
+
+    files = set(repo.files_at("HEAD"))
+    assert "Projects/Song/project.xml" in files
+    assert "Samples/Pack/BD.wav" in files
+    assert "Patches/patchindex.xml" in files
+    assert "bb2-stng.mml" in files
+    assert not any(f.endswith(".pk") for f in files)
+    assert not any(f.startswith("Patches/OneShots") for f in files)
+    assert not any("Trash" in f for f in files)
+    assert (repo.target / "blackbook-backup.toml").is_file()
+
+
+def test_no_changes_returns_none(card: Path, repo: SnapshotRepo) -> None:
+    repo.snapshot(card)
+    assert repo.snapshot(card) is None
+
+
+def test_detects_add_modify_delete(card: Path, repo: SnapshotRepo) -> None:
+    repo.snapshot(card, "Initial")
+    project = card / "Projects" / "Song"
+    make_wav(project / "RC000003.wav")
+    xml = project / "project.xml"
+    xml.write_text(xml.read_text(encoding="utf-8-sig").replace("BD.wav", "SD.wav"), encoding="utf-8")
+    touch_later(xml)
+    (project / "RC000002.wav").unlink()
+
+    commit = repo.snapshot(card, "Session")
+    assert commit.subject == "Session: 1 added, 1 modified, 1 deleted"
+    assert "Projects/Song (3)" in commit.body
+    changes = {c.path: c.status for c in repo.changes(commit.id)}
+    assert changes == {
+        "Projects/Song/RC000003.wav": "A",
+        "Projects/Song/project.xml": "M",
+        "Projects/Song/RC000002.wav": "D",
+    }
+    assert "SD.wav" in repo.file_diff(commit.id, "Projects/Song/project.xml")
+
+
+def test_same_size_different_content_is_detected(card: Path, repo: SnapshotRepo) -> None:
+    repo.snapshot(card)
+    wav = card / "Samples" / "Pack" / "BD.wav"
+    data = bytearray(wav.read_bytes())
+    data[-1] ^= 0xFF
+    wav.write_bytes(bytes(data))
+    touch_later(wav)
+    commit = repo.snapshot(card)
+    assert [c.path for c in repo.changes(commit.id)] == ["Samples/Pack/BD.wav"]
+
+
+def test_restore_folder_is_exact(card: Path, repo: SnapshotRepo) -> None:
+    first = repo.snapshot(card, "Initial")
+    project = card / "Projects" / "Song"
+    original_xml = (project / "project.xml").read_bytes()
+    (project / "project.xml").write_text("broken", encoding="utf-8")
+    (project / "RC000001.wav").unlink()
+    make_wav(project / "RC000099.wav")
+    repo.snapshot(card, "Broken")
+
+    result = repo.restore(card, first.id, "Projects/Song")
+    assert (project / "project.xml").read_bytes() == original_xml
+    assert (project / "RC000001.wav").is_file()
+    assert not (project / "RC000099.wav").exists()
+    assert sorted(result["restored"]) == ["Projects/Song/RC000001.wav", "Projects/Song/project.xml"]
+    assert result["removed"] == ["Projects/Song/RC000099.wav"]
+
+    subjects = [c.subject for c in repo.log()]
+    assert subjects[0].startswith("Restore Projects/Song from")
+    # Unaffected files outside the scope stay untouched
+    assert (card / "Samples" / "Pack" / "BD.wav").is_file()
+
+
+def test_restore_single_deleted_file(card: Path, repo: SnapshotRepo) -> None:
+    first = repo.snapshot(card)
+    target = card / "Samples" / "Pack" / "SD.wav"
+    content = target.read_bytes()
+    target.unlink()
+    repo.snapshot(card)
+    repo.restore(card, first.id, "Samples/Pack/SD.wav")
+    assert target.read_bytes() == content
+
+
+def test_restore_scope_absent_in_commit_removes_it(card: Path, repo: SnapshotRepo) -> None:
+    first = repo.snapshot(card)
+    make_wav(card / "Samples" / "New" / "x.wav")
+    repo.snapshot(card)
+    result = repo.restore(card, first.id, "Samples/New")
+    assert result["removed"] == ["Samples/New/x.wav"]
+    assert not (card / "Samples" / "New" / "x.wav").exists()
+
+
+def test_api_backup_flow_and_snapshot_before_write(card: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    (card / "bb2-stng.mml").write_text("settings")
+    app = create_app(card, [], tmp_path / "copies")
+    with TestClient(app) as client:
+        assert client.get("/api/backup/status").json()["initialized"] is False
+        assert client.put("/api/backup/target", json={"path": str(card / "inside")}).status_code == 400
+
+        status = client.put("/api/backup/target", json={"path": str(tmp_path / "bk")}).json()
+        assert status["initialized"] is True
+        assert settings.get("backup_target") == str((tmp_path / "bk").resolve())
+
+        first = client.post("/api/backup/snapshot", json={"message": "First"}).json()["commit"]
+        assert first["subject"].startswith("First:")
+
+        body = {
+            "type": "oneshot",
+            "name": "Kit",
+            "tags": ["Drum"],
+            "pads": [{"slot": 0, "source": "card:Samples/Pack/BD.wav"}],
+        }
+        make_wav(card / "Projects" / "Song" / "RC000005.wav")
+        assert client.post("/api/build/apply", json=body).status_code == 200
+
+        subjects = [c["subject"] for c in client.get("/api/backup/log").json()]
+        assert subjects[0].startswith("Before creating UserPatches\\OneShots\\Kit: 1 added")
+        changes = client.get("/api/backup/commit", params={"id": client.get("/api/backup/log").json()[0]["id"]}).json()
+        assert changes == [{"status": "A", "path": "Projects/Song/RC000005.wav"}]
+
+        config = client.get("/api/backup/config").json()["text"]
+        assert "include_factory = false" in config
+        assert client.put("/api/backup/config", json={"text": "include = ["}).status_code == 400

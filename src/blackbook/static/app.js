@@ -13,6 +13,7 @@ const state = {
   zones: [],
   buildTags: new Set(),
   pendingBody: null,
+  selectedCommit: null,
 };
 
 // ---------- helpers ----------
@@ -90,6 +91,7 @@ document.querySelectorAll("nav button").forEach((button) => {
     document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", b === button));
     document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === "view-" + button.dataset.view));
     if (button.dataset.view === "projects") loadProjects();
+    if (button.dataset.view === "backup") loadBackup();
   });
 });
 
@@ -493,6 +495,165 @@ async function loadProjects() {
       )))
   );
 }
+
+// ---------- backup ----------
+
+function fmtBytes(n) {
+  if (n > 1e9) return (n / 1e9).toFixed(2) + " GB";
+  if (n > 1e6) return (n / 1e6).toFixed(1) + " MB";
+  return Math.round(n / 1e3) + " kB";
+}
+
+function fmtDate(iso) {
+  return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function groupKey(path) {
+  const parts = path.split("/");
+  if (parts[0] === "Projects" && parts.length > 2) return parts.slice(0, 2).join("/");
+  if ((parts[0] === "UserPatches" || parts[0] === "Patches") && parts.length > 3) return parts.slice(0, 3).join("/");
+  if (parts[0] === "Samples" && parts.length > 2) return parts.slice(0, 2).join("/");
+  return path;
+}
+
+async function loadBackup() {
+  const status = await api("GET", "/api/backup/status");
+  const target = document.getElementById("bk-target");
+  if (status.target && document.activeElement !== target) target.value = status.target;
+
+  const lines = [];
+  if (!status.target) lines.push("No backup folder set.");
+  else if (!status.initialized) lines.push("Folder not initialized yet.");
+  else {
+    lines.push(`${status.commits} snapshots, repository ${fmtBytes(status.size_bytes)}`);
+    if (status.last) lines.push("Last: " + fmtDate(status.last.date));
+  }
+  lines.push(status.card_present ? "Card connected" : "Card not connected");
+  if (status.last_event) lines.push(status.last_event);
+  document.getElementById("bk-status").replaceChildren(...lines.map((l) => el("div", {}, l)));
+  document.getElementById("bk-snapshot").disabled = !status.initialized || !status.card_present;
+
+  if (!status.initialized) {
+    document.getElementById("bk-log").replaceChildren();
+    return;
+  }
+  const [log, config] = await Promise.all([api("GET", "/api/backup/log"), api("GET", "/api/backup/config")]);
+  const configBox = document.getElementById("bk-config");
+  if (document.activeElement !== configBox) configBox.value = config.text;
+
+  document.getElementById("bk-log").replaceChildren(
+    ...log.map((c) =>
+      el("div", {
+        class: "row" + (c.id === state.selectedCommit ? " selected" : ""),
+        onclick: () => showCommit(c.id, log),
+      }, el("span", { class: "name" }, c.subject), el("span", { class: "meta" }, fmtDate(c.date) + "  ·  " + c.id.slice(0, 10)))
+    )
+  );
+  if (!log.length) document.getElementById("bk-log").append(el("p", { class: "muted", style: "padding:10px" }, "No snapshots yet."));
+}
+
+async function restore(commit, path, label) {
+  const scope = path ? `"${path}"` : "ALL backed up folders";
+  if (!confirm(`Restore ${scope} from snapshot ${commit.slice(0, 10)}?\n\nThe current card state is saved as a snapshot first. Within the restored scope, files that do not exist in the snapshot are deleted from the card.`)) return;
+  try {
+    const result = await api("POST", "/api/backup/restore", { commit, path });
+    toast(`${label}: ${result.restored.length} files restored, ${result.removed.length} removed`);
+    await loadBackup();
+    await loadLibrary();
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+async function showCommit(id, log) {
+  state.selectedCommit = id;
+  const commit = log.find((c) => c.id === id);
+  document.querySelectorAll("#bk-log .row").forEach((row, i) => row.classList.toggle("selected", log[i].id === id));
+  const detail = document.getElementById("bk-detail");
+  detail.replaceChildren(el("p", { class: "muted" }, "Loading..."));
+  const changes = await api("GET", "/api/backup/commit?id=" + encodeURIComponent(id));
+  const parent = id + "~1";
+  const isFirst = log[log.length - 1].id === id;
+
+  const groups = new Map();
+  changes.forEach((c) => {
+    const key = groupKey(c.path);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(c);
+  });
+
+  const diffBox = el("div");
+  const rows = [];
+  for (const [key, files] of groups) {
+    const allDeleted = files.every((f) => f.status === "D");
+    rows.push(el("tr", { class: "group-head" },
+      el("td", { colspan: "2" }, key),
+      el("td", { class: "actions" },
+        el("button", { class: "small", title: "Restore this folder as it was in this snapshot", onclick: () => restore(allDeleted ? parent : id, key, key) }, allDeleted ? "Restore deleted" : "Restore state"),
+        " ",
+        isFirst ? null : el("button", { class: "small", title: "Undo the changes of this snapshot for this folder", onclick: () => restore(parent, key, key) }, "Restore before"))));
+    files.forEach((f) => {
+      const isText = /\.(xml|mml|toml)$/i.test(f.path);
+      rows.push(el("tr", { class: "file-row" },
+        el("td", { class: "status-" + f.status }, f.status),
+        el("td", {}, f.path),
+        el("td", { class: "actions" },
+          isText && f.status !== "A" ? el("button", { class: "small", onclick: async () => {
+            const result = await api("GET", `/api/backup/diff?id=${encodeURIComponent(id)}&path=${encodeURIComponent(f.path)}`);
+            diffBox.replaceChildren(el("div", { class: "label" }, "Diff " + f.path), el("pre", {}, result.diff || "(no textual difference)"));
+            diffBox.scrollIntoView({ behavior: "smooth" });
+          } }, "Diff") : null,
+          " ",
+          el("button", { class: "small", onclick: () => restore(f.status === "D" ? parent : id, f.path, f.path) }, f.status === "D" ? "Restore deleted" : "Restore"))));
+    });
+  }
+
+  detail.replaceChildren(
+    el("h2", {}, commit.subject),
+    el("div", { class: "muted" }, fmtDate(commit.date), "  ·  ", id),
+    el("div", { style: "margin:12px 0" },
+      el("button", { onclick: () => restore(id, "", "Snapshot") }, "Restore everything to this snapshot")),
+    el("div", { class: "label" }, `Changes (${changes.length} files)`),
+    changes.length ? el("table", {}, el("tbody", {}, rows)) : el("p", { class: "muted" }, "Configuration only."),
+    diffBox
+  );
+}
+
+document.getElementById("bk-target-save").addEventListener("click", async () => {
+  try {
+    await api("PUT", "/api/backup/target", { path: document.getElementById("bk-target").value.trim() });
+    toast("Backup folder set");
+    await loadBackup();
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
+
+document.getElementById("bk-snapshot").addEventListener("click", async (ev) => {
+  const button = ev.target;
+  button.disabled = true;
+  button.textContent = "Running...";
+  try {
+    const result = await api("POST", "/api/backup/snapshot", { message: document.getElementById("bk-message").value });
+    toast(result.commit ? result.commit.subject : "No changes since the last snapshot");
+    document.getElementById("bk-message").value = "";
+    await loadBackup();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    button.textContent = "Snapshot now";
+    button.disabled = false;
+  }
+});
+
+document.getElementById("bk-config-save").addEventListener("click", async () => {
+  try {
+    await api("PUT", "/api/backup/config", { text: document.getElementById("bk-config").value });
+    toast("Configuration saved, it is part of the next snapshot");
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
 
 // ---------- start ----------
 

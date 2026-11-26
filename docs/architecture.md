@@ -10,7 +10,8 @@
 | Patch builder | generates `patch.xml` from built-in templates per patch type and the UI input |
 | WAV module | reads WAV chunks (format, frames, cue markers), computes waveform data for the UI |
 | Editor bridge | launches external editors, generates Reaper projects, watches for changed WAVs |
-| Snapshot store | content-addressed object store with manifests, diff and restore |
+| Snapshot service | git backup of the card: mirror, commit, history, diff, restore, card connection watcher |
+| Settings | local settings of the installation in `.blackbook/settings.json` |
 | Writer | applies a change plan to the card |
 | API | FastAPI endpoints for the frontend |
 | Frontend | browser UI served by the backend |
@@ -19,7 +20,7 @@
 
 1. The operation produces a change plan: file operations and XML changes.
 2. The frontend shows the plan as a diff (dry run).
-3. After confirmation, the snapshot store creates a snapshot of the affected files.
+3. After confirmation, the snapshot service commits the current card state, if a backup folder is configured.
 4. The writer executes the plan and logs every step.
 5. The scanner updates the index.
 
@@ -44,4 +45,5 @@ The patch builder uses its own templates inside the package, one per patch type.
 
 - The server binds to `127.0.0.1` only.
 - Nothing is written without explicit confirmation.
-- Backups are stored outside the card.
+- Backups are stored outside the card; the backup folder must not be located on the card.
+- The backup repository has no remote, nothing leaves the machine.

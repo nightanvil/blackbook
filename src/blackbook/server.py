@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import threading
+import tomllib
+from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path
 
@@ -10,11 +13,12 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import builder
+from . import builder, settings
 from .backup import Backup
 from .card import Card, browse
 from .mapping import Zone, assign_key_ranges, automap, note_name
 from .patchindex import FACTORY_TAGS
+from .snapshot import CONFIG_NAME, SnapshotError, SnapshotRepo
 from .wav import WavError, read_info
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -80,6 +84,23 @@ class RemapIn(BaseModel):
     gap_rule: str = "split"
 
 
+class BackupTargetIn(BaseModel):
+    path: str
+
+
+class SnapshotIn(BaseModel):
+    message: str = ""
+
+
+class RestoreIn(BaseModel):
+    commit: str
+    path: str = ""
+
+
+class ConfigIn(BaseModel):
+    text: str
+
+
 class TagsIn(BaseModel):
     ref: str
     tags: list[str]
@@ -91,11 +112,73 @@ def zone_out(zone: Zone) -> dict:
     return data
 
 
-def create_app(card_root: Path, libraries: list[Path], backup_dir: Path) -> FastAPI:
+class SnapshotService:
+    """Holds the configured backup repository and watches for card connection."""
+
+    def __init__(self, card: Card, target: Path | None):
+        self.card = card
+        self.repo = SnapshotRepo(target) if target else None
+        self.last_event = ""
+        self._stop = threading.Event()
+
+    def require(self) -> SnapshotRepo:
+        if self.repo is None:
+            raise HTTPException(409, "no backup folder configured")
+        return self.repo
+
+    def card_present(self) -> bool:
+        return (self.card.root / "bb2-stng.mml").is_file() or (self.card.root / "Projects").is_dir()
+
+    def auto_snapshot(self, reason: str, setting: str) -> None:
+        repo = self.repo
+        if repo is None or not repo.initialized or not self.card_present():
+            return
+        if not getattr(repo.config(), setting):
+            return
+        try:
+            commit = repo.snapshot(self.card.root, reason)
+            self.last_event = f"{reason}: " + (commit.subject if commit else "no changes")
+        except (SnapshotError, OSError) as exc:
+            self.last_event = f"{reason} failed: {exc}"
+
+    def before_write(self, what: str) -> None:
+        repo = self.repo
+        if repo is None or not repo.initialized:
+            return
+        if repo.config().snapshot_before_write:
+            # A failing snapshot blocks the write
+            repo.snapshot(self.card.root, f"Before {what}")
+
+    def watch(self) -> None:
+        present = False
+        while not self._stop.is_set():
+            now = self.card_present()
+            if now and not present:
+                self.auto_snapshot("Card connected", "snapshot_on_connect")
+            present = now
+            self._stop.wait(5)
+
+    def stop(self) -> None:
+        self._stop.set()
+
+
+def create_app(
+    card_root: Path, libraries: list[Path], backup_dir: Path, snapshot_target: Path | None = None
+) -> FastAPI:
     card = Card(card_root)
     sources = Sources(card, libraries)
     backup = Backup(backup_dir, card.root)
-    app = FastAPI(title="blackbook")
+    target = snapshot_target or (Path(settings.get("backup_target")) if settings.get("backup_target") else None)
+    snapshots = SnapshotService(card, target)
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        watcher = threading.Thread(target=snapshots.watch, name="card-watcher", daemon=True)
+        watcher.start()
+        yield
+        snapshots.stop()
+
+    app = FastAPI(title="blackbook", lifespan=lifespan)
 
     def make_plan(body: BuildIn) -> builder.Plan:
         if body.type == "oneshot":
@@ -187,6 +270,7 @@ def create_app(card_root: Path, libraries: list[Path], backup_dir: Path) -> Fast
         if root != "UserPatches":
             raise HTTPException(403, "only user patches can be tagged")
         card.patch_dir(body.ref)
+        snapshots.before_write(f"tagging {body.ref}")
         index_path = card.index_path("UserPatches")
         backup.save(index_path)
         index = card.load_index("UserPatches")
@@ -255,8 +339,86 @@ def create_app(card_root: Path, libraries: list[Path], backup_dir: Path) -> Fast
         plan = make_plan(body)
         if not plan.ok:
             raise HTTPException(400, "; ".join(plan.errors))
+        snapshots.before_write(f"creating {plan.target_ref}")
         written = builder.apply(card, plan, backup)
         return {"ref": plan.target_ref, "written": written}
+
+    # ---------- backup ----------
+
+    def snapshot_call(func, *args):
+        try:
+            return func(*args)
+        except SnapshotError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.get("/api/backup/status")
+    def backup_status() -> dict:
+        repo = snapshots.repo
+        status = repo.status() if repo else {"target": None, "initialized": False}
+        status["card_present"] = snapshots.card_present()
+        status["last_event"] = snapshots.last_event
+        return status
+
+    @app.put("/api/backup/target")
+    def backup_target(body: BackupTargetIn) -> dict:
+        path = Path(body.path).expanduser()
+        if not path.is_absolute():
+            raise HTTPException(400, "absolute path required")
+        if path.resolve() == card.root or path.resolve().is_relative_to(card.root):
+            raise HTTPException(400, "the backup folder must not be on the card")
+        repo = SnapshotRepo(path)
+        snapshot_call(repo.init)
+        snapshots.repo = repo
+        settings.set_value("backup_target", str(repo.target))
+        return repo.status()
+
+    @app.post("/api/backup/snapshot")
+    def backup_snapshot(body: SnapshotIn) -> dict:
+        repo = snapshots.require()
+        if not snapshots.card_present():
+            raise HTTPException(409, "card not connected")
+        commit = snapshot_call(repo.snapshot, card.root, body.message.strip() or "Manual snapshot")
+        return {"commit": asdict(commit) if commit else None}
+
+    @app.get("/api/backup/log")
+    def backup_log(limit: int = 200) -> list[dict]:
+        repo = snapshots.require()
+        return [asdict(c) for c in snapshot_call(repo.log, limit)]
+
+    @app.get("/api/backup/commit")
+    def backup_commit(id: str) -> list[dict]:
+        repo = snapshots.require()
+        return [asdict(c) for c in snapshot_call(repo.changes, id)]
+
+    @app.get("/api/backup/diff")
+    def backup_diff(id: str, path: str) -> dict:
+        repo = snapshots.require()
+        return {"diff": snapshot_call(repo.file_diff, id, path)}
+
+    @app.post("/api/backup/restore")
+    def backup_restore(body: RestoreIn) -> dict:
+        repo = snapshots.require()
+        if not snapshots.card_present():
+            raise HTTPException(409, "card not connected")
+        return snapshot_call(repo.restore, card.root, body.commit, body.path)
+
+    @app.get("/api/backup/config")
+    def backup_config() -> dict:
+        repo = snapshots.require()
+        if not repo.initialized:
+            raise HTTPException(409, "backup folder not initialized")
+        return {"name": CONFIG_NAME, "text": repo.config_path.read_text(encoding="utf-8")}
+
+    @app.put("/api/backup/config")
+    def backup_config_save(body: ConfigIn) -> dict:
+        repo = snapshots.require()
+        try:
+            tomllib.loads(body.text)
+        except tomllib.TOMLDecodeError as exc:
+            raise HTTPException(400, f"invalid TOML: {exc}") from exc
+        repo.config_path.write_text(body.text, encoding="utf-8")
+        snapshot_call(repo.config)
+        return {"saved": True}
 
     @app.get("/")
     def index() -> FileResponse:

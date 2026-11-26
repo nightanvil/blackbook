@@ -189,6 +189,40 @@ td input { width: 60px; padding: 3px 6px; }
 .err { color: var(--err); }
 .ok { color: var(--ok); }
 
+/* Backup */
+.backup-side {
+  width: 440px;
+  padding: 12px;
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+.target-row { display: flex; gap: 6px; }
+.target-row input { flex: 1; min-width: 0; }
+#bk-log { flex: 1; border: 1px solid var(--line); border-radius: var(--radius); }
+#bk-log .row { flex-wrap: wrap; }
+#bk-log .row .meta { width: 100%; }
+.config textarea {
+  width: 100%;
+  height: 260px;
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px;
+  margin-bottom: 6px;
+}
+.status-A { color: var(--ok); }
+.status-M { color: var(--warn); }
+.status-D { color: var(--err); }
+.file-row td:first-child { width: 24px; font-weight: 600; }
+.file-row .actions { white-space: nowrap; text-align: right; }
+.group-head td { padding-top: 12px; color: var(--muted); font-size: 12px; }
+
 /* Dialog */
 dialog {
   background: var(--panel);

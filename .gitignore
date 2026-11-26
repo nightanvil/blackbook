@@ -33,3 +33,6 @@ desktop.ini
 
 # Repository-local toolchain
 .tools/
+
+# Local settings of this installation
+.blackbook/

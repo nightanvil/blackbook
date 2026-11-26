@@ -14,9 +14,9 @@ Status: prototype 0.1. Patches built with blackbook have not been verified on th
 | Patch builder multisample: key and velocity mapping from file names, editable zones, keyboard view | prototype |
 | Generated `preview.wav` for new patches | prototype |
 | Project overview: missing references and unused WAVs per project | prototype |
+| Backup: git snapshots with history, diff and restore per file, folder or everything | prototype |
 | Patch builder loop, slicer, shredder | planned |
 | External editor (Reaper) with automatic reference updates | planned |
-| Snapshot backup with diff and delta | planned |
 | Renaming with reference updates, batch rename | planned |
 
 Details in [docs/features.md](docs/features.md).
@@ -31,10 +31,17 @@ Details in [docs/features.md](docs/features.md).
 
 The browser opens at `http://127.0.0.1:8765/`. The card path can also be set via `BLACKBOOK_CARD`.
 
+Snapshot without UI, for example from a script or cron job:
+
+```
+.venv/bin/blackbook snapshot --card <card> -m "After session"
+```
+
 | Option | Meaning |
 |---|---|
 | `--card` | mounted card or a mirror of it |
 | `--library` | local sample folder shown in the builder's browser, repeatable; samples are copied into the patch |
+| `--backup-target` | git backup folder, also selectable in the UI; default is the last chosen folder |
 | `--backup-dir` | folder for copies of modified card files, default `backups/` in the repository |
 | `--port` | port of the local server, default 8765 |
 | `--no-browser` | do not open the browser |
@@ -64,7 +71,7 @@ The browser opens at `http://127.0.0.1:8765/`. The card path can also be set via
 
 ## Setup
 
-The bootstrap installs the complete toolchain inside the repository. Nothing is installed system-wide. Running the bootstrap requires any Python 3.8 or newer; the command is the same on every platform.
+The bootstrap installs the complete toolchain inside the repository. Nothing is installed system-wide. Running the bootstrap requires any Python 3.8 or newer; the command is the same on every platform. The backup requires `git` on the `PATH` (on Windows: Git for Windows).
 
 | Directory | Content |
 |---|---|
@@ -104,6 +111,8 @@ blackbook/
 │   ├── templates.py        patch.xml generation
 │   ├── builder.py          change plans and writing of new patches
 │   ├── backup.py           copies of modified files and journal
+│   ├── snapshot.py         git backup: mirror, commits, diff, restore
+│   ├── settings.py         local settings in .blackbook/settings.json
 │   └── static/             browser UI (HTML, CSS, JavaScript)
 ├── tests/                  pytest suite with synthetic test cards (no factory content)
 ├── bootstrap.py            toolchain setup inside the repository
