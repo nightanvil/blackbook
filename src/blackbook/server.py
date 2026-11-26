@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
+import sys
 import threading
 import time
 import tomllib
@@ -17,7 +19,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import builder, patchedit, settings
+from . import builder, patchedit, settings, updater
 from .backup import Backup
 from .card import Card, browse
 from .cardpath import INVALID_NAME_CHARS, resolve_sample_reference
@@ -109,6 +111,11 @@ class RemapIn(BaseModel):
 
 class BackupTargetIn(BaseModel):
     path: str
+
+
+class MkdirIn(BaseModel):
+    path: str
+    name: str
 
 
 class SnapshotIn(BaseModel):
@@ -357,6 +364,9 @@ def create_app(
             "backup": str(backup.dir),
             "commit": started_commit,
             "backup_ready": bool(snapshots.repo and snapshots.repo.initialized),
+            "first_start": not settings.get("welcome_done", False),
+            "version": updater.__version__,
+            "dev_checkout": updater.is_git_checkout(),
             "git_available": git_executable() is not None,
             "suggested_backup": str(default_target()),
             "current_commit": code_commit(),
@@ -606,21 +616,91 @@ def create_app(
             raise HTTPException(400, "absolute path required")
         if path.resolve() == card.root or path.resolve().is_relative_to(card.root):
             raise HTTPException(400, "the backup folder must not be on the card")
+        # A folder that already holds other files gets its own subfolder for the backup
+        try:
+            foreign = path.is_dir() and any(path.iterdir()) and not (path / CONFIG_NAME).exists()
+        except OSError:
+            foreign = False
+        if foreign:
+            path = path / "blackbook-backup"
         repo = SnapshotRepo(path)
         snapshot_call(repo.init)
         snapshots.repo = repo
         settings.set_value("backup_target", str(repo.target))
+        # A new backup folder starts with a complete snapshot of the card
+        if snapshots.card_present() and not repo.has_commits():
+            commit = snapshot_call(repo.snapshot, card.root, "Initial snapshot")
+            snapshots.record("Initial snapshot", commit)
         return repo.status()
 
     @app.post("/api/backup/setup")
     def backup_setup() -> dict:
         """Set up the suggested backup folder and take the first snapshot."""
-        status = backup_target(BackupTargetIn(path=str(default_target())))
-        if snapshots.card_present() and not snapshots.repo.has_commits():
-            commit = snapshot_call(snapshots.repo.snapshot, card.root, "Initial snapshot")
-            snapshots.record("Initial snapshot", commit)
-            status = snapshots.repo.status()
-        return status
+        return backup_target(BackupTargetIn(path=str(default_target())))
+
+    # ---------- folder picker ----------
+
+    @app.get("/api/fs/dirs")
+    def fs_dirs(path: str = "") -> dict:
+        base = Path(path).expanduser() if path else Path.home()
+        if not base.is_absolute() or not base.is_dir():
+            raise HTTPException(404, f"folder not found: {path}")
+        try:
+            dirs = sorted(
+                (p.name for p in base.iterdir() if p.is_dir() and not p.name.startswith(".")), key=str.casefold
+            )
+        except OSError as exc:
+            raise HTTPException(403, f"cannot open {base}: {exc.strerror}") from exc
+        roots = [str(Path.home())]
+        if sys.platform == "win32":
+            roots += [f"{d}:\\" for d in "CDEFGHIJKLMNOPQRSTUVWXYZ" if Path(f"{d}:\\").exists()]
+        else:
+            roots.append("/")
+        return {
+            "path": str(base),
+            "parent": str(base.parent) if base.parent != base else None,
+            "dirs": dirs,
+            "roots": roots,
+            "is_card": base.resolve() == card.root or base.resolve().is_relative_to(card.root),
+        }
+
+    @app.post("/api/fs/mkdir")
+    def fs_mkdir(body: MkdirIn) -> dict:
+        name = body.name.strip()
+        if not name or any(ch in name for ch in '/\\:*?"<>|'):
+            raise HTTPException(400, "invalid folder name")
+        target = Path(body.path) / name
+        try:
+            target.mkdir(parents=False, exist_ok=False)
+        except FileExistsError as exc:
+            raise HTTPException(409, f"{name} exists already") from exc
+        except OSError as exc:
+            raise HTTPException(400, f"cannot create {target}: {exc.strerror}") from exc
+        return {"path": str(target)}
+
+    # ---------- first start and updates ----------
+
+    @app.post("/api/welcome/done")
+    def welcome_done() -> dict:
+        settings.set_value("welcome_done", True)
+        return {"ok": True}
+
+    @app.get("/api/update/check")
+    def update_check() -> dict:
+        return updater.check()
+
+    @app.post("/api/update/apply")
+    def update_apply() -> dict:
+        try:
+            return updater.apply_release()
+        except (updater.UpdateError, OSError) as exc:
+            raise HTTPException(400, f"update failed: {exc}") from exc
+
+    @app.post("/api/shutdown")
+    def shutdown() -> dict:
+        # Leave time for the response, then end the process so the start script finishes
+        threading.Timer(0.5, lambda: os._exit(0)).start()
+        return {"ok": True}
 
     @app.post("/api/backup/snapshot")
     def backup_snapshot(body: SnapshotIn) -> dict:

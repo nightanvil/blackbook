@@ -24,7 +24,9 @@
   <li>For the backup: <b>git</b>. The start script takes care of it, see "What is git".</li>
 </ul>
 <h3>Before the first save</h3>
-<p>When the card is connected and nothing is backed up yet, a bar at the top offers <b>Set up backup</b>. One click creates <code>blackbook-backup</code> in your documents folder and takes the first snapshot. From then on blackbook saves a snapshot before and after every write, and every time the card is connected. <b>Other folder</b> lets you choose a different place in Backup.</p>
+<p>On the first start a welcome window offers to set up the backup: <b>Set up backup</b> uses <code>blackbook-backup</code> in your documents folder, <b>Choose folder</b> lets you pick another place. The first snapshot copies the whole card and can take several minutes. From then on blackbook saves a snapshot before and after every write, and every time the card is connected. If you skip it, a bar at the top reminds you.</p>
+<h3>Updates</h3>
+<p>When blackbook starts, it checks GitHub for a newer version. If there is one, a bar at the top offers <b>Update now</b>. After the update blackbook stops, start it again as usual. Settings, backup and card stay untouched.</p>
 ${todo}`,
     },
     { id: "library", title: "Library", html: `<p>Factory and user patches with their tags and samples.</p>${todo}` },

@@ -21,6 +21,9 @@ Planned: loop, slicer and shredder patches, an external audio editor, renaming w
 
 ## Installation and start
 
+> [!IMPORTANT]
+> **New to Python, git or the terminal? Follow the steps below exactly, one after another, and do not skip any.** You do not need to know these tools, the steps are written so that it works without that knowledge. If something does not look as described, stop there and [ask](https://github.com/nightanvil/blackbook/issues) instead of trying something else.
+
 You do this once. blackbook sets itself up inside its own folder and changes nothing else on your computer. The first start needs internet and takes a few minutes, later starts take seconds.
 
 ### What blackbook needs
@@ -149,11 +152,40 @@ You never have to use git yourself, blackbook does everything in the background,
 
 ## First steps
 
-1. **Set up the backup.** When the card is connected for the first time, a bar at the top offers it: click **Set up backup**. blackbook creates the folder `blackbook-backup` in your documents folder and takes the first snapshot. From then on it takes snapshots by itself. With **Other folder** you choose a different place (not on the card). Without git: copy the whole card to your computer yourself.
+1. **Set up the backup.** On the first start a welcome window offers it. **Set up backup** creates the folder `blackbook-backup` in your documents folder, **Choose folder** lets you pick another place on your computer (not on the card). The first snapshot copies the whole card and can take several minutes, keep blackbook open until it is done. From then on blackbook takes snapshots by itself. If you click **Later**, a bar at the top reminds you. Without git: copy the whole card to your computer yourself.
 2. Look around in **Library**. Nothing is written to the card unless you click **Write to card**.
 3. Every write shows a review first: what is copied, what changes.
 
 The built-in help (**?** at the top right, or `F1`) explains more.
+
+## Updating
+
+When blackbook starts, it asks GitHub whether a newer version exists. Nothing about you or your card is sent, it only reads the version number of the latest release.
+
+If there is a new version, a bar at the top shows it:
+
+1. Click **Update now**. blackbook downloads the new version and replaces its own program files.
+2. A window says that blackbook stops now. Click **OK**.
+3. Start blackbook again the same way as before (`start.sh`, `start.bat` or `start.command`). The first start after an update may take a moment.
+
+Your settings, your backup and your card are not touched by an update.
+
+**Updating by hand** (if the automatic update does not work): download the new ZIP, unpack it into a new folder and copy the folder `.blackbook` from the old blackbook folder into the new one. It is hidden on Linux and macOS: press `Ctrl+H` in the file manager, or `Cmd+Shift+.` in the Finder.
+
+## Your data: what is where
+
+| What | Where | Important? |
+|---|---|---|
+| Your card | the blackbox microSD card | yes, of course |
+| Backup with all snapshots | the backup folder you chose, by default `blackbook-backup` in your documents folder | **yes**, this is your safety net. It is a folder like any other, you can copy it to an external drive. |
+| Backup settings | `blackbook-backup.toml` inside the backup folder: what is backed up, automatic snapshots on or off | yes, part of the backup |
+| blackbook settings | `.blackbook/settings.json` in the blackbook folder: where the card and the backup folder are | small, blackbook asks again if it is missing |
+| Copies of changed index files | `backups/` in the blackbook folder | as an extra safety net |
+| Program and helpers | the blackbook folder, including `.tools` and `.venv` | no, can be downloaded again. `.tools` and `.venv` are created again on the next start if you delete them. |
+
+The theme (dark or light) is stored in your browser.
+
+**Removing blackbook:** delete the blackbook folder. Your backup folder stays where it is, delete it separately if you want.
 
 ## Tested systems
 

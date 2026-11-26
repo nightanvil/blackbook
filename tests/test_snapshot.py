@@ -136,8 +136,10 @@ def test_api_backup_flow_and_snapshot_before_write(card: Path, tmp_path: Path, m
         assert status["initialized"] is True
         assert settings.get("backup_target") == str((tmp_path / "bk").resolve())
 
-        first = client.post("/api/backup/snapshot", json={"message": "First"}).json()["commit"]
-        assert first["subject"].startswith("First:")
+        # Setting the folder takes the first snapshot
+        assert status["commits"] == 1
+        assert client.get("/api/backup/log").json()[0]["subject"].startswith("Initial snapshot:")
+        assert client.post("/api/backup/snapshot", json={"message": "Again"}).json()["commit"] is None
 
         body = {
             "type": "oneshot",
@@ -228,3 +230,14 @@ def test_backup_setup_uses_suggested_folder(card: Path, tmp_path: Path, monkeypa
         status = client.post("/api/backup/setup").json()
         assert status["initialized"] is True and status["commits"] == 1
         assert client.get("/api/info").json()["backup_ready"] is True
+
+
+def test_backup_in_used_folder_gets_subfolder(card: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    documents = tmp_path / "Documents"
+    documents.mkdir()
+    (documents / "letter.txt").write_text("private")
+    with TestClient(create_app(card, [], tmp_path / "copies")) as client:
+        status = client.put("/api/backup/target", json={"path": str(documents)}).json()
+    assert status["target"] == str((documents / "blackbook-backup").resolve())
+    assert sorted(p.name for p in documents.iterdir()) == ["blackbook-backup", "letter.txt"]

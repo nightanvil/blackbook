@@ -835,7 +835,8 @@ async function loadBackup() {
     el("table", { class: "facts" }, el("tbody", {}, facts.map(([k, v]) => el("tr", {}, el("td", { class: "muted" }, k), el("td", {}, v))))),
     events.length ? el("div", { class: "label" }, "Events since start") : null,
     events.length ? el("table", { class: "facts" }, el("tbody", {}, events.map((e) => el("tr", {}, el("td", { class: "muted" }, e.time), el("td", {}, e.text))))) : null);
-  document.getElementById("bk-snapshot").disabled = !status.initialized || !status.card_present;
+  state.backupInitialized = status.initialized;
+  setBackupBusy(!!state.backupBusy, document.getElementById("bk-snapshot").textContent);
 
   if (!status.initialized) {
     document.getElementById("bk-log").replaceChildren();
@@ -929,20 +930,12 @@ async function showCommit(id, log) {
   );
 }
 
-document.getElementById("bk-target-save").addEventListener("click", async () => {
-  try {
-    await api("PUT", "/api/backup/target", { path: document.getElementById("bk-target").value.trim() });
-    toast("Backup folder set");
-    await loadBackup();
-  } catch (err) {
-    toast(err.message, true);
-  }
-});
+document.getElementById("bk-target-save").addEventListener("click", () => setBackupFolder(document.getElementById("bk-target").value.trim()));
+document.getElementById("bk-target-browse").addEventListener("click", chooseBackupFolder);
 
-document.getElementById("bk-snapshot").addEventListener("click", async (ev) => {
-  const button = ev.target;
-  button.disabled = true;
-  button.textContent = "Running...";
+document.getElementById("bk-snapshot").addEventListener("click", async () => {
+  if (state.backupBusy) return;
+  setBackupBusy(true);
   try {
     const result = await api("POST", "/api/backup/snapshot", { message: document.getElementById("bk-message").value });
     toast(result.commit ? result.commit.subject : "No changes since the last snapshot");
@@ -951,8 +944,8 @@ document.getElementById("bk-snapshot").addEventListener("click", async (ev) => {
   } catch (err) {
     toast(err.message, true);
   } finally {
-    button.textContent = "Snapshot now";
-    button.disabled = false;
+    setBackupBusy(false);
+    await loadBackup();
   }
 });
 
@@ -1005,7 +998,7 @@ async function showCodeCommit() {
 // Ask once per session to set up the backup while the card is connected and nothing is backed up
 function renderBackupBanner(info) {
   const banner = document.getElementById("backup-banner");
-  const show = state.cardPresent && !info.backup_ready && !state.backupBannerDismissed;
+  const show = state.cardPresent && !info.backup_ready && !info.first_start && !state.backupBannerDismissed && !state.backupBusy;
   banner.hidden = !show;
   const key = show ? `${info.git_available}|${info.suggested_backup}` : "";
   if (!show || banner.dataset.key === key) return;
@@ -1014,8 +1007,8 @@ function renderBackupBanner(info) {
   if (info.git_available) {
     fill(banner,
       el("span", { class: "grow" }, el("strong", {}, "Your card is not backed up yet. "), "blackbook can keep snapshots of the card in ", el("code", {}, info.suggested_backup), "."),
-      el("button", { class: "primary small", onclick: setupBackup }, "Set up backup"),
-      el("button", { class: "small", onclick: () => { showView("backup"); document.getElementById("bk-target").focus(); } }, "Other folder"),
+      el("button", { class: "primary small", onclick: () => setBackupFolder(info.suggested_backup) }, "Set up backup"),
+      el("button", { class: "small", onclick: chooseBackupFolder }, "Other folder"),
       later);
   } else {
     fill(banner,
@@ -1025,19 +1018,177 @@ function renderBackupBanner(info) {
   }
 }
 
-async function setupBackup(ev) {
+// ---------- backup setup ----------
+
+const FIRST_SNAPSHOT_HINT = "The first snapshot copies the whole card into the backup folder. With a full card this can take several minutes. Keep blackbook open until it is done.";
+
+// Disable every backup action while a snapshot runs, also across view changes
+function setBackupBusy(busy, label = "Running ...") {
+  state.backupBusy = busy;
+  const snap = document.getElementById("bk-snapshot");
+  snap.disabled = busy || !state.backupInitialized || !state.cardPresent;
+  snap.textContent = busy ? label : "Snapshot now";
+  ["bk-target-save", "bk-target-browse"].forEach((id) => { document.getElementById(id).disabled = busy; });
+  document.querySelectorAll("#backup-banner button").forEach((b) => { b.disabled = busy; });
+  document.getElementById("bk-busy").hidden = !busy;
+}
+
+async function setBackupFolder(path) {
+  if (state.backupBusy) return;
+  setBackupBusy(true, "First snapshot ...");
+  toast(FIRST_SNAPSHOT_HINT);
+  try {
+    const status = await api("PUT", "/api/backup/target", { path });
+    toast(status.commits ? `Backup set up in ${status.target}, first snapshot taken` : `Backup folder set: ${status.target}`);
+    document.getElementById("backup-banner").hidden = true;
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    setBackupBusy(false);
+    await loadBackup();
+  }
+}
+
+async function chooseBackupFolder() {
+  const current = document.getElementById("bk-target").value.trim();
+  const path = await pickFolder(current || state.suggestedBackup);
+  if (path) await setBackupFolder(path);
+}
+
+// ---------- folder picker ----------
+
+function pickFolder(start) {
+  const dialog = document.getElementById("folder-dialog");
+  let current = null;
+
+  async function open(path) {
+    let data;
+    try {
+      data = await api("GET", "/api/fs/dirs?path=" + encodeURIComponent(path || ""));
+    } catch (_) {
+      // A suggested folder that does not exist yet: start at its parent
+      if (path) return open(path.replace(/[\\/][^\\/]*[\\/]?$/, "") || "");
+      throw _;
+    }
+    current = data.path;
+    document.getElementById("folder-path").textContent = data.path;
+    document.getElementById("folder-warn").textContent = data.is_card ? "This folder is on the blackbox card. Choose a folder on your computer." : "";
+    document.getElementById("folder-choose").disabled = data.is_card;
+    fill(document.getElementById("folder-roots"), data.roots.map((r, i) => el("button", { class: "small", title: r, onclick: () => open(r) }, i === 0 ? "Home" : r)));
+    const rows = [];
+    if (data.parent) rows.push(el("div", { class: "row dir", onclick: () => open(data.parent) }, el("span", { class: "name" }, "..")));
+    data.dirs.forEach((d) => rows.push(el("div", { class: "row dir", onclick: () => open(data.path.replace(/[\\/]$/, "") + (data.path.includes("\\") ? "\\" : "/") + d) }, el("span", { class: "name" }, d))));
+    if (!data.dirs.length) rows.push(el("p", { class: "muted", style: "padding:10px" }, "No subfolders."));
+    fill(document.getElementById("folder-list"), rows);
+  }
+
+  return new Promise((resolve) => {
+    const done = (value) => {
+      dialog.close();
+      ["folder-choose", "folder-cancel", "folder-create"].forEach((id) => { document.getElementById(id).onclick = null; });
+      resolve(value);
+    };
+    document.getElementById("folder-choose").onclick = () => done(current);
+    document.getElementById("folder-cancel").onclick = () => done(null);
+    dialog.oncancel = () => done(null);
+    document.getElementById("folder-create").onclick = async () => {
+      const input = document.getElementById("folder-new");
+      try {
+        const created = await api("POST", "/api/fs/mkdir", { path: current, name: input.value });
+        input.value = "";
+        await open(created.path);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    };
+    document.getElementById("folder-new").onkeydown = (ev) => { if (ev.key === "Enter") document.getElementById("folder-create").click(); };
+    open(start).then(() => dialog.showModal(), (err) => { toast(err.message, true); resolve(null); });
+  });
+}
+
+// ---------- first start ----------
+
+function showWelcome(info) {
+  const dialog = document.getElementById("welcome-dialog");
+  const finish = async () => {
+    dialog.close();
+    try { await api("POST", "/api/welcome/done"); } catch (_) { /* shown again next time */ }
+  };
+  const content = [
+    el("h2", {}, "Welcome to blackbook"),
+    el("p", {}, el("strong", {}, "This is a very early version. "), "Please try it and tell me what you need: ",
+      el("a", { href: "https://github.com/nightanvil/blackbook/issues", target: "_blank", rel: "noopener noreferrer" }, "ideas and feedback"), "."),
+    el("p", {}, "Card: ", state.cardPresent ? el("span", { class: "ok" }, "connected") : "not connected yet, switch the blackbox to microSD mode."),
+  ];
+  const actions = [];
+  if (info.backup_ready) {
+    content.push(el("p", {}, "The backup is already set up."));
+    actions.push(el("button", { class: "primary", onclick: finish }, "Start"));
+  } else if (info.git_available) {
+    content.push(
+      el("h3", {}, "Your card is not backed up yet"),
+      el("p", {}, "blackbook can keep snapshots of the card in ", el("code", {}, info.suggested_backup),
+        ". With snapshots you can go back to any earlier state of the card, for a single file or everything."),
+      el("p", { class: "hint" }, FIRST_SNAPSHOT_HINT));
+    actions.push(
+      el("button", { onclick: finish }, "Later"),
+      el("button", { onclick: async () => { await finish(); await chooseBackupFolder(); } }, "Choose folder"),
+      el("button", { class: "primary", onclick: async () => { await finish(); await setBackupFolder(info.suggested_backup); } }, "Set up backup"));
+  } else {
+    content.push(
+      el("h3", {}, "Backups are off"),
+      el("p", {}, "git is not installed, so blackbook cannot make backups of the card. Everything else works. Copy the whole card to your computer yourself before you save anything."));
+    actions.push(
+      el("button", { onclick: async () => { await finish(); openHelp("git"); } }, "How to install git"),
+      el("button", { class: "primary", onclick: finish }, "Start"));
+  }
+  fill(document.getElementById("welcome-content"), content);
+  fill(document.getElementById("welcome-actions"), actions);
+  dialog.oncancel = finish;
+  dialog.showModal();
+}
+
+// ---------- updates ----------
+
+async function checkForUpdate() {
+  let info;
+  try { info = await api("GET", "/api/update/check"); } catch (_) { return; }
+  if (!info.available) return;
+  const banner = document.getElementById("update-banner");
+  if (info.mode === "git") {
+    fill(banner,
+      el("span", { class: "grow" }, el("strong", {}, `${info.behind} new commit${info.behind === 1 ? "" : "s"} available. `), "Development checkout: update with git pull, then start blackbook again."),
+      el("button", { class: "small", onclick: () => { banner.hidden = true; } }, "Later"));
+  } else {
+    fill(banner,
+      el("span", { class: "grow" }, el("strong", {}, `blackbook ${info.latest} is available. `), `You have ${info.current}.`),
+      info.url ? el("a", { href: info.url, target: "_blank", rel: "noopener noreferrer" }, "What is new") : null,
+      el("button", { class: "primary small", onclick: installUpdate }, "Update now"),
+      el("button", { class: "small", onclick: () => { banner.hidden = true; } }, "Later"));
+  }
+  banner.hidden = false;
+}
+
+async function installUpdate(ev) {
   const button = ev.currentTarget;
   button.disabled = true;
-  button.textContent = "Setting up ...";
+  button.textContent = "Updating ...";
   try {
-    const status = await api("POST", "/api/backup/setup");
-    toast(`Backup set up in ${status.target}, first snapshot taken`);
-    document.getElementById("backup-banner").hidden = true;
-    await loadBackup();
+    const result = await api("POST", "/api/update/apply");
+    fill(document.getElementById("update-content"),
+      el("h2", {}, `Updated to ${result.version}`),
+      el("p", {}, "blackbook stops now. Start it again the same way as before (start.sh, start.bat or start.command). The next start may take a moment to set up the new version."),
+      el("p", { class: "hint" }, "Your settings, your backup and your card are not changed by the update."));
+    document.getElementById("update-ok").onclick = async () => {
+      try { await api("POST", "/api/shutdown"); } catch (_) { /* already stopping */ }
+      document.getElementById("update-dialog").close();
+      document.body.replaceChildren(el("div", { class: "stopped" }, el("h2", {}, "blackbook has stopped"), el("p", {}, "Start it again to use the new version, then reload this page.")));
+    };
+    document.getElementById("update-dialog").showModal();
   } catch (err) {
     toast(err.message, true);
     button.disabled = false;
-    button.textContent = "Set up backup";
+    button.textContent = "Update now";
   }
 }
 
@@ -1063,6 +1214,9 @@ async function start() {
   renderZones();
   await pollCard();
   setInterval(pollCard, 4000);
+  const fresh = await api("GET", "/api/info");
+  if (fresh.first_start) showWelcome(fresh);
+  checkForUpdate();
   await loadBrowser();
 }
 

@@ -104,3 +104,11 @@ blackbook/
 ## Test data
 
 1010music factory content is not part of the repository. For local tests, the path to a card or a mirror is set via the environment variable `BLACKBOOK_CARD`. Local copies under `card/` or `testdata/` are excluded via `.gitignore`.
+
+## Releases and updates
+
+`src/blackbook/updater.py` checks `https://api.github.com/repos/nightanvil/blackbook/releases/latest` on every start of the UI and compares the tag (`vX.Y.Z`) with `blackbook.__version__`. A newer release is downloaded as the GitHub zipball and copied over the installation; `.blackbook`, `.tools`, `.venv`, `backups`, `local`, `abnahme` and `.git` are never touched. Afterwards the UI asks to restart and ends the server via `POST /api/shutdown`. The next start runs `bootstrap.py --if-needed`, which installs changed requirements.
+
+In a git checkout the check runs `git fetch` and reports how many commits the upstream branch is ahead; updating stays `git pull`.
+
+To publish a release: raise `version` in `pyproject.toml` and `__version__` in `src/blackbook/__init__.py`, commit, tag `vX.Y.Z` and create a GitHub release from the tag.

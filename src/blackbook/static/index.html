@@ -39,6 +39,7 @@
     </div>
   </header>
 
+  <div id="update-banner" class="app-banner" hidden></div>
   <div id="backup-banner" class="app-banner" hidden></div>
 
   <main>
@@ -136,6 +137,7 @@
         <div class="label">Backup folder</div>
         <div class="target-row">
           <input id="bk-target" placeholder="/path/to/backup folder">
+          <button id="bk-target-browse" title="Choose a folder">Browse</button>
           <button id="bk-target-save">Set</button>
         </div>
         <div id="bk-status" class="muted"></div>
@@ -144,6 +146,7 @@
           <input id="bk-message" placeholder="Reason (optional)">
           <button id="bk-snapshot" class="primary">Snapshot now</button>
         </div>
+        <div id="bk-busy" class="hint" hidden>A snapshot is running. The first one copies the whole card and can take several minutes.</div>
         <div class="label">History</div>
         <div id="bk-log" class="list compact"></div>
         <details class="config">
@@ -165,6 +168,35 @@
       <button id="plan-cancel">Cancel</button>
       <button id="plan-apply" class="primary">Write to card</button>
     </div>
+  </dialog>
+
+  <dialog id="folder-dialog">
+    <div class="dialog-body">
+      <h2>Choose the backup folder</h2>
+      <p class="hint">Choose an empty folder or create a new one. If the folder already contains other files, blackbook creates a subfolder blackbook-backup in it.</p>
+      <div id="folder-roots" class="folder-roots"></div>
+      <div id="folder-path" class="folder-path"></div>
+      <div id="folder-list" class="list compact folder-list"></div>
+      <div class="target-row">
+        <input id="folder-new" placeholder="New folder name">
+        <button id="folder-create">Create folder</button>
+      </div>
+      <div id="folder-warn" class="err"></div>
+    </div>
+    <div class="dialog-actions">
+      <button id="folder-cancel">Cancel</button>
+      <button id="folder-choose" class="primary">Use this folder</button>
+    </div>
+  </dialog>
+
+  <dialog id="welcome-dialog">
+    <div class="dialog-body" id="welcome-content"></div>
+    <div class="dialog-actions" id="welcome-actions"></div>
+  </dialog>
+
+  <dialog id="update-dialog">
+    <div class="dialog-body" id="update-content"></div>
+    <div class="dialog-actions"><button id="update-ok" class="primary">OK, stop blackbook</button></div>
   </dialog>
 
   <div class="helpov" id="help" hidden>
