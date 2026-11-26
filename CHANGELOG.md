@@ -7,7 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ### Changed
 
-- New icon showing the blackbox 2, in the top bar, the help, the browser tab and the README.
+- New icon in the top bar, the help, the browser tab and the README.
 
 ### Documentation
 
