@@ -14,6 +14,9 @@ const state = {
   buildTags: new Set(),
   pendingBody: null,
   selectedCommit: null,
+  mode: "new",
+  baseRef: null,
+  playing: null,
 };
 
 // ---------- helpers ----------
@@ -57,12 +60,39 @@ function toast(message, isError = false) {
   toast.timer = setTimeout(() => node.classList.remove("show"), 3500);
 }
 
+const player = document.getElementById("player");
+
+function setPlaying(source) {
+  state.playing = source;
+  document.getElementById("stop-btn").hidden = !source;
+}
+
+function stop() {
+  player.pause();
+  player.currentTime = 0;
+  setPlaying(null);
+}
+
+// Clicking the same sample again stops it
 function play(source) {
   if (!source) return;
-  const player = document.getElementById("player");
+  if (state.playing === source && !player.paused) {
+    stop();
+    return;
+  }
   player.src = "/api/audio?src=" + encodeURIComponent(source);
-  player.play().catch((err) => toast("Playback failed: " + err.message, true));
+  setPlaying(source);
+  player.play().catch((err) => {
+    setPlaying(null);
+    toast("Playback failed: " + err.message, true);
+  });
 }
+
+player.addEventListener("ended", () => setPlaying(null));
+document.getElementById("stop-btn").addEventListener("click", stop);
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && state.playing) stop();
+});
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 function noteName(n) { return NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 1); }
@@ -186,9 +216,17 @@ async function showPatch(ref) {
     )
   );
 
+  const editable = summary && (summary.type === "OneShots" || summary.type === "SampInst");
+  const editButtons = editable
+    ? el("div", { style: "margin-top:10px;display:flex;gap:8px" },
+        isUser ? el("button", { class: "primary", onclick: () => loadIntoBuilder(ref, "edit") }, "Edit in builder") : null,
+        el("button", { onclick: () => loadIntoBuilder(ref, "copy") }, "Use as template"))
+    : el("div", { class: "muted", style: "margin-top:10px" }, "Editing of this patch type is not supported yet.");
+
   detail.replaceChildren(
     el("h2", {}, summary ? summary.name : ref),
     el("div", { class: "muted" }, ref.replaceAll("\\", " / "), "  ·  ", data.track_type),
+    editButtons,
     el("div", { class: "label" }, "Preview"),
     data.preview
       ? el("button", { onclick: () => play(data.preview) }, "▶ Play preview")
@@ -276,12 +314,7 @@ function makeDropTarget(node, onDrop) {
 // ---------- builder: common ----------
 
 document.querySelectorAll(".seg button").forEach((button) => {
-  button.addEventListener("click", () => {
-    state.buildType = button.dataset.type;
-    document.querySelectorAll(".seg button").forEach((b) => b.classList.toggle("active", b === button));
-    document.getElementById("b-oneshot").hidden = state.buildType !== "oneshot";
-    document.getElementById("b-multisample").hidden = state.buildType !== "multisample";
-  });
+  button.addEventListener("click", () => selectBuildType(button.dataset.type));
 });
 
 function buildBody() {
@@ -289,9 +322,14 @@ function buildBody() {
     type: state.buildType,
     name: document.getElementById("b-name").value,
     tags: [...state.buildTags],
+    base_ref: state.baseRef,
+    mode: state.mode,
   };
   if (state.buildType === "oneshot") {
-    body.pads = Object.entries(state.pads).map(([slot, pad]) => ({ slot: Number(slot), ...pad }));
+    body.pads = Object.entries(state.pads).map(([slot, pad]) => ({
+      slot: Number(slot), source: pad.source, gain: pad.gain, pitch: pad.pitch, pan: pad.pan,
+      choke_group: pad.choke_group, reverse: pad.reverse, loop_mode: pad.loop_mode,
+    }));
   } else {
     body.zones = state.zones.map((z) => ({
       source: z.source, root: z.root, key_low: z.key_low, key_high: z.key_high,
@@ -334,6 +372,8 @@ document.getElementById("plan-apply").addEventListener("click", async () => {
     document.getElementById("plan-dialog").close();
     toast(`Written ${result.ref.replaceAll("\\", "/")} (${result.written.length} files)`);
     await loadLibrary();
+    // Continue with the saved patch in edit mode
+    await loadIntoBuilder(result.ref, "edit", false);
   } catch (err) {
     toast(err.message, true);
   }
@@ -347,16 +387,20 @@ function renderPads() {
     ...Array.from({ length: 16 }, (_, slot) => {
       const pad = state.pads[slot];
       const node = el("div", {
-        class: "pad" + (pad ? " filled" : "") + (state.selectedPad === slot ? " selected" : ""),
+        class: "pad" + (pad ? " filled" : "") + (pad && !pad.source ? " missing" : "") + (state.selectedPad === slot ? " selected" : ""),
         onclick: () => {
           state.selectedPad = slot;
           if (pad) play(pad.source);
           renderPads();
         },
-      }, el("span", { class: "num" }, slot + 1), el("span", { class: "sample" }, pad ? baseName(pad.source) : ""));
+      }, el("span", { class: "num" }, slot + 1), el("span", { class: "sample" }, pad ? (pad.source ? baseName(pad.source) : pad.filename + " (missing)") : ""));
       makeDropTarget(node, (sources) => {
         sources.forEach((source, i) => {
-          if (slot + i < 16) state.pads[slot + i] = { source, gain: 0, pitch: 0, pan: 0, choke_group: 0, reverse: false, loop: false };
+          if (slot + i < 16) {
+            const old = state.pads[slot + i];
+            // Replacing the sample keeps the pad settings
+            state.pads[slot + i] = old ? { ...old, source, filename: null } : { source, gain: 0, pitch: 0, pan: 0, choke_group: 0, reverse: false, loop_mode: 0 };
+          }
         });
         state.selectedPad = slot;
         renderPads();
@@ -380,6 +424,14 @@ function renderPadEditor() {
   const check = (label, key) =>
     el("label", { class: "check" }, el("input", { type: "checkbox", checked: pad[key], onchange: (ev) => { pad[key] = ev.target.checked; } }), label);
 
+  if (!pad.source) {
+    panel.replaceChildren(
+      el("strong", {}, `Pad ${slot + 1}: ${pad.filename}`),
+      el("p", { class: "err" }, "The file of this pad is missing on the card. The pad stays unchanged unless you drop a new sample onto it or clear it."),
+      el("button", { class: "small", onclick: () => { delete state.pads[slot]; renderPads(); } }, "Clear"));
+    return;
+  }
+
   panel.replaceChildren(
     el("div", { style: "display:flex;justify-content:space-between;margin-bottom:10px" },
       el("strong", {}, `Pad ${slot + 1}: ${baseName(pad.source)}`),
@@ -392,7 +444,7 @@ function renderPadEditor() {
       field("Pan (-1000..1000)", "pan", { step: "1", min: "-1000", max: "1000" }),
       field("Choke group (0 = off)", "choke_group", { step: "1", min: "0", max: "16" }),
       check("Reverse", "reverse"),
-      check("Loop", "loop")),
+      field("Loop mode (0 = off)", "loop_mode", { step: "1", min: "0", max: "8" })),
     el("p", { class: "muted", style: "margin:10px 0 0;font-size:12px" }, "Gain and pitch are stored in thousandths. The unit mapping to the device display is unverified.")
   );
 }
@@ -474,6 +526,76 @@ function renderKeyboard() {
     nodes.push(el("div", { class: "root", style: `left:${(z.root + 0.5) * width}%` }));
   });
   kb.replaceChildren(...nodes);
+}
+
+// ---------- builder: edit and template mode ----------
+
+function selectBuildType(type) {
+  state.buildType = type;
+  document.querySelectorAll(".seg button").forEach((b) => b.classList.toggle("active", b.dataset.type === type));
+  document.getElementById("b-oneshot").hidden = type !== "oneshot";
+  document.getElementById("b-multisample").hidden = type !== "multisample";
+}
+
+function renderMode() {
+  const banner = document.getElementById("b-mode");
+  const name = document.getElementById("b-name");
+  name.readOnly = state.mode === "edit";
+  document.querySelectorAll(".seg button").forEach((b) => { b.disabled = state.mode !== "new"; });
+  if (state.mode === "new") {
+    banner.hidden = true;
+    return;
+  }
+  const ref = state.baseRef.replaceAll("\\", " / ");
+  banner.hidden = false;
+  banner.replaceChildren(
+    el("span", { class: "grow" },
+      state.mode === "edit" ? "Editing " : "New patch based on ", el("strong", {}, ref),
+      state.mode === "edit" ? " (saved in place, a snapshot is taken before)" : " (saved as new user patch)"),
+    state.mode === "edit" ? el("button", { class: "small", onclick: () => { state.mode = "copy"; document.getElementById("b-name").value += " copy"; renderMode(); } }, "Save as copy instead") : null,
+    el("button", { class: "small", onclick: resetBuilder }, "Start new patch"));
+}
+
+function resetBuilder() {
+  state.mode = "new";
+  state.baseRef = null;
+  state.pads = {};
+  state.zones = [];
+  state.selectedPad = null;
+  state.buildTags.clear();
+  document.getElementById("b-name").value = "";
+  tagChips(document.getElementById("b-tags"), state.buildTags);
+  renderPads();
+  renderZones();
+  renderMode();
+}
+
+async function loadIntoBuilder(ref, mode, switchView = true) {
+  let data;
+  try {
+    data = await api("GET", "/api/patch/load?ref=" + encodeURIComponent(ref));
+  } catch (err) {
+    toast(err.message, true);
+    return;
+  }
+  state.mode = mode;
+  state.baseRef = ref;
+  state.buildTags = new Set(data.tags);
+  tagChips(document.getElementById("b-tags"), state.buildTags);
+  document.getElementById("b-name").value = mode === "edit" ? data.name : data.name + " copy";
+  selectBuildType(data.type);
+  if (data.type === "oneshot") {
+    state.pads = {};
+    data.pads.forEach((p) => { state.pads[p.slot] = p; });
+    state.selectedPad = data.pads.length ? data.pads[0].slot : null;
+    renderPads();
+  } else {
+    state.zones = data.zones;
+    renderZones();
+  }
+  renderMode();
+  if (data.missing && data.missing.length) toast(`${data.missing.length} referenced files are missing on the card`, true);
+  if (switchView) document.querySelector('nav button[data-view="build"]').click();
 }
 
 // ---------- projects ----------

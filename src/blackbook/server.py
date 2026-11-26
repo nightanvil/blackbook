@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import threading
 import tomllib
 from contextlib import asynccontextmanager
@@ -13,9 +14,10 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import builder, settings
+from . import builder, patchedit, settings
 from .backup import Backup
 from .card import Card, browse
+from .cardpath import resolve_sample_reference
 from .mapping import Zone, assign_key_ranges, automap, note_name
 from .patchindex import FACTORY_TAGS
 from .snapshot import CONFIG_NAME, SnapshotError, SnapshotRepo
@@ -45,13 +47,14 @@ class Sources:
 
 class PadIn(BaseModel):
     slot: int
-    source: str
+    # None keeps the pad of the base patch untouched
+    source: str | None
     gain: float = 0.0
     pitch: float = 0.0
     pan: int = 0
     choke_group: int = 0
     reverse: bool = False
-    loop: bool = False
+    loop_mode: int = 0
 
 
 class ZoneIn(BaseModel):
@@ -72,6 +75,9 @@ class BuildIn(BaseModel):
     gain: float = 0.0
     pads: list[PadIn] = Field(default_factory=list)
     zones: list[ZoneIn] = Field(default_factory=list)
+    # Existing patch as starting point: mode 'edit' changes it in place, 'copy' saves a new patch
+    base_ref: str | None = None
+    mode: str = "new"
 
 
 class AutomapIn(BaseModel):
@@ -180,22 +186,33 @@ def create_app(
 
     app = FastAPI(title="blackbook", lifespan=lifespan)
 
+    def make_base(body: BuildIn) -> builder.Base | None:
+        if not body.base_ref or body.mode == "new":
+            return None
+        if body.mode not in ("edit", "copy"):
+            raise HTTPException(400, f"unknown mode: {body.mode}")
+        try:
+            return builder.Base.load(card.patch_dir(body.base_ref), body.mode)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+
     def make_plan(body: BuildIn) -> builder.Plan:
+        base = make_base(body)
         if body.type == "oneshot":
             pads = {
                 p.slot: builder.Pad(
-                    source=sources.resolve(p.source),
+                    source=sources.resolve(p.source) if p.source else None,
                     gain=p.gain,
                     pitch=p.pitch,
                     pan=p.pan,
                     choke_group=p.choke_group,
                     reverse=p.reverse,
-                    loop=p.loop,
+                    loop_mode=p.loop_mode,
                 )
                 for p in body.pads
             }
             spec = builder.OneShotSpec(body.name.strip(), body.tags, pads, body.track_gain)
-            return builder.plan_oneshot(card, spec)
+            return builder.plan_oneshot(card, spec, base)
         if body.type == "multisample":
             zones = [
                 builder.MultisampleZone(
@@ -213,7 +230,7 @@ def create_app(
                 for z in body.zones
             ]
             spec = builder.MultisampleSpec(body.name.strip(), body.tags, zones, body.track_gain, body.gain)
-            return builder.plan_multisample(card, spec)
+            return builder.plan_multisample(card, spec, base)
         raise HTTPException(400, f"unknown patch type: {body.type}")
 
     @app.get("/api/info")
@@ -263,6 +280,100 @@ def create_app(
                 for s in samples
             ],
         }
+
+    @app.get("/api/patch/load")
+    def patch_load(ref: str) -> dict:
+        """Builder state of an existing one-shot or multisample patch."""
+        try:
+            patch_dir = card.patch_dir(ref)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        text = (patch_dir / "patch.xml").read_bytes().decode("utf-8-sig")
+        all_cells = patchedit.cells(text)
+        track = re.search(r'<track type="(\w+)"', text)
+        track_type = track.group(1) if track else ""
+        root = ref.replace("/", "\\").split("\\")[0]
+
+        def source_of(filename: str) -> str | None:
+            if not filename:
+                return None
+            path = resolve_sample_reference(card.root, filename, patch_dir)
+            return "card:" + card.relative(path) if path and path.is_file() else None
+
+        def milli_to(value: str | None) -> float:
+            return round(int(value or 0) / 1000, 3)
+
+        result: dict = {
+            "ref": ref,
+            "name": patch_dir.name,
+            "is_user": root == "UserPatches",
+            "tags": card.load_index(root).tags_for(ref),
+        }
+        if track_type == "samtrack":
+            pads = []
+            missing = []
+            for i, cell in enumerate(all_cells):
+                if cell.type != "saminst" or "celldisppos" not in cell.attrs:
+                    continue
+                nxt = all_cells[i + 1] if i + 1 < len(all_cells) and all_cells[i + 1].type == "samasst" else None
+                filename = nxt.attrs.get("filename", "") if nxt else ""
+                if not filename or filename.endswith("\\"):
+                    continue
+                source = source_of(filename)
+                slot = int(cell.attrs["celldisppos"])
+                if source is None:
+                    missing.append(filename)
+                a = cell.attrs
+                pads.append(
+                    {
+                        "slot": slot,
+                        "source": source,
+                        "filename": filename,
+                        "gain": milli_to(a.get("gaindb")),
+                        "pitch": milli_to(a.get("pitch")),
+                        "pan": int(a.get("panpos", 0) or 0),
+                        "choke_group": int(a.get("chokegrp", 0) or 0),
+                        "reverse": a.get("reverse", "0") != "0",
+                        "loop_mode": int(a.get("loopmodes", 0) or 0),
+                    }
+                )
+            result.update(type="oneshot", pads=pads, missing=missing)
+        elif track_type == "multisamtrack":
+            inst = next((c for c in all_cells if c.type == "saminst"), None)
+            zones = []
+            missing = []
+            for cell in all_cells:
+                if cell.type != "samasst" or not cell.attrs.get("filename"):
+                    continue
+                a = cell.attrs
+                source = source_of(a["filename"])
+                if source is None:
+                    missing.append(a["filename"])
+                    continue
+                vel_high = int(a.get("velrangetop", 127) or 0)
+                root_note = int(a.get("rootnote", 60) or 0)
+                zones.append(
+                    {
+                        "source": source,
+                        "root": root_note,
+                        "root_name": note_name(root_note),
+                        "key_low": int(a.get("keyrangebottom", 0) or 0),
+                        "key_high": int(a.get("keyrangetop", 127) or 0),
+                        "vel_low": int(a.get("velrangebottom", 0) or 0),
+                        "vel_high": min(vel_high, 127),
+                        "vel_root": int(a.get("velroot", 64) or 0),
+                        "warnings": [],
+                    }
+                )
+            result.update(
+                type="multisample",
+                zones=zones,
+                gain=milli_to(inst.attrs.get("gaindb")) if inst else 0.0,
+                missing=missing,
+            )
+        else:
+            raise HTTPException(400, f"{track_type or 'this'} patches cannot be edited yet")
+        return result
 
     @app.put("/api/patch/tags")
     def set_tags(body: TagsIn) -> dict:

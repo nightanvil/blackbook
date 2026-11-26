@@ -13,6 +13,8 @@ Status: prototype 0.1. Patches built with blackbook have not been verified on th
 | Patch builder one-shot: 16 pads via drag and drop, gain, pitch, pan, choke group, reverse, loop | prototype |
 | Patch builder multisample: key and velocity mapping from file names, editable zones, keyboard view | prototype |
 | Generated `preview.wav` for new patches | prototype |
+| Edit user one-shot and multisample patches in place; changes only the attributes handled by the builder, sequences, modulation and unknown parameters stay untouched | prototype |
+| Use any one-shot or multisample patch, including factory patches, as template for a new user patch | prototype |
 | Project overview: missing references and unused WAVs per project | prototype |
 | Backup: git snapshots with history, diff and restore per file, folder or everything | prototype |
 | Patch builder loop, slicer, shredder | planned |

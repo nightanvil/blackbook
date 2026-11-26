@@ -15,6 +15,7 @@
       <button data-view="projects">Projects</button>
       <button data-view="backup">Backup</button>
     </nav>
+    <button id="stop-btn" class="small" hidden title="Stop playback (Esc)">■ Stop</button>
     <div id="card-path" class="muted"></div>
   </header>
 
@@ -65,6 +66,7 @@
           <input id="b-name" placeholder="Patch name" maxlength="64">
           <button id="b-plan" class="primary">Review &amp; save</button>
         </div>
+        <div id="b-mode" class="mode-banner" hidden></div>
 
         <div id="b-oneshot">
           <div id="pads" class="pads"></div>

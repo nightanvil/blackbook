@@ -14,7 +14,16 @@ Creates and edits patches on the computer. The result is a patch folder `UserPat
 4. Enter name and tags.
 5. Review the result as file list and XML, then write.
 
-Existing patches (factory and user) can be opened as a template and saved under a new name. Factory patches are never overwritten.
+Existing patches are opened from the library:
+
+| Action | Available for | Result |
+|---|---|---|
+| Edit in builder | user patches | the patch is changed in place, a snapshot is taken before |
+| Use as template | user and factory patches | a new user patch based on the original |
+
+Editing changes only the attributes the builder handles: per pad gain, pitch, pan, choke group, reverse, loop mode and sample; per zone key and velocity range. Sequences, modulation sources, envelopes, filters and parameters unknown to blackbook stay byte-identical. A pad whose sample is unchanged keeps its trim and loop points. WAV files are never deleted by an edit; replaced samples stay in the patch folder. Factory patches are never overwritten.
+
+Playback of samples and previews stops with a second click on the same sample, the Stop button in the header or the Escape key.
 
 ### Types
 

@@ -38,7 +38,14 @@ header {
 
 .brand { font-weight: 700; letter-spacing: 0.04em; }
 nav { display: flex; gap: 4px; }
-#card-path { margin-left: auto; font-size: 12px; }
+#card-path { font-size: 12px; }
+#stop-btn { margin-left: auto; }
+header > #stop-btn[hidden] + #card-path { margin-left: auto; }
+.mode-banner { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border: 1px solid var(--accent); border-radius: var(--radius); background: #221d14; }
+.mode-banner .grow { flex: 1; }
+.pad.missing { border-color: var(--err); }
+.row button.small { margin-left: 4px; }
+button.playing { background: var(--accent); color: var(--accent-ink); }
 
 button, select, input {
   font: inherit;
