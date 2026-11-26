@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import patchedit, templates
+from . import padparams, patchedit, templates
 from .backup import Backup
 from .card import Card
 from .cardpath import join_reference, validate_name
@@ -32,6 +32,11 @@ class Pad:
     choke_group: int = 0
     reverse: bool = False
     loop_mode: int = 0
+    # Further saminst attributes as XML values, see padparams; they override the fields above
+    params: dict[str, int] = field(default_factory=dict)
+    # Playback window in frames; None keeps the window of the base patch or plays the whole file
+    start: int | None = None
+    length: int | None = None
 
 
 @dataclass
@@ -205,9 +210,16 @@ def plan_oneshot(card: Card, spec: OneShotSpec, base: Base | None = None) -> Pla
         if not 0 <= slot <= 15:
             errors.append(f"invalid pad {slot}")
             continue
-        info = check_wav(pad.source, f"pad {pad_number(slot)}", errors, warnings)
+        label = f"pad {pad_number(slot)}"
+        errors += padparams.validate(pad.params, label)
+        info = check_wav(pad.source, label, errors, warnings)
         if info:
             infos[pad.source] = info
+            if pad.start is not None or pad.length is not None:
+                start = pad.start or 0
+                length = info.frames - start if pad.length is None else pad.length
+                if start < 0 or length < 0 or start + length > info.frames:
+                    errors.append(f"{label}: start {start} and length {length} exceed the {info.frames} frames of the file")
 
     names = assign_names([pad.source for _, pad in sorted(active.items())], base.patch_dir if base else None)
 
@@ -219,7 +231,15 @@ def plan_oneshot(card: Card, spec: OneShotSpec, base: Base | None = None) -> Pla
             "chokegrp": pad.choke_group,
             "reverse": int(pad.reverse),
             "loopmodes": pad.loop_mode,
+            **pad.params,
         }
+
+    def window(pad: Pad) -> dict:
+        if pad.start is None and pad.length is None:
+            return {}
+        frames = infos[pad.source].frames if pad.source in infos else 0
+        start = pad.start or 0
+        return {"samstart": start, "samlen": frames - start if pad.length is None else pad.length}
 
     def new_sample(pad: Pad) -> dict:
         frames = infos[pad.source].frames if pad.source in infos else 0
@@ -229,7 +249,7 @@ def plan_oneshot(card: Card, spec: OneShotSpec, base: Base | None = None) -> Pla
             "samlen": frames,
             "loopstart": 0,
             "loopend": frames,
-        }
+        } | window(pad)
 
     samples_changed = base is None
     if base is None:
@@ -252,7 +272,7 @@ def plan_oneshot(card: Card, spec: OneShotSpec, base: Base | None = None) -> Pla
             same_file = (
                 pad.source.parent == base.patch_dir and existing.get(slot, "").casefold() == pad.source.name.casefold()
             )
-            sample = {} if same_file else new_sample(pad)
+            sample = window(pad) if same_file else new_sample(pad)
             samples_changed |= bool(sample)
             updates[slot] = (inst_values(pad), sample)
         for slot, filename in existing.items():

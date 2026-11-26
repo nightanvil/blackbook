@@ -171,7 +171,8 @@ def test_api_load_and_edit(card: Path, tmp_path: Path, monkeypatch) -> None:
             (1, "card:UserPatches/OneShots/Kit/SD.wav"),
             (2, "card:UserPatches/OneShots/Kit/BD.wav"),
         ]
-        pads = [{**p, "gain": -1.5} if p["slot"] == 0 else p for p in data["pads"]]
+        assert data["pads"][0]["frames"] > 0 and data["pads"][0]["length"] == data["pads"][0]["frames"]
+        pads = [{**p, "params": {**p["params"], "gaindb": -1500, "samtrigtype": 1}} if p["slot"] == 0 else p for p in data["pads"]]
         body = {
             "type": "oneshot",
             "name": "Kit",
@@ -184,7 +185,16 @@ def test_api_load_and_edit(card: Path, tmp_path: Path, monkeypatch) -> None:
         assert plan["ok"] and plan["files"] == []
         assert client.post("/api/build/apply", json=body).status_code == 200
         again = client.get("/api/patch/load", params={"ref": "UserPatches\\OneShots\\Kit"}).json()
-        assert again["pads"][0]["gain"] == -1.5
+        assert again["pads"][0]["params"]["gaindb"] == -1500
+        assert again["pads"][0]["params"]["samtrigtype"] == 1
+        # Playback window and range checks
+        pads = [{**p, "start": 100, "length": 200} if p["slot"] == 1 else p for p in again["pads"]]
+        assert client.post("/api/build/apply", json={**body, "pads": pads}).status_code == 200
+        third = client.get("/api/patch/load", params={"ref": "UserPatches\\OneShots\\Kit"}).json()
+        assert (third["pads"][1]["start"], third["pads"][1]["length"]) == (100, 200)
+        bad = [{**p, "params": {"res": 5000}, "start": 0, "length": 10**9} if p["slot"] == 0 else p for p in third["pads"]]
+        errors = client.post("/api/build/plan", json={**body, "pads": bad}).json()["errors"]
+        assert any("Res out of range" in e for e in errors) and any("exceed" in e for e in errors)
 
 
 def test_import_dropped_files(card: Path, tmp_path: Path, monkeypatch) -> None:

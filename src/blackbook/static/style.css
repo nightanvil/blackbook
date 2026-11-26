@@ -225,6 +225,18 @@ td input { width: 60px; padding: 3px 6px; }
 .pad-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; align-items: end; }
 .pad-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
 .pad-form label.check { flex-direction: row; align-items: center; gap: 6px; }
+.pad-form label.pnum { grid-column: span 2; }
+.pad-form .plabel { display: flex; gap: 6px; align-items: baseline; }
+.pad-form .plabel .unit { margin-left: auto; opacity: .7; }
+.pad-form .prow { display: flex; gap: 8px; align-items: center; }
+.pad-form .prow input[type=range] { flex: 1; min-width: 0; }
+.pad-form .prow input[type=number] { width: 80px; }
+.unverified { display: inline-block; width: 14px; height: 14px; line-height: 14px; text-align: center; border-radius: 50%; background: var(--panel-3); color: var(--muted); font-size: 10px; cursor: help; }
+.pad-head { display: flex; justify-content: space-between; margin-bottom: 8px; }
+.tabs { display: flex; gap: 2px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.tabs button { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 12px; color: var(--muted); }
+.tabs button.active { color: var(--text); border-bottom-color: var(--accent, var(--ok)); }
+.hint-small { margin: 10px 0 0; font-size: 12px; }
 
 .ms-tools { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
 .ms-tools label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }

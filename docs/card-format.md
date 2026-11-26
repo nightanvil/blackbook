@@ -174,7 +174,20 @@ Parameters are integers in device-internal units, for example `gaindb="6800"`, `
 |---|---|---|
 | `gaindb` | thousandths of dB (`-6300` = -6.3 dB) | yes, compared with the device display |
 | `pitch` | thousandths of semitones (`2230` = +2.23) | derived from files only |
-| other parameters | unknown | no |
+| `dualfilcutoff` | tenths of percent, -1000 (low-pass closed) to 1000 (high-pass closed), 0 open | range from the manual |
+| `res`, `overdrive`, `fx1send`, `fx2send` | tenths of percent, 0 to 1000 | range from the manual; `fx1send` as delay and `fx2send` as reverb is assumed |
+| `panpos` | -1000 (left) to 1000 (right) | derived from files only |
+| `envattack`, `envdecay`, `envsus`, `envrel`, `velamount`, `lfoamount`, `lforate` | tenths of percent, 0 to 1000 | range from the manual |
+| `samtrigtype` | launch: 0 Trigger, 1 Gate, 2 Toggle | assumed from the manual order |
+| `polymode` | 0 Mono, 1 Poly 2, 2 Poly 4, 3 Poly 6, 4 Poly 8, 5 Poly X | assumed from the manual order |
+| `chokegrp` | 0 None, 1 to 4 groups A to D | 0 and 1 seen in files |
+| `interpqual` | 0 Normal, 1 HighQ | assumed |
+| `lfowave` | 0 Rev Saw to 8 Random in the manual order | assumed, 0 and 8 seen in files |
+| `lfobeatsync`, `lfokeytrig` | beat sync and restart, 0 off, 1 on | assumed |
+| `lforatebeatsync` | 0 = 8 bars to 14 = 1/64 in the manual order | assumed, 0 and 6 seen in files |
+| `samstart`, `samlen` | playback start and length in frames (`samasst`) | yes |
+
+The ranges and the assumed encodings are kept in `src/blackbook/padparams.py`.
 
 ### Dependencies when renaming
 

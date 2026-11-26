@@ -23,7 +23,7 @@ blackbook is free and stays free. If it helps you, you can buy me a coffee on [K
 
 - **Library:** all factory and user patches with type and tag filter. Listen to samples and previews.
 - **Tags:** tag your own patches, as on the device.
-- **Build:** one-shot kits on 16 pads and multisample instruments, by drag and drop. Key and velocity ranges are read from the file names.
+- **Build:** one-shot kits on 16 pads with all pad settings of the device (sound, setup, envelope, LFO, start and length), and multisample instruments, by drag and drop. Key and velocity ranges are read from the file names.
 - **Edit:** change your own patches in place. Sequences, modulation and everything blackbook does not know stay untouched.
 - **Templates:** any one-shot or multisample patch, also factory patches, as a starting point for a new one.
 - **Projects:** missing samples and unused files per project.

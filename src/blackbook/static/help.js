@@ -43,7 +43,17 @@ ${todo}`,
 <p>Click a patch to see its samples. <b>Play preview</b> plays the patch's <code>preview.wav</code>, the play button next to a sample plays that sample. <code>Esc</code> or the Stop button at the top stops playback.</p>
 <p>For your own patches you can change the tags and save them. One-shot and multisample patches can be opened in the builder: <b>Edit in builder</b> changes the patch itself, <b>Use as template</b> starts a new patch from it. Factory patches can only be used as templates.</p>`,
     },
-    { id: "build", title: "Build", html: `<p>One-shot kits on 16 pads and multisample instruments, new or based on an existing patch.</p>${todo}` },
+    { id: "build", title: "Build", html: `<p>One-shot kits on 16 pads and multisample instruments, new or based on an existing patch.</p>
+<h3>One-shot pads</h3>
+<p>Click a pad to select and hear it. The pad editor below the grid has the same tabs as the pad dashboard on the device:</p>
+<ul>
+  <li><b>Sound:</b> level, pitch, filter, resonance, pan, overdrive, delay and reverb send.</li>
+  <li><b>Setup:</b> reverse, launch (trigger, gate, toggle), polyphony, choke group, interpolation.</li>
+  <li><b>Env/LFO:</b> attack, decay, sustain, release, velocity, LFO shape, depth, rate, beat sync and restart.</li>
+  <li><b>WAV:</b> start and length of the part of the sample the pad plays.</li>
+</ul>
+<p>Drag a slider or type a value. A double click on a slider sets the value of a new pad. Values marked <b>?</b> are written in the order of the device manual; that the device reads them the same way is not confirmed yet.</p>
+${todo}` },
     { id: "projects", title: "Projects", html: `<p>The projects on the card.</p>${todo}` },
     { id: "backup", title: "Backup", html: `<p>Snapshots of the card in a backup folder, with history, diff and restore.</p><p><b>The backup folder must be outside the blackbook folder.</b> An update or a new installation can delete the blackbook folder, and a backup inside it would be lost. blackbook does not accept such a folder.</p>${todo}` },
     {

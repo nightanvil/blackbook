@@ -21,7 +21,7 @@ Existing patches are opened from the library:
 | Edit in builder | user patches | the patch is changed in place, a snapshot is taken before |
 | Use as template | user and factory patches | a new user patch based on the original |
 
-Editing changes only the attributes the builder handles: per pad gain, pitch, pan, choke group, reverse, loop mode and sample; per zone key and velocity range. Sequences, modulation sources, envelopes, filters and parameters unknown to blackbook stay byte-identical. A pad whose sample is unchanged keeps its trim and loop points. WAV files are never deleted by an edit; replaced samples stay in the patch folder. Factory patches are never overwritten.
+Editing changes only the attributes the builder handles: per pad the parameters listed in `src/blackbook/padparams.py` (level, pitch, filter, resonance, pan, overdrive, sends, reverse, launch, poly, choke group, interpolation, envelope, velocity, LFO), the playback window (`samstart`, `samlen`) and the sample; per zone key and velocity range. Sequences, modulation sources, envelopes, filters and parameters unknown to blackbook stay byte-identical. A pad whose sample is unchanged keeps its trim and loop points. WAV files are never deleted by an edit; replaced samples stay in the patch folder. Factory patches are never overwritten.
 
 ### Files from outside the browser
 

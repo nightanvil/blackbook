@@ -517,8 +517,8 @@ function buildBody() {
   };
   if (state.buildType === "oneshot") {
     body.pads = Object.entries(state.pads).map(([slot, pad]) => ({
-      slot: Number(slot), source: pad.source, gain: pad.gain, pitch: pad.pitch, pan: pad.pan,
-      choke_group: pad.choke_group, reverse: pad.reverse, loop_mode: pad.loop_mode,
+      slot: Number(slot), source: pad.source, loop_mode: pad.loop_mode || 0,
+      params: pad.params || {}, start: pad.start ?? null, length: pad.length ?? null,
     }));
   } else {
     body.zones = state.zones.map((z) => ({
@@ -591,8 +591,10 @@ function renderPads() {
           const target = PAD_SLOTS_BY_NUMBER[start + i];
           if (target === undefined) return;
           const old = state.pads[target];
-          // Replacing the sample keeps the pad settings
-          state.pads[target] = old ? { ...old, source, filename: null } : { source, gain: 0, pitch: 0, pan: 0, choke_group: 0, reverse: false, loop_mode: 0 };
+          // Replacing the sample keeps the pad settings, the playback window starts over
+          state.pads[target] = old
+            ? { ...old, source, filename: null, start: null, length: null, frames: null }
+            : { source, loop_mode: 0, params: defaultPadParams(), start: null, length: null, frames: null };
         });
         state.selectedPad = slot;
         renderPads();
@@ -603,6 +605,67 @@ function renderPads() {
   renderPadEditor();
 }
 
+function defaultPadParams() {
+  return Object.fromEntries((state.padParams || []).map((p) => [p.key, p.default]));
+}
+
+const PAD_TABS = ["Sound", "Setup", "Env/LFO", "WAV"];
+
+function paramControl(pad, param) {
+  const params = pad.params;
+  const value = params[param.key] ?? param.default;
+  const mark = param.verified ? null : el("span", { class: "unverified", title: "The file encoding of this value is not yet confirmed on the device" }, "?");
+  const label = el("span", { class: "plabel" }, param.label, mark);
+  const rerender = () => renderPadEditor();
+  if (param.kind === "toggle") {
+    return el("label", { class: "check" },
+      el("input", { type: "checkbox", checked: value !== 0, onchange: (ev) => { params[param.key] = ev.target.checked ? 1 : 0; rerender(); } }), label);
+  }
+  if (param.kind === "choice") {
+    return el("label", {}, label,
+      el("select", { onchange: (ev) => { params[param.key] = Number(ev.target.value); } },
+        param.options.map((name, i) => el("option", { value: i, selected: i === value }, name))));
+  }
+  const shown = value / param.scale;
+  const digits = String(param.step).split(".")[1]?.length || 0;
+  const number = el("input", { type: "number", min: param.min, max: param.max, step: param.step, value: shown.toFixed(digits) });
+  const slider = el("input", { type: "range", min: param.min, max: param.max, step: param.step, value: shown });
+  const set = (v, from) => {
+    const clamped = Math.min(param.max, Math.max(param.min, Number(v)));
+    params[param.key] = Math.round(clamped * param.scale);
+    if (from !== number) number.value = clamped.toFixed(digits);
+    if (from !== slider) slider.value = clamped;
+  };
+  number.addEventListener("change", () => set(number.value, number));
+  slider.addEventListener("input", () => set(slider.value, slider));
+  // Double click on the slider resets to the default of a new pad
+  slider.addEventListener("dblclick", () => set(param.default / param.scale, null));
+  return el("label", { class: "pnum" }, el("span", { class: "plabel" }, param.label, mark, el("span", { class: "unit" }, param.unit)), el("span", { class: "prow" }, slider, number));
+}
+
+async function ensureFrames(pad) {
+  if (pad.frames != null || !pad.source) return;
+  try {
+    pad.frames = (await api("GET", `/api/wavinfo?src=${encodeURIComponent(pad.source)}`)).frames;
+  } catch (_) { pad.frames = null; }
+}
+
+function wavTab(pad) {
+  const frames = pad.frames;
+  if (frames == null) return [el("p", { class: "muted" }, "Reading the file ...")];
+  const start = pad.start ?? 0;
+  const length = pad.length ?? frames - start;
+  const field = (label, value, onchange) => el("label", {}, label,
+    el("input", { type: "number", min: 0, max: frames, step: 1, value, onchange: (ev) => { onchange(Math.round(Number(ev.target.value))); renderPadEditor(); } }));
+  return [
+    el("div", { class: "pad-form" },
+      field("Start (frames)", start, (v) => { pad.start = Math.min(Math.max(v, 0), frames); pad.length = Math.min(length, frames - pad.start); }),
+      field("Length (frames)", length, (v) => { pad.start = start; pad.length = Math.min(Math.max(v, 0), frames - start); }),
+      el("label", {}, "File", el("span", { class: "muted" }, `${frames} frames`)),
+      el("label", {}, " ", el("button", { class: "small", onclick: () => { pad.start = 0; pad.length = frames; renderPadEditor(); } }, "Whole file"))),
+  ];
+}
+
 function renderPadEditor() {
   const panel = document.getElementById("pad-editor");
   const slot = state.selectedPad;
@@ -611,10 +674,6 @@ function renderPadEditor() {
     panel.replaceChildren(el("span", { class: "muted" }, slot == null ? "Select a pad." : `Pad ${padNumber(slot)} is empty. Drop a WAV onto it.`));
     return;
   }
-  const field = (label, key, attrs) =>
-    el("label", {}, label, el("input", { type: "number", value: pad[key], ...attrs, oninput: (ev) => { pad[key] = Number(ev.target.value); } }));
-  const check = (label, key) =>
-    el("label", { class: "check" }, el("input", { type: "checkbox", checked: pad[key], onchange: (ev) => { pad[key] = ev.target.checked; } }), label);
 
   if (!pad.source) {
     panel.replaceChildren(
@@ -624,20 +683,28 @@ function renderPadEditor() {
     return;
   }
 
+  pad.params = { ...defaultPadParams(), ...(pad.params || {}) };
+  const tab = state.padTab || "Sound";
+  let content;
+  if (tab === "WAV") {
+    if (pad.frames == null) ensureFrames(pad).then(() => { if (state.pads[slot] === pad) renderPadEditor(); });
+    content = wavTab(pad);
+  } else {
+    const visible = (state.padParams || []).filter((p) => p.group === tab && (!p.when || (pad.params[p.when[0]] ?? 0) === p.when[1]));
+    content = [el("div", { class: "pad-form" }, visible.map((p) => paramControl(pad, p)))];
+  }
+  const unverified = (state.padParams || []).some((p) => p.group === tab && !p.verified);
+
   panel.replaceChildren(
-    el("div", { style: "display:flex;justify-content:space-between;margin-bottom:10px" },
+    el("div", { class: "pad-head" },
       el("strong", {}, `Pad ${padNumber(slot)}: ${baseName(pad.source)}`),
       el("span", {},
         el("button", { class: "small", onclick: () => play(pad.source) }, "▶"), " ",
         el("button", { class: "small", onclick: () => { delete state.pads[slot]; renderPads(); } }, "Clear"))),
-    el("div", { class: "pad-form" },
-      field("Gain (dB)", "gain", { step: "0.1", min: "-60", max: "12" }),
-      field("Pitch (semitones)", "pitch", { step: "0.01", min: "-24", max: "24" }),
-      field("Pan (-1000..1000)", "pan", { step: "1", min: "-1000", max: "1000" }),
-      field("Choke group (0 = off)", "choke_group", { step: "1", min: "0", max: "16" }),
-      check("Reverse", "reverse"),
-      field("Loop mode (0 = off)", "loop_mode", { step: "1", min: "0", max: "8" })),
-    el("p", { class: "muted", style: "margin:10px 0 0;font-size:12px" }, "Gain and pitch are stored in thousandths. The unit mapping to the device display is unverified.")
+    el("div", { class: "tabs" }, PAD_TABS.map((name) =>
+      el("button", { class: name === tab ? "active" : "", onclick: () => { state.padTab = name; renderPadEditor(); } }, name))),
+    ...content,
+    unverified ? el("p", { class: "muted hint-small" }, "Values marked ? are written in the order of the device manual; their file encoding is not yet confirmed on the device.") : null,
   );
 }
 
@@ -1298,6 +1365,7 @@ async function refreshBackupIfVisible() {
 
 async function start() {
   const info = await api("GET", "/api/info");
+  state.padParams = await api("GET", "/api/padparams");
   state.roots = info.roots;
   state.cardPath = info.card;
   await loadLibrary();

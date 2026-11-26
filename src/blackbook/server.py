@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import builder, patchedit, settings, updater
+from . import builder, padparams, patchedit, settings, updater
 from .backup import Backup
 from .card import Card, browse
 from .carddetect import find_cards
@@ -91,6 +91,9 @@ class PadIn(BaseModel):
     choke_group: int = 0
     reverse: bool = False
     loop_mode: int = 0
+    params: dict[str, int] = Field(default_factory=dict)
+    start: int | None = None
+    length: int | None = None
 
 
 class ZoneIn(BaseModel):
@@ -340,6 +343,9 @@ def create_app(
                     choke_group=p.choke_group,
                     reverse=p.reverse,
                     loop_mode=p.loop_mode,
+                    params=p.params,
+                    start=p.start,
+                    length=p.length,
                 )
                 for p in body.pads
             }
@@ -492,6 +498,18 @@ def create_app(
             ],
         }
 
+    @app.get("/api/padparams")
+    def pad_params() -> list[dict]:
+        return padparams.describe()
+
+    def wav_frames(source: str | None) -> int | None:
+        if source is None:
+            return None
+        try:
+            return read_info(sources.resolve(source)).frames
+        except (WavError, OSError):
+            return None
+
     @app.get("/api/patch/load")
     def patch_load(ref: str) -> dict:
         """Builder state of an existing one-shot or multisample patch."""
@@ -542,12 +560,11 @@ def create_app(
                         "slot": slot,
                         "source": source,
                         "filename": filename,
-                        "gain": milli_to(a.get("gaindb")),
-                        "pitch": milli_to(a.get("pitch")),
-                        "pan": int(a.get("panpos", 0) or 0),
-                        "choke_group": int(a.get("chokegrp", 0) or 0),
-                        "reverse": a.get("reverse", "0") != "0",
                         "loop_mode": int(a.get("loopmodes", 0) or 0),
+                        "params": padparams.read(a),
+                        "start": int(nxt.attrs.get("samstart", 0) or 0),
+                        "length": int(nxt.attrs.get("samlen", 0) or 0),
+                        "frames": wav_frames(source),
                     }
                 )
             result.update(type="oneshot", pads=pads, missing=missing)
