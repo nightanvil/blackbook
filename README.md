@@ -1,85 +1,85 @@
 # blackbook
 
-Werkzeug für die microSD-Karte des 1010music blackbox 2. Baut Patches am Rechner, bindet einen externen Audio-Editor ein, sichert die Karte versioniert und organisiert Projekte, Patches und Samples. Alle Verweise in `project.xml`, `patch.xml` und `patchindex.xml` bleiben dabei konsistent.
+Toolkit for the microSD card of the 1010music blackbox 2. Builds patches on the computer, integrates an external audio editor, keeps versioned backups of the card and organizes projects, patches and samples. All references in `project.xml`, `patch.xml` and `patchindex.xml` stay consistent.
 
-Status: Konzeptphase, noch kein lauffähiger Code.
+Status: concept phase, no working code yet.
 
-## Funktionsumfang (geplant)
+## Features (planned)
 
-- Patch-Builder: OneShot-, Multisample-, Loop-, Slicer- und Shredder-Patches am Rechner erstellen und bearbeiten, inklusive Tags
-- Externer Editor: WAVs in Reaper oder einem anderen Editor bearbeiten, Längen und Verweise werden automatisch nachgezogen
-- Backup: inkrementelle Snapshots mit Deduplizierung, Diff zwischen beliebigen Ständen, Wiederherstellung bis auf Dateiebene
-- Organisation: Bibliothek mit Vorhören, Tagging in Masse, Umbenennen inklusive Verweise, Batch-Rename, Prüfungen
-- Sicherheit: Dry-Run mit Diff-Vorschau und Snapshot vor jedem Schreibvorgang
+- Patch builder: create and edit one-shot, multisample, loop, slicer and shredder patches on the computer, including tags
+- External editor: edit WAVs in Reaper or another editor, lengths and references are updated automatically
+- Backup: incremental, deduplicated snapshots, diff between any two states, restore down to single files
+- Organization: library with audition, bulk tagging, renaming with reference updates, batch rename, consistency checks
+- Safety: dry run with diff preview and a snapshot before every write
 
-Details in [docs/funktionen.md](docs/funktionen.md).
+Details in [docs/features.md](docs/features.md).
 
-## Plattformen
+## Platforms
 
-| Plattform | Status |
+| Platform | Status |
 |---|---|
-| Linux | Zielplattform |
-| Windows | Zielplattform |
-| macOS | lauffähig vorgesehen, ohne Tests |
+| Linux | target platform |
+| Windows | target platform |
+| macOS | expected to work, untested |
 
-## Technik
+## Technology
 
 - Backend: Python 3.12+, FastAPI
-- Frontend: HTML und JavaScript ohne Build-Schritt, ausgeliefert vom Backend
-- Start: lokaler Server, Bedienung im Browser unter `http://127.0.0.1`
-- Arbeitsverzeichnis: gemountete Karte (blackbox 2 im microSD Mode, Kartenleser) oder ein lokaler Spiegel der Karte
+- Frontend: HTML and JavaScript without a build step, served by the backend
+- Runs as a local server, used in the browser at `http://127.0.0.1`
+- Works on the mounted card (blackbox 2 in microSD mode, card reader) or a local mirror of the card
 
-## Einrichtung
+## Setup
 
-Der Bootstrap legt die gesamte Toolchain im Repo an. Systemweit wird nichts installiert. Voraussetzung ist ein beliebiges Python ab 3.8 zum Starten des Bootstraps, auf allen Plattformen derselbe Befehl.
+The bootstrap installs the complete toolchain inside the repository. Nothing is installed system-wide. Running the bootstrap requires any Python 3.8 or newer; the command is the same on every platform.
 
-| Ordner | Inhalt |
+| Directory | Content |
 |---|---|
-| `.tools/uv/` | Paketmanager uv, als Release von GitHub geladen und per SHA-256 geprüft |
-| `.tools/python/` | Python-Interpreter, von uv verwaltet |
-| `.tools/cache/` | Download-Cache |
-| `.venv/` | virtuelle Umgebung mit allen Abhängigkeiten |
+| `.tools/uv/` | uv package manager, downloaded from GitHub releases and verified via SHA-256 |
+| `.tools/python/` | Python interpreter managed by uv |
+| `.tools/cache/` | download cache |
+| `.venv/` | virtual environment with all dependencies |
 
 ```
-python bootstrap.py            # Laufzeit-Abhängigkeiten
-python bootstrap.py --dev      # zusätzlich pytest und ruff
-python bootstrap.py --clean    # .tools und .venv vorher löschen
+python bootstrap.py            # runtime dependencies
+python bootstrap.py --dev      # additionally pytest and ruff
+python bootstrap.py --clean    # remove .tools and .venv first
 ```
 
-Unter Linux und macOS heisst der Befehl je nach System `python3`.
+On Linux and macOS the command may be `python3`.
 
-Der Bootstrap ist wiederholbar und ergänzt nur, was fehlt oder veraltet ist. Abhängigkeiten stehen in `requirements.txt` (Laufzeit) und `requirements-dev.txt` (Entwicklung). Versionen von uv und Python sind im Kopf von `bootstrap.py` festgelegt.
+The bootstrap is repeatable and only adds what is missing or outdated. Dependencies are listed in `requirements.txt` (runtime) and `requirements-dev.txt` (development). The uv and Python versions are pinned at the top of `bootstrap.py`.
 
-`.tools/` und `.venv/` enthalten plattformspezifische Binärdateien. Wird das Repo zwischen Rechnern synchronisiert (zum Beispiel per Syncthing), sind beide Ordner von der Synchronisation auszuschliessen und auf jedem Rechner einzeln per Bootstrap anzulegen.
+`.tools/` and `.venv/` contain platform-specific binaries. If the repository is synchronized between machines (for example with Syncthing), exclude both directories from synchronization and run the bootstrap on each machine.
 
-## Verzeichnisstruktur
+## Repository layout
 
 ```
 blackbook/
 ├── docs/
-│   ├── funktionen.md       Patch-Builder, externer Editor, Backup, Organisation
-│   ├── kartenformat.md     Aufbau der microSD-Karte und der XML-Dateien
-│   └── architektur.md      Aufbau der Anwendung und Schreibregeln
+│   ├── features.md         patch builder, external editor, backup, organization
+│   ├── card-format.md      structure of the microSD card and its XML files
+│   └── architecture.md     application structure and write rules
 ├── src/
-│   └── blackbook/          Python-Paket (Backend und ausgeliefertes Frontend)
+│   └── blackbook/          Python package (backend and served frontend)
 ├── tests/
-│   └── fixtures/           eigene, synthetische Testkarten (keine Factory-Inhalte)
-├── bootstrap.py            Einrichtung der Toolchain im Repo
-├── requirements.txt        Laufzeit-Abhängigkeiten
-├── requirements-dev.txt    Entwicklungs-Abhängigkeiten
+│   └── fixtures/           own synthetic test cards (no factory content)
+├── bootstrap.py            toolchain setup inside the repository
+├── requirements.txt        runtime dependencies
+├── requirements-dev.txt    development dependencies
 ├── LICENSE
 ├── pyproject.toml
 └── README.md
 ```
 
-## Testdaten
+## Test data
 
-Factory-Content von 1010music ist nicht Bestandteil des Repos. Für lokale Tests wird der Pfad zu einer Karte oder einem Spiegel über die Umgebungsvariable `BLACKBOOK_CARD` angegeben. Lokale Kopien unter `card/` oder `testdata/` sind per `.gitignore` ausgeschlossen.
+1010music factory content is not part of the repository. For local tests, the path to a card or a mirror is set via the environment variable `BLACKBOOK_CARD`. Local copies under `card/` or `testdata/` are excluded via `.gitignore`.
 
-## Hinweis
+## Disclaimer
 
-Inoffizielles Projekt, nicht mit 1010music LLC verbunden. Vor dem ersten Schreibzugriff auf eine Karte ein vollständiges Backup anlegen.
+Unofficial project, not affiliated with 1010music LLC. Make a full backup of the card before the first write access.
 
-## Lizenz
+## License
 
-MIT, siehe [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).
