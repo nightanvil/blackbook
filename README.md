@@ -1,4 +1,4 @@
-# bb2-organizer
+# blackbook
 
 Lokaler Organizer für die microSD-Karte des 1010music blackbox 2. Verwaltet Projekte, Patches und Samples, vergibt Tags und benennt Dateien um, wobei alle Verweise in `project.xml`, `patch.xml` und `patchindex.xml` konsistent bleiben.
 
@@ -32,22 +32,27 @@ Status: Konzeptphase, noch kein lauffähiger Code.
 ## Verzeichnisstruktur
 
 ```
-bb2-organizer/
+blackbook/
 ├── docs/
 │   ├── kartenformat.md     Aufbau der microSD-Karte und der XML-Dateien
 │   └── architektur.md      Aufbau der Anwendung und Schreibregeln
 ├── src/
-│   └── bb2org/             Python-Paket (Backend und ausgeliefertes Frontend)
+│   └── blackbook/          Python-Paket (Backend und ausgeliefertes Frontend)
 ├── tests/
 │   └── fixtures/           eigene, synthetische Testkarten (keine Factory-Inhalte)
+├── LICENSE
 ├── pyproject.toml
 └── README.md
 ```
 
 ## Testdaten
 
-Factory-Content von 1010music ist nicht Bestandteil des Repos. Für lokale Tests wird der Pfad zu einer Karte oder einem Spiegel über die Umgebungsvariable `BB2_CARD` angegeben. Lokale Kopien unter `card/` oder `testdata/` sind per `.gitignore` ausgeschlossen.
+Factory-Content von 1010music ist nicht Bestandteil des Repos. Für lokale Tests wird der Pfad zu einer Karte oder einem Spiegel über die Umgebungsvariable `BLACKBOOK_CARD` angegeben. Lokale Kopien unter `card/` oder `testdata/` sind per `.gitignore` ausgeschlossen.
 
 ## Hinweis
 
 Inoffizielles Projekt, nicht mit 1010music LLC verbunden. Vor dem ersten Schreibzugriff auf eine Karte ein vollständiges Backup anlegen.
+
+## Lizenz
+
+MIT, siehe [LICENSE](LICENSE).
