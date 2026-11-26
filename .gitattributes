@@ -1,0 +1,5 @@
+* text=auto eol=lf
+
+# Card files keep their original bytes
+*.xml -text
+*.wav binary
