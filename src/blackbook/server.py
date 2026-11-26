@@ -7,6 +7,7 @@ import subprocess
 import threading
 import time
 import tomllib
+from collections import deque
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path
@@ -140,7 +141,7 @@ class SnapshotService:
     def __init__(self, card: Card, target: Path | None):
         self.card = card
         self.repo = SnapshotRepo(target) if target else None
-        self.last_event = ""
+        self.events: deque[dict] = deque(maxlen=20)
         self._stop = threading.Event()
 
     def require(self) -> SnapshotRepo:
@@ -165,14 +166,16 @@ class SnapshotService:
             commit = repo.snapshot(self.card.root, reason, automatic=True)
             self.record(reason, commit)
         except (SnapshotError, OSError) as exc:
-            self.last_event = f"{time.strftime('%H:%M')} {reason} failed: {exc}"
+            self.event(f"{reason} failed: {exc}")
+
+    def event(self, text: str) -> None:
+        self.events.appendleft({"time": time.strftime("%H:%M:%S"), "text": text})
 
     def record(self, reason: str, commit) -> None:
-        stamp = time.strftime("%H:%M")
         if commit:
-            self.last_event = f"{stamp} snapshot created: {commit.subject}"
+            self.event(f"Snapshot created ({commit.subject})")
         else:
-            self.last_event = f"{stamp} {reason}: no changes since the last snapshot, none created"
+            self.event(f"{reason}: no changes since the last snapshot, no snapshot created")
 
     def before_write(self, what: str) -> None:
         repo = self.repo
@@ -192,7 +195,7 @@ class SnapshotService:
             self.record(reason, repo.snapshot(self.card.root, reason, automatic=True))
         except (SnapshotError, OSError) as exc:
             # The card is already written, a failing snapshot only gets reported
-            self.last_event = f"{time.strftime('%H:%M')} After {what} failed: {exc}"
+            self.event(f"After {what} failed: {exc}")
 
     def watch(self) -> None:
         present = False
@@ -203,7 +206,7 @@ class SnapshotService:
                     self.auto_snapshot("Card connected", "snapshot_on_connect")
                 present = now
             except Exception as exc:  # noqa: BLE001 - the watcher must survive any error
-                self.last_event = f"{time.strftime('%H:%M')} card watcher error: {exc}"
+                self.event(f"Card watcher error: {exc}")
             self._stop.wait(5)
 
     def stop(self) -> None:
@@ -584,7 +587,7 @@ def create_app(
         repo = snapshots.repo
         status = repo.status() if repo else {"target": None, "initialized": False}
         status["card_present"] = snapshots.card_present()
-        status["last_event"] = snapshots.last_event
+        status["events"] = list(snapshots.events)
         return status
 
     @app.put("/api/backup/target")

@@ -4,20 +4,36 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>blackbook</title>
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <script>
+    // Apply the stored theme before the first paint
+    try { const t = localStorage.getItem("blackbook.theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) { /* storage unavailable */ }
+  </script>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header>
-    <div class="brand">blackbook <span id="code-commit" class="muted"></span></div>
-    <nav>
-      <button data-view="library" class="active">Library</button>
-      <button data-view="build">Build</button>
-      <button data-view="projects">Projects</button>
-      <button data-view="backup">Backup</button>
-    </nav>
-    <button id="stop-btn" class="small" hidden title="Stop playback (Esc)">■ Stop</button>
-    <div id="card-path" class="muted"></div>
-    <div id="card-state"></div>
+  <header class="topbar">
+    <div class="topinner">
+      <div class="brand"><img src="/static/icon.svg" alt="" class="logo">blackbook <span class="muted">blackbox 2 organizer</span><span class="ver muted" id="code-commit"></span></div>
+      <nav>
+        <button data-view="library" class="active">Library</button>
+        <button data-view="build">Build</button>
+        <button data-view="projects">Projects</button>
+        <button data-view="backup">Backup</button>
+      </nav>
+      <div class="topright">
+        <button id="stop-btn" class="small" hidden title="Stop playback (Esc)">■ Stop</button>
+        <div id="card-state"></div>
+        <span class="sep"></span>
+        <div class="themesw" id="theme-switch" role="group" aria-label="Theme">
+          <button type="button" data-theme-set="auto" title="Theme: follow the system setting" aria-label="Theme: follow the system setting"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/></svg></button>
+          <button type="button" data-theme-set="dark" title="Theme: dark" aria-label="Theme: dark"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
+          <button type="button" data-theme-set="light" title="Theme: light" aria-label="Theme: light"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+        </div>
+        <button class="iconbtn" id="help-btn" type="button" title="Help (F1)" aria-label="Help"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><path d="M9.5 9.2a2.6 2.6 0 0 1 5 1c0 1.8-2.5 2.2-2.5 3.8M12 17.2h.01"/></svg></button>
+        <a class="iconbtn" href="https://ko-fi.com/nightanvil" target="_blank" rel="noopener noreferrer" title="Support blackbook on Ko-fi" aria-label="Support blackbook on Ko-fi"><img src="/static/ko-fi.png" width="20" height="20" alt=""></a>
+      </div>
+    </div>
   </header>
 
   <main>
@@ -146,8 +162,19 @@
     </div>
   </dialog>
 
+  <div class="helpov" id="help" hidden>
+    <div class="helpbox" role="dialog" aria-modal="true" aria-label="Help">
+      <div class="helphead"><img src="/static/icon.svg" alt="" class="logo"><strong>blackbook help</strong><span class="grow"></span><button class="iconbtn" id="help-close" type="button" title="Close (Esc)" aria-label="Close">✕</button></div>
+      <div class="helpcols">
+        <nav class="helpnav" id="help-nav"></nav>
+        <div class="helpbody" id="help-body"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="toast"></div>
   <audio id="player"></audio>
+  <script src="/static/help.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

@@ -155,7 +155,9 @@ def test_api_backup_flow_and_snapshot_before_write(card: Path, tmp_path: Path, m
         assert log[0]["subject"].startswith("After creating UserPatches\\OneShots\\Kit:")
         after = {c["path"] for c in client.get("/api/backup/commit", params={"id": log[0]["id"]}).json()}
         assert "UserPatches/OneShots/Kit/patch.xml" in after
-        assert "snapshot created: After creating" in client.get("/api/backup/status").json()["last_event"]
+        status = client.get("/api/backup/status").json()
+        assert status["events"][0]["text"].startswith("Snapshot created (After creating")
+        assert status["size_bytes"] == status["history_bytes"] + status["mirror_bytes"] > 0
 
         config = client.get("/api/backup/config").json()["text"]
         assert "include_factory = false" in config

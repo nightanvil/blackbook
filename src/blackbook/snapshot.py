@@ -144,6 +144,10 @@ class FileChange:
     path: str
 
 
+def folder_size(path: Path) -> int:
+    return sum(p.stat().st_size for p in path.rglob("*") if p.is_file()) if path.is_dir() else 0
+
+
 def file_hash(path: Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as fh:
@@ -418,6 +422,8 @@ class SnapshotRepo:
             "commits": 0,
             "last": None,
             "size_bytes": 0,
+            "history_bytes": 0,
+            "mirror_bytes": 0,
         }
         if not self.initialized:
             return info
@@ -425,6 +431,7 @@ class SnapshotRepo:
             info["commits"] = int(self.git("rev-list", "--count", "HEAD").strip())
             last = self.log(1)[0]
             info["last"] = {"id": last.id, "date": last.date, "subject": last.subject}
-        git_dir = self.target / ".git"
-        info["size_bytes"] = sum(p.stat().st_size for p in git_dir.rglob("*") if p.is_file())
+        info["history_bytes"] = folder_size(self.target / ".git")
+        info["mirror_bytes"] = folder_size(self.mirror)
+        info["size_bytes"] = info["history_bytes"] + info["mirror_bytes"]
         return info

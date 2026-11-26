@@ -1,22 +1,41 @@
 :root {
-  --bg: #121315;
-  --panel: #1b1d20;
-  --panel-2: #24272b;
-  --line: #30343a;
-  --text: #e6e6e3;
-  --muted: #8b9097;
-  --accent: #e8a33d;
-  --accent-ink: #1a1306;
+  --bg: #161617;
+  --panel: #232325;
+  --panel-2: #323235;
+  --panel-3: #3c3c40;
+  --line: #2e2e31;
+  --text: #ececee;
+  --muted: #aeaeb4;
+  --accent: #e9e9ec;
+  --accent-ink: #18181a;
+  --focus: #8a7cff;
+  --used: #5a6bd8;
   --ok: #6cbf84;
-  --warn: #e3b341;
-  --err: #e5615b;
-  --radius: 6px;
-  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  --warn: #ffb347;
+  --err: #ff6b6b;
+  --shadow: 0 8px 28px rgba(0, 0, 0, .45);
+  --radius: 7px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
   color-scheme: dark;
 }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --bg: #ececef; --panel: #f9f9fb; --panel-2: #e2e2e6; --panel-3: #d6d6db; --line: #dcdce0;
+    --text: #1c1c1e; --muted: #4e4e54; --accent: #1c1c1e; --accent-ink: #ffffff; --focus: #5b4bd6;
+    --used: #6f7fe6; --ok: #2e7d4f; --warn: #b86e00; --err: #c62828; --shadow: 0 8px 24px rgba(0, 0, 0, .14);
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #ececef; --panel: #f9f9fb; --panel-2: #e2e2e6; --panel-3: #d6d6db; --line: #dcdce0;
+  --text: #1c1c1e; --muted: #4e4e54; --accent: #1c1c1e; --accent-ink: #ffffff; --focus: #5b4bd6;
+  --used: #6f7fe6; --ok: #2e7d4f; --warn: #b86e00; --err: #c62828; --shadow: 0 8px 24px rgba(0, 0, 0, .14);
+  color-scheme: light;
+}
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -27,22 +46,38 @@ body {
   flex-direction: column;
 }
 
-header {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--line);
-  background: var(--panel);
+/* Top bar: brand left, views centered, status, theme and links right */
+.topbar { background: var(--panel); border-bottom: 1px solid var(--line); }
+.topinner {
+  padding: 7px 16px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px;
 }
+.brand { font-weight: 600; letter-spacing: .2px; display: flex; align-items: center; gap: 8px; white-space: nowrap; min-width: 0; }
+.brand .logo { width: 24px; height: 24px; flex: none; }
+.brand .ver { font-weight: 400; font-size: 11px; opacity: .75; }
+.brand .ver.err { color: var(--err); opacity: 1; }
+.topbar nav { display: flex; gap: 2px; }
+.topbar nav button { background: none; border: none; color: var(--muted); padding: 7px 14px; position: relative; font-weight: 500; }
+.topbar nav button:hover { color: var(--text); background: none; }
+.topbar nav button.active { color: var(--text); background: none; }
+.topbar nav button.active::after {
+  content: ""; position: absolute; left: 50%; bottom: -8px; width: 22px; height: 2px; border-radius: 2px;
+  background: var(--text); transform: translateX(-50%);
+}
+.topright { display: flex; gap: 6px; align-items: center; justify-content: flex-end; min-width: 0; }
+.sep { width: 1px; height: 18px; background: var(--panel-3); margin: 0 4px; }
+#card-state { font-size: 12px; padding: 3px 10px; border-radius: 12px; background: var(--panel-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#card-state.ok { color: var(--ok); }
+#card-state.err { color: var(--err); }
+.iconbtn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 32px; padding: 0; background: transparent; border: none; color: var(--muted); border-radius: var(--radius); }
+.iconbtn:hover { color: var(--text); background: var(--panel-2); }
+.iconbtn svg, .iconbtn img { display: block; }
+.themesw { display: inline-flex; background: var(--panel-2); border-radius: var(--radius); padding: 2px; }
+.themesw button { width: 28px; height: 26px; padding: 0; display: inline-flex; align-items: center; justify-content: center; background: none; border: none; color: var(--muted); border-radius: 5px; }
+.themesw button[aria-pressed="true"] { background: var(--panel); color: var(--text); }
+.themesw svg { width: 16px; height: 16px; }
 
-.brand { font-weight: 700; letter-spacing: 0.04em; }
-#code-commit { font-weight: 400; font-size: 12px; letter-spacing: 0; margin-left: 6px; }
-nav { display: flex; gap: 4px; }
-#card-path, #card-state { font-size: 12px; }
-#stop-btn { margin-left: auto; }
-header > #stop-btn[hidden] + #card-path { margin-left: auto; }
-.mode-banner { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border: 1px solid var(--accent); border-radius: var(--radius); background: #221d14; }
+.mode-banner { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border: 1px solid var(--focus); border-radius: var(--radius); background: color-mix(in srgb, var(--focus) 12%, var(--panel)); }
 .mode-banner .grow { flex: 1; }
 .pad.missing { border-color: var(--err); }
 .row button.small { margin-left: 4px; }
@@ -173,7 +208,7 @@ td input { width: 60px; padding: 3px 6px; }
 }
 .pad .num { color: var(--muted); font-size: 11px; }
 .pad .sample { word-break: break-all; line-height: 1.2; }
-.pad.filled { border-color: #5a4a2a; background: #221d14; }
+.pad.filled { border-color: color-mix(in srgb, var(--used) 60%, var(--line)); background: color-mix(in srgb, var(--used) 14%, var(--panel)); }
 .pad.selected { outline: 2px solid var(--accent); }
 .pad.over, .dropzone.over, #br-list.over { outline: 2px dashed var(--accent); }
 
@@ -260,3 +295,27 @@ ul.msgs { margin: 4px 0 12px; padding-left: 18px; }
   display: none;
 }
 #toast.show { display: block; }
+
+/* Help overlay: index on the left, text on the right */
+.helpov { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, .5); display: grid; place-items: center; padding: 24px; }
+.helpbox { width: min(1080px, 100%); height: min(88vh, 900px); background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; }
+.helphead { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.helphead .logo { width: 22px; height: 22px; }
+.helphead .grow { flex: 1; }
+.helpcols { flex: 1; min-height: 0; display: grid; grid-template-columns: 210px minmax(0, 1fr); }
+.helpnav { overflow-y: auto; padding: 12px 8px; border-right: 1px solid var(--line); background: color-mix(in srgb, var(--panel-2) 40%, var(--panel)); }
+.helpnav a { display: block; padding: 6px 10px; border-radius: 6px; color: var(--muted); text-decoration: none; font-size: 13px; }
+.helpnav a:hover { color: var(--text); background: var(--panel-2); }
+.helpnav a.active { color: var(--accent-ink); background: var(--accent); }
+.helpbody { overflow-y: auto; padding: 8px 28px 40vh; line-height: 1.55; }
+.helpsec { padding-top: 16px; max-width: 760px; }
+.helpsec + .helpsec { border-top: 1px solid var(--line); margin-top: 18px; }
+.helpsec h2 { font-size: 19px; margin: 0 0 10px; }
+.helpsec h3 { font-size: 14px; margin: 16px 0 6px; }
+.helpsec a { color: var(--focus); }
+.helpsec code { font-size: 12.5px; background: var(--panel-2); border-radius: 4px; padding: 1px 5px; }
+.helpsec .placeholder { color: var(--muted); font-style: italic; }
+
+/* Backup status */
+table.facts { border-collapse: collapse; font-size: 13px; }
+table.facts td { padding: 2px 12px 2px 0; vertical-align: top; }

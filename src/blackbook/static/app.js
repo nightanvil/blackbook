@@ -96,6 +96,8 @@ function play(source) {
 player.addEventListener("ended", () => setPlaying(null));
 document.getElementById("stop-btn").addEventListener("click", stop);
 document.addEventListener("keydown", (ev) => {
+  if (ev.key === "F1") { ev.preventDefault(); openHelp(); return; }
+  if (ev.key === "Escape" && !document.getElementById("help").hidden) { closeHelp(); return; }
   if (ev.key === "Escape" && state.playing) stop();
 });
 
@@ -121,6 +123,69 @@ function tagChips(container, selected, onChange) {
     )
   );
 }
+
+// ---------- theme ----------
+
+// 'auto' follows the OS, 'dark' and 'light' are stored and set as data-theme on <html>
+function applyTheme(theme) {
+  const root = document.documentElement;
+  if (theme === "dark" || theme === "light") root.dataset.theme = theme;
+  else { theme = "auto"; delete root.dataset.theme; }
+  document.querySelectorAll("#theme-switch button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.themeSet === theme)));
+  return theme;
+}
+
+function storedTheme() {
+  try { return localStorage.getItem("blackbook.theme") || "auto"; } catch (_) { return "auto"; }
+}
+
+applyTheme(storedTheme());
+document.getElementById("theme-switch").addEventListener("click", (ev) => {
+  const button = ev.target.closest("button[data-theme-set]");
+  if (!button) return;
+  const theme = applyTheme(button.dataset.themeSet);
+  try {
+    if (theme === "auto") localStorage.removeItem("blackbook.theme");
+    else localStorage.setItem("blackbook.theme", theme);
+  } catch (_) { /* storage unavailable */ }
+});
+
+// ---------- help ----------
+
+function openHelp(sectionId) {
+  const sections = window.BlackbookHelp.sections;
+  const nav = document.getElementById("help-nav");
+  const body = document.getElementById("help-body");
+  if (!body.childElementCount) {
+    sections.forEach((sec) => {
+      nav.append(el("a", { href: "#help-" + sec.id, "data-id": sec.id, onclick: (ev) => {
+        ev.preventDefault();
+        document.getElementById("help-" + sec.id).scrollIntoView({ behavior: "smooth" });
+      } }, sec.title));
+      const node = el("section", { class: "helpsec", id: "help-" + sec.id }, el("h2", {}, sec.title));
+      node.insertAdjacentHTML("beforeend", sec.html);
+      body.append(node);
+    });
+    body.addEventListener("scroll", () => {
+      let current = sections[0].id;
+      for (const sec of sections) {
+        if (document.getElementById("help-" + sec.id).offsetTop - body.offsetTop <= body.scrollTop + 40) current = sec.id;
+      }
+      nav.querySelectorAll("a").forEach((a) => a.classList.toggle("active", a.dataset.id === current));
+    });
+  }
+  document.getElementById("help").hidden = false;
+  if (sectionId) document.getElementById("help-" + sectionId)?.scrollIntoView();
+  body.dispatchEvent(new Event("scroll"));
+}
+
+function closeHelp() {
+  document.getElementById("help").hidden = true;
+}
+
+document.getElementById("help-btn").addEventListener("click", () => openHelp());
+document.getElementById("help-close").addEventListener("click", closeHelp);
+document.getElementById("help").addEventListener("click", (ev) => { if (ev.target.id === "help") closeHelp(); });
 
 // ---------- navigation ----------
 
@@ -747,17 +812,20 @@ async function loadBackup() {
   const target = document.getElementById("bk-target");
   if (status.target && document.activeElement !== target) target.value = status.target;
 
-  const lines = [];
-  if (!status.target) lines.push("No backup folder set.");
-  else if (!status.initialized) lines.push("Folder not initialized yet.");
+  const facts = [];
+  if (!status.target) facts.push(["Backup", "no folder set"]);
+  else if (!status.initialized) facts.push(["Backup", "folder not initialized yet"]);
   else {
-    lines.push(`${status.commits} snapshots, repository ${fmtBytes(status.size_bytes)}`);
-    if (status.last) lines.push("Last: " + fmtDate(status.last.date));
+    facts.push(["Snapshots", `${status.commits}` + (status.last ? `, last ${fmtDate(status.last.date)}` : "")]);
+    facts.push(["Size", `${fmtBytes(status.size_bytes)} in total (card copy ${fmtBytes(status.mirror_bytes)}, history ${fmtBytes(status.history_bytes)})`]);
   }
-  lines.push(status.card_present ? "Card connected" : "Card not connected");
-  if (status.last_event) lines.push("Last event: " + status.last_event);
-  state.backupStamp = `${status.commits}|${status.last_event}`;
-  document.getElementById("bk-status").replaceChildren(...lines.map((l) => el("div", {}, l)));
+  facts.push(["Card", status.card_present ? "connected" : "not connected"]);
+  const events = status.events || [];
+  state.backupStamp = `${status.commits}|${events.length ? events[0].time + events[0].text : ""}`;
+  fill(document.getElementById("bk-status"),
+    el("table", { class: "facts" }, el("tbody", {}, facts.map(([k, v]) => el("tr", {}, el("td", { class: "muted" }, k), el("td", {}, v))))),
+    events.length ? el("div", { class: "label" }, "Events since start") : null,
+    events.length ? el("table", { class: "facts" }, el("tbody", {}, events.map((e) => el("tr", {}, el("td", { class: "muted" }, e.time), el("td", {}, e.text))))) : null);
   document.getElementById("bk-snapshot").disabled = !status.initialized || !status.card_present;
 
   if (!status.initialized) {
@@ -897,6 +965,7 @@ async function pollCard() {
   } catch (_) { /* server unreachable */ }
   const indicator = document.getElementById("card-state");
   indicator.textContent = present ? "Card connected" : "Card not connected: switch the blackbox to microSD mode";
+  indicator.title = state.cardPath || "";
   indicator.className = present ? "ok" : "err";
   document.getElementById("b-plan").disabled = !present;
   if (present && state.cardPresent === false) {
@@ -926,7 +995,8 @@ async function refreshBackupIfVisible() {
   if (!document.getElementById("view-backup").classList.contains("active")) return;
   try {
     const status = await api("GET", "/api/backup/status");
-    if (`${status.commits}|${status.last_event}` !== state.backupStamp) await loadBackup();
+    const events = status.events || [];
+    if (`${status.commits}|${events.length ? events[0].time + events[0].text : ""}` !== state.backupStamp) await loadBackup();
   } catch (_) { /* server unreachable */ }
 }
 
@@ -935,7 +1005,7 @@ async function refreshBackupIfVisible() {
 async function start() {
   const info = await api("GET", "/api/info");
   state.roots = info.roots;
-  document.getElementById("card-path").textContent = info.card;
+  state.cardPath = info.card;
   await loadLibrary();
   tagChips(document.getElementById("b-tags"), state.buildTags);
   renderPads();
