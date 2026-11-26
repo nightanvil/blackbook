@@ -32,7 +32,7 @@
 
 ## Vorlagen für patch.xml
 
-Der Patch-Builder nutzt eigene Vorlagen im Paket, eine je Patch-Typ. Factory-Patches dienen nur als Referenz zur Prüfung, nicht als ausgelieferte Vorlage. Neu erzeugte Dateien haben UTF-8 ohne BOM und LF-Zeilenenden, wie der Grossteil der Factory-Dateien.
+Der Patch-Builder nutzt eigene Vorlagen im Paket, eine je Patch-Typ. Factory-Patches dienen nur als Referenz zur Prüfung, nicht als ausgelieferte Vorlage. Neu erzeugte Dateien haben UTF-8 mit BOM und LF-Zeilenenden, wie die vom Gerät geschriebenen Dateien. Zu jedem Patch erzeugt der Builder eine `preview.wav` (24 Bit, 48 kHz, stereo).
 
 ## Plattformen
 

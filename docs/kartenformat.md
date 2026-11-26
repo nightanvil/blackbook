@@ -1,17 +1,21 @@
 # Kartenformat blackbox 2
 
-Stand: Firmware 1.1, User Manual vom 10.10.2026, Factory Content RC1.
+Stand: Firmware 1.1, User Manual vom 10.10.2026, Factory Content RC1 und eine genutzte Karte (exFAT, 128 GB) vom 26.11.2026.
 
 ## Verzeichnisse
 
 ```
 <Karte>/
 ├── bb2-stng.mml                     globale Einstellungen
+├── blackbox2.bin                    Firmware-Datei für Updates
 ├── Projects/
-│   └── <Projektname>/
-│       ├── project.xml              komplettes Projekt
-│       ├── <Aufnahme>.wav           aufgenommene oder gepackte Samples
-│       └── <Multisample-Set>/       je Multisample-Set ein Unterordner
+│   ├── <Projektname>/
+│   │   ├── project.xml              komplettes Projekt
+│   │   ├── RC000001.wav             Aufnahmen, fortlaufend nummeriert
+│   │   ├── <Name>.wav               umbenannte Aufnahmen und kopierte Samples
+│   │   └── <Multisample-Set>/       je Multisample-Set ein Unterordner
+│   └── <Projektname> - autosave/    automatische Sicherung, gleicher Aufbau
+├── Samples/                         frei angelegte Sample-Bibliothek, beliebige Unterordner
 ├── Patches/                         Factory-Patches
 │   ├── patchindex.xml               Tags für den Patch Browser
 │   ├── OneShots/<Patch>/
@@ -20,12 +24,18 @@ Stand: Firmware 1.1, User Manual vom 10.10.2026, Factory Content RC1.
 │   ├── Slicer/<Patch>/
 │   └── Shredder/<Patch>/
 └── UserPatches/                     eigene Patches, gleicher Aufbau wie Patches
-    └── patchindex.xml
+    ├── patchindex.xml
+    └── <Typ>/<Patch>/
+        ├── patch.xml
+        ├── preview.wav              Vorhör-Datei für den Patch Browser
+        └── <Sample>.wav
 ```
 
 Jeder Patch-Ordner enthält `patch.xml` und alle WAVs, die der Patch nutzt. Zu jeder WAV kann eine `<name>.wav.pk` existieren. Das ist ein Waveform-Cache, der gefahrlos gelöscht werden kann und vom Gerät neu erzeugt wird.
 
 Factory Content RC1: 5 Projekte, 146 Patches, 6805 WAVs, ca. 7,4 GB.
+
+Fremde Einträge auf einer genutzten Karte, die blackbook ignoriert: `.Trash-1000/` (Papierkorb von Linux-Dateimanagern, belegt Platz auf der Karte), `System Volume Information/` (Windows), Dateien anderer Sampler-Formate wie `.nki`, `.exs`, `.kt3`, `.geist`.
 
 ## Patch-Typen
 
@@ -47,7 +57,7 @@ Ein Projekt enthält zusätzlich einen `mastrack` (Master mit FX).
 | `project.xml` | 1 | 4 |
 | `patch.xml` | 68 | 78 |
 
-Alle Dateien sind UTF-8 mit LF-Zeilenenden. Das Gerät liest beide Varianten, ein vorhandenes BOM ist daher beim Schreiben beizubehalten, ein fehlendes nicht zu ergänzen.
+Alle Dateien sind UTF-8 mit LF-Zeilenenden. Das Gerät liest beide Varianten. Vom Gerät selbst geschriebene Dateien (`project.xml`, `patch.xml`, `patchindex.xml` in `UserPatches`, `bb2-stng.mml`) haben ein BOM.
 
 Pfadtrenner in allen XML-Dateien ist der Backslash, unabhängig vom Betriebssystem des Rechners.
 
@@ -63,7 +73,8 @@ Pfadtrenner in allen XML-Dateien ist der Backslash, unabhängig vom Betriebssyst
 </patchmetadata>
 ```
 
-- `path` ist relativ zur Kartenwurzel und zeigt auf den Patch-Ordner.
+- `path` ist relativ zur Kartenwurzel und zeigt auf den Patch-Ordner, auch in `UserPatches/patchindex.xml` (`UserPatches\Shredder\VOICE GLITCH`).
+- Ein Patch ohne Tags hat keinen Eintrag.
 - Die Datei enthält viele Leerzeilen ohne Bedeutung.
 - Tags im Factory Content: Atmosphere, Bass, Drum, Foley, Guitar, Keys, Lead, Orchestral, Organ, Pad, Percussion, SFX, Strings, Synth, Vocal.
 - Ob das Gerät weitere, frei definierte Tags anzeigt, ist nicht dokumentiert.
@@ -103,8 +114,11 @@ Samples werden ausschliesslich über das Attribut `filename` in `<cell type="sam
 | `patch.xml` | relativ zum Patch-Ordner | `Kick_EDM.wav` |
 | `project.xml` | relativ zur Kartenwurzel | `Patches\OneShots\EDM Kit\Kick_EDM.wav` |
 | `project.xml` | relativ zur Kartenwurzel mit führendem Backslash | `\Patches\Loops\Female Vocals 1\Bloom_Dm_90BPM_FemaleVocal.wav` |
+| `project.xml` | relativ zum Projektordner | `.\RC000010.wav` |
 
-Beide Formen in `project.xml` kommen im Factory Content vor und werden vom Gerät geladen.
+Verweise relativ zur Kartenwurzel zeigen in `Patches`, `UserPatches` oder `Samples`. Alle Formen werden vom Gerät geladen.
+
+Ein leerer Pad-Slot erscheint entweder ohne `samasst`-Cell oder als `samasst` mit `filename` auf den Ordner (`UserPatches\OneShots\FIRST\`) und `samlen="0"`.
 
 ### Längen und Positionen
 
@@ -114,7 +128,7 @@ Diese Werte stehen auch in jeder `project.xml`, die das WAV nutzt. Eine Änderun
 
 ### OneShot-Patches
 
-Ein OneShot-Patch hat 16 Pads. Jedes Pad ist eine `saminst`-Cell mit `celldisppos` 0 bis 15, gefolgt von einer `samasst`-Cell mit dem WAV. Ein Pad ohne Sample hat keine `samasst`-Cell.
+Ein OneShot-Patch hat 16 Pads. Jedes Pad ist eine `saminst`-Cell mit `celldisppos` 0 bis 15, gefolgt von einer `samasst`-Cell mit dem WAV.
 
 ### Multisample-Patches
 
@@ -137,6 +151,10 @@ Jedes WAV ist eine `samasst`-Cell mit Key- und Velocity-Bereich:
 - Samplerate 44,1 und 48 kHz, mono und stereo.
 - 1269 Dateien haben einen `JUNK`-Chunk vor dem `fmt`-Chunk. WAVs sind daher chunkweise zu lesen, nicht über feste Header-Offsets.
 
+### preview.wav
+
+Das Gerät legt beim Speichern eines Patches eine `preview.wav` im Patch-Ordner an: PCM 24 Bit, 48 kHz, stereo, Länge je nach Patch (beobachtet 1 bis 16 Sekunden). Der Patch Browser spielt sie bei aktivem Preview ab. Factory-Patches haben keine `preview.wav`.
+
 ### Parameterwerte
 
 Parameter sind Ganzzahlen in geräteinternen Einheiten, zum Beispiel `gaindb="6800"`, `trkgain="-9200"`, `envsus="1000"`. Die Umrechnung in die am Gerät angezeigten Werte ist nicht dokumentiert.
@@ -153,6 +171,10 @@ Parameter sind Ganzzahlen in geräteinternen Einheiten, zum Beispiel `gaindb="68
 
 ## Verhalten des Geräts
 
+- Aufnahmen heissen `RC` plus sechsstellige Nummer (`RC000001.wav`) und liegen im Projektordner. Die Nummer zählt pro Projekt weiter, auch über Save As hinweg.
+- Save Patch kopiert alle genutzten WAVs in den Patch-Ordner, erzeugt `preview.wav` und schreibt bei gewählten Tags einen Eintrag in `UserPatches/patchindex.xml`. Das Projekt verweist danach weiterhin auf die ursprünglichen WAVs.
+- Neben einem Projekt entsteht ein Ordner `<Projektname> - autosave` mit eigener `project.xml` und eigenen Kopien der Aufnahmen.
+- `bb2-stng.mml` enthält im Element `<preset name="...">` das zuletzt geladene Projekt.
 - Rename WAV am Gerät benennt nur Dateien im Projektordner um. Liegt die Datei woanders, kopiert das Gerät sie unter neuem Namen in den Projektordner.
 - Pack kopiert alle referenzierten WAVs und Patches in den Projektordner und schreibt die Verweise um.
 - Clean löscht WAVs im Projektordner, auf die kein Verweis mehr existiert, auch unbenutzte Aufnahmen.
@@ -160,9 +182,9 @@ Parameter sind Ganzzahlen in geräteinternen Einheiten, zum Beispiel `gaindb="68
 
 ## Offene Fragen
 
-- Standardbenennung neuer Aufnahmen und Form ihrer Verweise in `project.xml`
-- Form der Verweise nach Pack (vermutlich `Projects\<Projektname>\...`)
-- Aufbau von `UserPatches/patchindex.xml` im Detail
+- Form der Verweise nach Pack
+- Wann das Gerät einen Autosave schreibt und ob es ihn beim Laden bevorzugt
+- Ob `preview.wav` fehlen darf und ob ein extern erzeugtes Preview akzeptiert wird
 - Toleranz des Geräts gegenüber geänderter Attributreihenfolge, Einrückung, Zeilenenden und fehlendem BOM
 - Unterstützung frei definierter Tags
 - Gross- und Kleinschreibung bei Pfaden (FAT32 und exFAT sind case-insensitive, Linux-Dateisysteme eines Spiegels nicht)
