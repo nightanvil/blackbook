@@ -144,6 +144,12 @@ class FileChange:
     path: str
 
 
+GIT_MISSING = (
+    "git is not installed. The backup needs it: on Windows install Git for Windows from https://git-scm.com, "
+    "on Linux the package 'git', on macOS run 'xcode-select --install'. Then restart blackbook."
+)
+
+
 def folder_size(path: Path) -> int:
     return sum(p.stat().st_size for p in path.rglob("*") if p.is_file()) if path.is_dir() else 0
 
@@ -222,6 +228,8 @@ class SnapshotRepo:
     # ---------- git ----------
 
     def git(self, *args: str, binary: bool = False) -> str | bytes:
+        if shutil.which("git") is None:
+            raise SnapshotError(GIT_MISSING)
         env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C"}
         identity: list[str] = []
         if args and args[0] == "commit":
@@ -424,6 +432,7 @@ class SnapshotRepo:
             "size_bytes": 0,
             "history_bytes": 0,
             "mirror_bytes": 0,
+            "git_missing": GIT_MISSING if shutil.which("git") is None else "",
         }
         if not self.initialized:
             return info

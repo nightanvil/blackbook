@@ -128,15 +128,14 @@ function tagChips(container, selected, onChange) {
 
 // 'auto' follows the OS, 'dark' and 'light' are stored and set as data-theme on <html>
 function applyTheme(theme) {
-  const root = document.documentElement;
-  if (theme === "dark" || theme === "light") root.dataset.theme = theme;
-  else { theme = "auto"; delete root.dataset.theme; }
+  if (theme !== "auto" && theme !== "light") theme = "dark";
+  document.documentElement.dataset.theme = theme;
   document.querySelectorAll("#theme-switch button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.themeSet === theme)));
   return theme;
 }
 
 function storedTheme() {
-  try { return localStorage.getItem("blackbook.theme") || "auto"; } catch (_) { return "auto"; }
+  try { return localStorage.getItem("blackbook.theme") || "dark"; } catch (_) { return "dark"; }
 }
 
 applyTheme(storedTheme());
@@ -145,8 +144,7 @@ document.getElementById("theme-switch").addEventListener("click", (ev) => {
   if (!button) return;
   const theme = applyTheme(button.dataset.themeSet);
   try {
-    if (theme === "auto") localStorage.removeItem("blackbook.theme");
-    else localStorage.setItem("blackbook.theme", theme);
+    localStorage.setItem("blackbook.theme", theme);
   } catch (_) { /* storage unavailable */ }
 });
 
@@ -213,11 +211,11 @@ function renderLibrary() {
   const list = document.getElementById("lib-list");
 
   const items = state.patches.filter((p) =>
-    (!search || p.name.toLowerCase().includes(search)) &&
+    (!search || p.name.toLowerCase().includes(search) || p.tags.some((t) => t.toLowerCase().includes(search))) &&
     (!source || p.root === source) &&
     (!type || p.type === type) &&
     [...state.libTags].every((t) => p.tags.includes(t))
-  );
+  ).sort((a, b) => (b.is_user - a.is_user) || a.name.localeCompare(b.name) || a.type.localeCompare(b.type));
 
   list.replaceChildren(
     ...items.map((p) =>
@@ -225,10 +223,9 @@ function renderLibrary() {
         class: "row" + (p.ref === state.selectedRef ? " selected" : ""),
         onclick: () => showPatch(p.ref),
       },
-      el("span", { class: "name" }, p.name),
-      p.is_user ? el("span", { class: "badge user" }, "user") : null,
-      el("span", { class: "meta" }, p.type),
-      el("span", { class: "meta" }, p.tags.length ? p.tags.join(", ") : "untagged"))
+      p.is_user ? el("span", { class: "badge user" }, "user") : el("span", { class: "badge factory" }, "factory"),
+      el("span", { class: "name", title: p.tags.length ? "Tags: " + p.tags.join(", ") : "untagged" }, p.name),
+      el("span", { class: "meta" }, p.type))
     )
   );
   if (!items.length) list.append(el("p", { class: "muted", style: "padding:12px" }, "No patches match."));
@@ -820,6 +817,7 @@ async function loadBackup() {
     facts.push(["Size", `${fmtBytes(status.size_bytes)} in total (card copy ${fmtBytes(status.mirror_bytes)}, history ${fmtBytes(status.history_bytes)})`]);
   }
   facts.push(["Card", status.card_present ? "connected" : "not connected"]);
+  if (status.git_missing) facts.unshift(["Problem", el("span", { class: "err" }, status.git_missing)]);
   const events = status.events || [];
   state.backupStamp = `${status.commits}|${events.length ? events[0].time + events[0].text : ""}`;
   fill(document.getElementById("bk-status"),
@@ -985,7 +983,8 @@ async function showCodeCommit() {
   } catch (_) { return; }
   const box = document.getElementById("code-commit");
   const stale = info.current_commit && info.commit !== info.current_commit;
-  box.textContent = stale ? `${info.commit} (restart needed, code is at ${info.current_commit})` : info.commit;
+  box.textContent = stale ? `${info.commit} restart needed` : info.commit;
+  box.title = stale ? `blackbook was updated to ${info.current_commit}. Close the terminal window and start blackbook again.` : "";
   box.className = stale ? "err" : "muted";
   document.title = info.commit ? `blackbook ${info.commit}` : "blackbook";
 }

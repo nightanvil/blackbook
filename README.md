@@ -1,140 +1,100 @@
-# blackbook
+# <img src="src/blackbook/static/icon.svg" alt="" width="40" align="top"> blackbook
 
-Toolkit for the microSD card of the 1010music blackbox 2. Builds patches on the computer, integrates an external audio editor, keeps versioned backups of the card and organizes projects, patches and samples. All references in `project.xml`, `patch.xml` and `patchindex.xml` stay consistent.
+**blackbook** is an unofficial organizer for the microSD card of the **1010music blackbox 2**. It runs on your computer and opens in your web browser. Nothing is uploaded anywhere.
 
-Status: prototype 0.1. Patches built with blackbook have not been verified on the device yet.
+> [!IMPORTANT]
+> **This is a very, very, very early version.** Expect rough edges and missing pieces. It is shared now so you can try it and tell me what you need. Every idea and every bug report helps: [Ideas and feedback](https://github.com/nightanvil/blackbook/issues).
 
-## Features
+blackbook is free and stays free. If it helps you, you can buy me a coffee on [Ko-fi](https://ko-fi.com/nightanvil).
 
-| Feature | Status |
+## What it does
+
+- **Library:** all factory and user patches with type and tag filter. Listen to samples and previews.
+- **Tags:** tag your own patches, as on the device.
+- **Build:** one-shot kits on 16 pads and multisample instruments, by drag and drop. Key and velocity ranges are read from the file names.
+- **Edit:** change your own patches in place. Sequences, modulation and everything blackbook does not know stay untouched.
+- **Templates:** any one-shot or multisample patch, also factory patches, as a starting point for a new one.
+- **Projects:** missing samples and unused files per project.
+- **Backup:** snapshots of the card with history, comparison and restore. Automatic when the card is connected, and before and after blackbook writes.
+
+Planned: loop, slicer and shredder patches, an external audio editor, renaming with all references kept intact. Tell me what you need most.
+
+## Installation and start
+
+You do this once. blackbook sets itself up inside its own folder and changes nothing else on your computer. The first start needs internet and takes a few minutes, later starts take seconds.
+
+### 1. Download
+
+On the [GitHub page](https://github.com/nightanvil/blackbook) click the green **Code** button, then **Download ZIP**. Unpack the ZIP into a folder of your choice, for example your home folder or `Documents`. Do not put it on the blackbox card.
+
+### 2. Start
+
+**Linux** (tested)
+
+1. Install `git` and `python3` if they are missing. On most systems they are already there. Otherwise, for example on Ubuntu: `sudo apt install git python3`, on Arch and CachyOS: `sudo pacman -S git python`.
+2. Open the blackbook folder in your file manager. Right-click on an empty spot and choose **Open in Terminal** (or similar).
+3. Type the following and press Enter:
+
+   ```bash
+   bash start.sh
+   ```
+
+**Windows** (not tested yet)
+
+1. Install [Git for Windows](https://git-scm.com/download/win) with the default settings. blackbook needs it for the backup.
+2. Open the blackbook folder and double-click **`start.bat`**. If Windows warns about an unknown app, click **More info**, then **Run anyway**.
+
+Python is not needed: if it is missing, `start.bat` downloads a private copy into the blackbook folder.
+
+**macOS** (not tested yet)
+
+1. Open the Terminal app once and run `xcode-select --install` (installs git), if you have never done this.
+2. In the Finder, right-click **`start.command`**, choose **Open** and confirm. Later a double-click is enough.
+
+### 3. Connect the blackbox
+
+Connect the blackbox 2 over USB and switch it to **microSD mode** (or put its card into a card reader). blackbook finds the card by itself and opens in your browser at <http://127.0.0.1:8765/>.
+
+A terminal window stays open while blackbook runs. **Keep it open** while you work. To stop blackbook, close that window (or press `Ctrl+C` in it).
+
+## First steps
+
+1. **Make a backup first.** Open **Backup**, choose a folder on your computer (not on the card) and click **Snapshot now**. From then on blackbook takes snapshots by itself.
+2. Look around in **Library**. Nothing is written to the card unless you click **Write to card**.
+3. Every write shows a review first: what is copied, what changes.
+
+The built-in help (**?** at the top right, or `F1`) explains more.
+
+## Microsoft, Apple, Linux: what is tested
+
+| System | Status |
 |---|---|
-| Library: all factory and user patches with type and tag filter, audition of samples and `preview.wav` | prototype |
-| Tag editor for user patches, writes `UserPatches/patchindex.xml` | prototype |
-| Patch builder one-shot: 16 pads via drag and drop, gain, pitch, pan, choke group, reverse, loop | prototype |
-| Patch builder multisample: key and velocity mapping from file names, editable zones, keyboard view | prototype |
-| Generated `preview.wav` for new patches | prototype |
-| Edit user one-shot and multisample patches in place; changes only the attributes handled by the builder, sequences, modulation and unknown parameters stay untouched | prototype |
-| Use any one-shot or multisample patch, including factory patches, as template for a new user patch | prototype |
-| Drag and drop of WAV files and folders from the file manager onto pads, zones or card folders | prototype |
-| Project overview: missing references and unused WAVs per project | prototype |
-| Backup: git snapshots with history, diff and restore per file, folder or everything | prototype |
-| Patch builder loop, slicer, shredder | planned |
-| External editor (Reaper) with automatic reference updates | planned |
-| Renaming with reference updates, batch rename | planned |
+| Linux | tested |
+| Windows | should work, not tested yet |
+| macOS | should work, not tested yet |
 
-Details in [docs/features.md](docs/features.md).
+Feedback from Windows and macOS users is very welcome.
 
-## Usage
+## Feedback
 
-```
-.venv/bin/blackbook --card /run/media/<user>/BB2                # Linux
-.venv\Scripts\blackbook --card E:\                              # Windows
-.venv/bin/blackbook --card <card> --library ~/Samples/Drums     # additional sample folder
-```
+Please use [GitHub Issues](https://github.com/nightanvil/blackbook/issues) for ideas and bug reports. Helpful in a bug report: what you did, what you expected, what happened instead, and your system.
 
-The browser opens at `http://127.0.0.1:8765/`. The card path can also be set via `BLACKBOOK_CARD`.
+## Use at your own risk
 
-Snapshot without UI, for example from a script or cron job:
+> [!WARNING]
+> blackbook is a hobby project and **not affiliated with 1010music**. The card format was worked out by looking at the files the blackbox writes, and a firmware update can change it. blackbook writes to your card, so keep backups. Factory patches are never changed.
 
-```
-.venv/bin/blackbook snapshot --card <card> -m "After session"
-```
+1010music and blackbox are trademarks of 1010music LLC, used here only to describe compatibility. No 1010music content is part of this repository.
 
-| Option | Meaning |
-|---|---|
-| `--card` | mounted card or a mirror of it |
-| `--library` | local sample folder shown in the builder's browser, repeatable; samples are copied into the patch |
-| `--backup-target` | git backup folder, also selectable in the UI; default is the last chosen folder |
-| `--backup-dir` | folder for copies of modified card files, default `backups/` in the repository |
-| `--port` | port of the local server, default 8765 |
-| `--no-browser` | do not open the browser |
+## How it was made
 
-### Write behavior
-
-- New patches are created as new folders below `UserPatches/<type>/`. Existing folders are never overwritten.
-- Every write is reviewed in a dialog first: target folder, copied files, warnings, generated `patch.xml`.
-- Before `patchindex.xml` is modified, the original is copied to `backups/<session>/files/`. `backups/<session>/journal.json` lists every created folder and modified file.
-- Factory patches and factory tags are read only.
-- Gain is stored in thousandths of dB (verified on the device) and pitch in thousandths of semitones (derived from existing files).
-- While the blackbox is not in microSD mode, the card is not available. The header shows the connection state; saving is disabled until the card is back. On reconnection the library reloads and, if configured, a snapshot captures the changes made on the device.
-
-## Platforms
-
-| Platform | Status |
-|---|---|
-| Linux | target platform |
-| Windows | target platform |
-| macOS | expected to work, untested |
-
-## Technology
-
-- Backend: Python 3.12+, FastAPI
-- Frontend: HTML and JavaScript without a build step, served by the backend
-- Runs as a local server, used in the browser at `http://127.0.0.1`
-- Works on the mounted card (blackbox 2 in microSD mode, card reader) or a local mirror of the card
-
-## Setup
-
-The bootstrap installs the complete toolchain inside the repository. Nothing is installed system-wide. Running the bootstrap requires any Python 3.8 or newer; the command is the same on every platform. The backup requires `git` on the `PATH` (on Windows: Git for Windows).
-
-| Directory | Content |
-|---|---|
-| `.tools/uv/` | uv package manager, downloaded from GitHub releases and verified via SHA-256 |
-| `.tools/python/` | Python interpreter managed by uv |
-| `.tools/cache/` | download cache |
-| `.venv/` | virtual environment with all dependencies |
-
-```
-python bootstrap.py            # runtime dependencies
-python bootstrap.py --dev      # additionally pytest and ruff
-python bootstrap.py --clean    # remove .tools and .venv first
-```
-
-On Linux and macOS the command may be `python3`.
-
-The bootstrap is repeatable and only adds what is missing or outdated. Dependencies are listed in `requirements.txt` (runtime) and `requirements-dev.txt` (development). The uv and Python versions are pinned at the top of `bootstrap.py`.
-
-`.tools/` and `.venv/` contain platform-specific binaries. If the repository is synchronized between machines (for example with Syncthing), exclude both directories from synchronization and run the bootstrap on each machine.
-
-## Repository layout
-
-```
-blackbook/
-├── docs/
-│   ├── features.md         patch builder, external editor, backup, organization
-│   ├── card-format.md      structure of the microSD card and its XML files
-│   └── architecture.md     application structure and write rules
-├── src/blackbook/
-│   ├── __main__.py         command line entry point
-│   ├── server.py           FastAPI application and API
-│   ├── card.py             reading patches, projects and sample folders
-│   ├── cardpath.py         card references, case-insensitive path resolution, name rules
-│   ├── patchindex.py       format-preserving patchindex.xml updates
-│   ├── wav.py              RIFF chunk parser, audio reading, 24 bit writer
-│   ├── mapping.py          multisample key and velocity mapping
-│   ├── templates.py        patch.xml generation
-│   ├── builder.py          change plans and writing of new patches
-│   ├── backup.py           copies of modified files and journal
-│   ├── snapshot.py         git backup: mirror, commits, diff, restore
-│   ├── settings.py         local settings in .blackbook/settings.json
-│   └── static/             browser UI (HTML, CSS, JavaScript)
-├── tests/                  pytest suite with synthetic test cards (no factory content)
-├── bootstrap.py            toolchain setup inside the repository
-├── requirements.txt        runtime dependencies
-├── requirements-dev.txt    development dependencies
-├── LICENSE
-├── pyproject.toml
-└── README.md
-```
-
-## Test data
-
-1010music factory content is not part of the repository. For local tests, the path to a card or a mirror is set via the environment variable `BLACKBOOK_CARD`. Local copies under `card/` or `testdata/` are excluded via `.gitignore`.
-
-## Disclaimer
-
-Unofficial project, not affiliated with 1010music LLC. Make a full backup of the card before the first write access.
+blackbook was built together with Claude (Anthropic) as a coding assistant, credited as co-author in the commits. Technical details, command line options and the code layout: [docs/development.md](docs/development.md). Card format: [docs/card-format.md](docs/card-format.md).
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+[MIT](LICENSE), without any warranty.
+
+## Authors
+
+- Gabriel Köhl ([@gabrielkoehl](https://github.com/gabrielkoehl))
+- Claude (Anthropic), AI coding assistant, co-author

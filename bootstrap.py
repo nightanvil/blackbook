@@ -5,7 +5,7 @@ Downloads uv into .tools/uv, installs a managed Python into .tools/python
 and creates .venv with all dependencies. Runs on Linux, Windows and macOS
 with any Python >= 3.8 and the standard library only.
 
-Usage: python bootstrap.py [--dev] [--clean]
+Usage: python bootstrap.py [--dev] [--clean] [--if-needed]
 """
 
 import argparse
@@ -33,6 +33,8 @@ IS_WINDOWS = sys.platform == "win32"
 EXE = ".exe" if IS_WINDOWS else ""
 UV_BIN = UV_DIR / ("uv" + EXE)
 VENV_PYTHON = VENV_DIR / ("Scripts/python.exe" if IS_WINDOWS else "bin/python")
+
+STAMP = VENV_DIR / ".bootstrap-stamp"
 
 RELEASE_URL = "https://github.com/astral-sh/uv/releases/download/{version}/{asset}"
 
@@ -109,6 +111,23 @@ def install_uv() -> None:
         target.chmod(0o755)
 
 
+def stamp_value(dev: bool) -> str:
+    """Fingerprint of everything the environment depends on."""
+    digest = hashlib.sha256(f"{UV_VERSION}|{PYTHON_VERSION}|{dev}".encode())
+    for name in ("requirements.txt", "requirements-dev.txt", "pyproject.toml"):
+        path = REPO_DIR / name
+        if path.is_file():
+            digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def up_to_date(dev: bool) -> bool:
+    try:
+        return VENV_PYTHON.exists() and STAMP.read_text().strip() == stamp_value(dev)
+    except OSError:
+        return False
+
+
 def run(*args) -> None:
     print("> " + " ".join(str(a) for a in args))
     # Relative entries in the requirements files are resolved against the repository
@@ -119,7 +138,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Set up the repository-local toolchain.")
     parser.add_argument("--dev", action="store_true", help="install development dependencies")
     parser.add_argument("--clean", action="store_true", help="remove .tools and .venv first")
+    parser.add_argument("--if-needed", action="store_true", help="do nothing when the environment is up to date")
     args = parser.parse_args()
+
+    if args.if_needed and not args.clean and up_to_date(args.dev):
+        return
 
     if args.clean:
         print(f"Removing {TOOLS_DIR} and {VENV_DIR}")
@@ -142,6 +165,7 @@ def main() -> None:
 
     requirements = REPO_DIR / ("requirements-dev.txt" if args.dev else "requirements.txt")
     run(UV_BIN, "pip", "install", "--python", VENV_PYTHON, "-r", requirements)
+    STAMP.write_text(stamp_value(args.dev))
 
     activate = r".venv\Scripts\activate" if IS_WINDOWS else "source .venv/bin/activate"
     print()

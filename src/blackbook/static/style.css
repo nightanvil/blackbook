@@ -1,37 +1,38 @@
 :root {
-  --bg: #161617;
-  --panel: #232325;
-  --panel-2: #323235;
-  --panel-3: #3c3c40;
-  --line: #2e2e31;
-  --text: #ececee;
-  --muted: #aeaeb4;
-  --accent: #e9e9ec;
-  --accent-ink: #18181a;
-  --focus: #8a7cff;
-  --used: #5a6bd8;
+  --bg: #121315;
+  --panel: #1b1d20;
+  --panel-2: #24272b;
+  --panel-3: #30343a;
+  --line: #30343a;
+  --text: #e6e6e3;
+  --muted: #8b9097;
+  --accent: #e8a33d;
+  --accent-ink: #1a1306;
+  --focus: #e8a33d;
+  --used: #e8a33d;
   --ok: #6cbf84;
-  --warn: #ffb347;
-  --err: #ff6b6b;
-  --shadow: 0 8px 28px rgba(0, 0, 0, .45);
-  --radius: 7px;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
+  --warn: #e3b341;
+  --err: #e5615b;
+  --shadow: 0 8px 28px rgba(0, 0, 0, .5);
+  --radius: 6px;
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
   font-size: 14px;
   color-scheme: dark;
 }
+/* Light: warm paper tones, darker amber accent for contrast on white */
+:root[data-theme="light"] {
+  --bg: #efede8; --panel: #fbfaf7; --panel-2: #e6e2da; --panel-3: #d3cec4; --line: #d3cec4;
+  --text: #1d1b18; --muted: #5f5a52; --accent: #b86e12; --accent-ink: #ffffff; --focus: #b86e12;
+  --used: #b86e12; --ok: #2e7d4f; --warn: #9a6a00; --err: #c0392b; --shadow: 0 8px 24px rgba(0, 0, 0, .16);
+  color-scheme: light;
+}
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme]) {
-    --bg: #ececef; --panel: #f9f9fb; --panel-2: #e2e2e6; --panel-3: #d6d6db; --line: #dcdce0;
-    --text: #1c1c1e; --muted: #4e4e54; --accent: #1c1c1e; --accent-ink: #ffffff; --focus: #5b4bd6;
-    --used: #6f7fe6; --ok: #2e7d4f; --warn: #b86e00; --err: #c62828; --shadow: 0 8px 24px rgba(0, 0, 0, .14);
+  :root[data-theme="auto"] {
+    --bg: #efede8; --panel: #fbfaf7; --panel-2: #e6e2da; --panel-3: #d3cec4; --line: #d3cec4;
+    --text: #1d1b18; --muted: #5f5a52; --accent: #b86e12; --accent-ink: #ffffff; --focus: #b86e12;
+    --used: #b86e12; --ok: #2e7d4f; --warn: #9a6a00; --err: #c0392b; --shadow: 0 8px 24px rgba(0, 0, 0, .16);
     color-scheme: light;
   }
-}
-:root[data-theme="light"] {
-  --bg: #ececef; --panel: #f9f9fb; --panel-2: #e2e2e6; --panel-3: #d6d6db; --line: #dcdce0;
-  --text: #1c1c1e; --muted: #4e4e54; --accent: #1c1c1e; --accent-ink: #ffffff; --focus: #5b4bd6;
-  --used: #6f7fe6; --ok: #2e7d4f; --warn: #b86e00; --err: #c62828; --shadow: 0 8px 24px rgba(0, 0, 0, .14);
-  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -52,7 +53,10 @@ body {
   padding: 7px 16px;
   display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px;
 }
-.brand { font-weight: 600; letter-spacing: .2px; display: flex; align-items: center; gap: 8px; white-space: nowrap; min-width: 0; }
+.brand { font-weight: 600; letter-spacing: .2px; display: flex; align-items: center; gap: 8px; white-space: nowrap; min-width: 0; overflow: hidden; }
+.brand > * { flex: none; }
+.brand .sub { overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
+@media (max-width: 1100px) { .brand .sub { display: none; } }
 .brand .logo { width: 24px; height: 24px; flex: none; }
 .brand .ver { font-weight: 400; font-size: 11px; opacity: .75; }
 .brand .ver.err { color: var(--err); opacity: 1; }
@@ -118,7 +122,10 @@ main { flex: 1; min-height: 0; }
 .filters label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
 
 .list { overflow: auto; }
-#lib-list { width: 380px; border-right: 1px solid var(--line); }
+#lib-list { width: 420px; border-right: 1px solid var(--line); }
+#lib-list .row { display: grid; grid-template-columns: 62px minmax(0, 1fr) 76px; gap: 10px; }
+#lib-list .row .badge { justify-self: start; }
+#lib-list .row .meta { overflow: hidden; text-overflow: ellipsis; }
 
 .row {
   display: flex;
@@ -143,6 +150,7 @@ main { flex: 1; min-height: 0; }
   border: 1px solid var(--line);
 }
 .badge.user { color: var(--accent); border-color: var(--accent); }
+.badge.factory { color: var(--muted); }
 
 .detail { flex: 1; padding: 16px 20px; overflow: auto; }
 .detail h2 { margin: 0 0 4px; }
@@ -319,3 +327,4 @@ ul.msgs { margin: 4px 0 12px; padding-left: 18px; }
 /* Backup status */
 table.facts { border-collapse: collapse; font-size: 13px; }
 table.facts td { padding: 2px 12px 2px 0; vertical-align: top; }
+.helpsec .note { background: color-mix(in srgb, var(--warn) 14%, var(--panel)); border-left: 3px solid var(--warn); border-radius: 6px; padding: 8px 12px; }

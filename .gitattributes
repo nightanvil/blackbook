@@ -3,3 +3,6 @@
 # Card files keep their original bytes
 *.xml -text
 *.wav binary
+
+# Windows batch files need CRLF
+*.bat text eol=crlf

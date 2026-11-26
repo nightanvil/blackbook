@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 import webbrowser
 from pathlib import Path
 
@@ -55,26 +56,53 @@ def serve(argv: list[str]) -> None:
     parser.add_argument("--no-browser", action="store_true", help="do not open the browser")
     args = parser.parse_args(argv)
 
-    if not args.card:
-        parser.error("--card or BLACKBOOK_CARD is required")
+    card_path = Path(args.card) if args.card else wait_for_card()
 
     import uvicorn
 
     from .server import create_app
 
     app = create_app(
-        Path(args.card),
+        card_path,
         [Path(p) for p in args.library],
         Path(args.backup_dir),
         resolve_target(args.backup_target),
     )
     url = f"http://127.0.0.1:{args.port}/"
     print(f"blackbook running at {url}")
-    if not Path(args.card).is_dir():
-        print(f"card not found at {args.card}, waiting for it (switch the blackbox to microSD mode)")
+    print(f"card: {card_path}")
+    if not card_path.is_dir():
+        print(f"card not found at {card_path}, waiting for it (switch the blackbox to microSD mode)")
+    print("Keep this window open while you use blackbook. Close it to stop blackbook.")
     if not args.no_browser:
         webbrowser.open(url)
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
+
+
+def wait_for_card() -> Path:
+    """Use the last card if it is mounted, otherwise wait until a card shows up."""
+    from .carddetect import find_cards, is_card
+
+    stored = settings.get("card_path")
+    if stored and is_card(Path(stored)):
+        return Path(stored)
+    announced = False
+    while True:
+        cards = find_cards()
+        if cards:
+            if len(cards) > 1:
+                print("several cards found, using the first: " + ", ".join(str(c) for c in cards))
+            settings.set_value("card_path", str(cards[0]))
+            return cards[0]
+        if not announced:
+            print("No blackbox card found.")
+            print("Connect the blackbox 2 over USB and switch it to microSD mode (or insert the card into a card reader).")
+            print("Waiting for the card ... (Ctrl+C to cancel)")
+            announced = True
+        try:
+            time.sleep(2)
+        except KeyboardInterrupt:
+            sys.exit(0)
 
 
 def snapshot(argv: list[str]) -> None:
@@ -85,6 +113,8 @@ def snapshot(argv: list[str]) -> None:
     parser.add_argument("-m", "--message", default="Manual snapshot", help="reason shown in the commit subject")
     args = parser.parse_args(argv)
 
+    if not args.card:
+        args.card = settings.get("card_path")
     if not args.card:
         parser.error("--card or BLACKBOOK_CARD is required")
     target = resolve_target(args.backup_target)

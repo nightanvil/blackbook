@@ -246,3 +246,15 @@ def test_build_rejects_invalid_input(card: Path) -> None:
     assert not plan.ok
     assert any("invalid characters" in e for e in plan.errors)
     assert any("no pad" in e for e in plan.errors)
+
+
+def test_card_detection(tmp_path, monkeypatch) -> None:
+    from blackbook import carddetect
+
+    card = tmp_path / "BB2"
+    (card / "UserPatches").mkdir(parents=True)
+    (card / "bb2-stng.mml").write_text("settings")
+    (tmp_path / "USBSTICK").mkdir()
+    monkeypatch.setattr(carddetect, "mount_points", lambda: [tmp_path / "USBSTICK", card])
+    assert carddetect.find_cards() == [card]
+    assert not carddetect.is_card(tmp_path / "missing")
