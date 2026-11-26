@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from blackbook import builder, patchedit, server, settings
+from blackbook import builder, eject, patchedit, server, settings
 from blackbook.backup import Backup
 from blackbook.card import Card
 from blackbook.mapping import automap
@@ -291,3 +291,25 @@ def test_writes_are_flushed(card: Path, tmp_path: Path, monkeypatch) -> None:
         assert calls == []
         client.post("/api/build/plan", json={"type": "oneshot", "name": "X", "tags": [], "pads": []})
         assert calls == [1]
+
+
+def test_mount_device_matches_exact_mount_point() -> None:
+    mounts = (
+        "/dev/nvme0n1p2 / btrfs rw 0 0\n"
+        "/dev/sdb1 /run/media/me/BB\\0402 exfat rw 0 0\n"
+        "/dev/sdc1 /run/media/me/BB2 exfat rw 0 0\n"
+    )
+    assert eject.mount_device(Path("/run/media/me/BB2"), mounts) == "/dev/sdc1"
+    assert eject.mount_device(Path("/run/media/me/BB 2"), mounts) == "/dev/sdb1"
+    assert eject.mount_device(Path("/run/media/me/BB2/Patches"), mounts) is None
+
+
+def test_eject_refuses_folder_that_is_no_drive(card: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    (card / "bb2-stng.mml").write_text("settings")
+    app = create_app(card, [], tmp_path / "copies")
+    with TestClient(app) as client:
+        response = client.post("/api/card/eject")
+        assert response.status_code == 409
+        assert "not a separate drive" in response.json()["detail"]
+        assert card.is_dir()

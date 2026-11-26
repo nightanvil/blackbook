@@ -26,6 +26,7 @@ from .backup import Backup
 from .card import Card, browse
 from .carddetect import find_cards
 from .cardpath import INVALID_NAME_CHARS, resolve_sample_reference
+from .eject import EjectError, eject
 from .mapping import Zone, assign_key_ranges, automap, note_name
 from .patchindex import FACTORY_TAGS
 from .snapshot import CONFIG_NAME, SnapshotError, SnapshotRepo, default_target, git_executable
@@ -415,6 +416,19 @@ def create_app(
     @app.get("/api/card/status")
     def card_status() -> dict:
         return {"present": snapshots.card_present()}
+
+    @app.post("/api/card/eject")
+    def card_eject() -> dict:
+        if not snapshots.card_present():
+            raise HTTPException(409, "no card connected")
+        try:
+            eject(card.root)
+        except EjectError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise HTTPException(500, f"eject failed: {exc}") from exc
+        snapshots.event("Card ejected")
+        return {"ejected": str(card.root)}
 
     @app.get("/api/info")
     def info() -> dict:

@@ -27,6 +27,7 @@
       <div class="topright">
         <button id="stop-btn" class="small" hidden title="Stop playback (Esc)">■ Stop</button>
         <div id="card-state"></div>
+        <button id="eject-btn" class="small" type="button" hidden title="Eject the card so you can unplug the blackbox or leave microSD mode safely">Eject</button>
         <span class="sep"></span>
         <div class="themesw" id="theme-switch" role="group" aria-label="Theme">
           <button type="button" data-theme-set="auto" title="Theme: follow the system setting" aria-label="Theme: follow the system setting"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/></svg></button>
@@ -198,6 +199,11 @@
   <dialog id="update-dialog">
     <div class="dialog-body" id="update-content"></div>
     <div class="dialog-actions"><button id="update-ok" class="primary">OK, stop blackbook</button></div>
+  </dialog>
+
+  <dialog id="message-dialog">
+    <div class="dialog-body" id="message-content"></div>
+    <div class="dialog-actions" id="message-actions"></div>
   </dialog>
 
   <div class="helpov" id="help" hidden>

@@ -5,8 +5,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ## [Unreleased]
 
+### Added
+
+- Eject button at the top right: writes everything to the card and ejects it through the operating system, so the blackbox can be unplugged or leave microSD mode safely.
+
 ### Changed
 
+- Restoring from the backup asks in a blackbook dialog instead of a browser dialog.
 - New icon in the top bar, the help, the browser tab and the README.
 
 ### Fixed

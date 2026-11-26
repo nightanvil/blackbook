@@ -11,6 +11,7 @@
 | WAV module | reads WAV chunks (format, frames, cue markers), computes waveform data for the UI |
 | Editor bridge | launches external editors, generates Reaper projects, watches for changed WAVs |
 | Snapshot service | git backup of the card: mirror, commit, history, diff, restore, card connection watcher |
+| Eject | flushes all writes and ejects the card through the operating system: `udisksctl` (fallback `gio`) on Linux, `diskutil` on macOS, volume lock, dismount and eject via the Windows API |
 | Settings | local settings of the installation in `.blackbook/settings.json` |
 | Writer | applies a change plan to the card |
 | API | FastAPI endpoints for the frontend |
@@ -21,7 +22,7 @@
 1. The operation produces a change plan: file operations and XML changes.
 2. The frontend shows the plan as a diff (dry run).
 3. After confirmation, the snapshot service commits the current card state, if a backup folder is configured.
-4. The writer executes the plan and logs every step.
+4. The writer executes the plan and logs every step. After every write request the API calls `os.sync()`, so the data is on the card before the frontend reports success.
 5. The scanner updates the index.
 
 ## XML write rules
@@ -40,6 +41,7 @@ The patch builder uses its own templates inside the package, one per patch type.
 - File system paths are handled with `pathlib` internally; conversion to card paths with backslashes happens only at the XML boundary.
 - Path comparisons are case-insensitive, matching FAT32 and exFAT.
 - On Windows the card is addressed as a drive, on Linux and macOS via its mount point.
+- Eject works only when the card path is the root of a separate drive (mount point or drive letter). A folder copy of a card is never ejected. udisks runs without user interaction, so blackbook never opens a password prompt.
 
 ## Security
 

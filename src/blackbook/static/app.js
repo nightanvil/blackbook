@@ -65,6 +65,25 @@ function toast(message, isError = false) {
   toast.timer = setTimeout(() => node.classList.remove("show"), 3500);
 }
 
+// In-page message dialog. buttons: [{ label, value, primary }]; resolves with the value of the clicked
+// button, or null when the dialog is closed with Esc
+function showMessage(title, text, buttons = [{ label: "OK", value: true, primary: true }]) {
+  const dialog = document.getElementById("message-dialog");
+  return new Promise((resolve) => {
+    const done = (value) => { dialog.onclose = null; dialog.close(); resolve(value); };
+    fill(document.getElementById("message-content"), el("h2", {}, title), el("p", {}, text));
+    fill(document.getElementById("message-actions"), buttons.map((b) =>
+      el("button", { class: b.primary ? "primary" : "", onclick: () => done(b.value) }, b.label)));
+    dialog.onclose = () => resolve(null);
+    dialog.showModal();
+    dialog.querySelector(".dialog-actions button.primary")?.focus();
+  });
+}
+
+function confirmDialog(title, text, okLabel) {
+  return showMessage(title, text, [{ label: "Cancel", value: false }, { label: okLabel, value: true, primary: true }]);
+}
+
 const player = document.getElementById("player");
 
 function setPlaying(source) {
@@ -541,7 +560,7 @@ document.getElementById("plan-apply").addEventListener("click", async () => {
   try {
     const result = await api("POST", "/api/build/apply", state.pendingBody);
     document.getElementById("plan-dialog").close();
-    toast(`Written ${result.ref.replaceAll("\\", "/")} (${result.written.length} files)`);
+    toast(`Written ${result.ref.replaceAll("\\", "/")} (${result.written.length} files). Use Eject before you unplug the card.`);
     await loadLibrary();
     // Continue with the saved patch in edit mode
     await loadIntoBuilder(result.ref, "edit", false);
@@ -860,7 +879,11 @@ async function loadBackup() {
 
 async function restore(commit, path, label) {
   const scope = path ? `"${path}"` : "ALL backed up folders";
-  if (!confirm(`Restore ${scope} from snapshot ${commit.slice(0, 10)}?\n\nThe current card state is saved as a snapshot first. Within the restored scope, files that do not exist in the snapshot are deleted from the card.`)) return;
+  const ok = await confirmDialog(
+    "Restore from backup",
+    `Restore ${scope} from snapshot ${commit.slice(0, 10)}?\n\nThe current card state is saved as a snapshot first. Within the restored scope, files that do not exist in the snapshot are deleted from the card.`,
+    "Restore");
+  if (!ok) return;
   try {
     const result = await api("POST", "/api/backup/restore", { commit, path });
     toast(`${label}: ${result.restored.length} files restored, ${result.removed.length} removed`);
@@ -970,6 +993,7 @@ async function pollCard() {
   indicator.textContent = present ? "Card connected" : "Card not connected: switch the blackbox to microSD mode";
   indicator.title = state.cardPath || "";
   indicator.className = present ? "ok" : "err";
+  document.getElementById("eject-btn").hidden = !present;
   document.getElementById("b-plan").disabled = !present;
   if (present && state.cardPresent === false) {
     toast("Card connected again, library reloaded");
@@ -979,6 +1003,22 @@ async function pollCard() {
   await refreshBackupIfVisible();
   await showCodeCommit();
 }
+
+document.getElementById("eject-btn").addEventListener("click", async (ev) => {
+  const button = ev.currentTarget;
+  button.disabled = true;
+  button.textContent = "Ejecting ...";
+  try {
+    await api("POST", "/api/card/eject");
+    await pollCard();
+    await showMessage("Card ejected", "You can now unplug the blackbox or leave microSD mode.\n\nWhen you connect the card again, blackbook finds it by itself.");
+  } catch (err) {
+    await showMessage("The card could not be ejected", err.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Eject";
+  }
+});
 
 // Show the running code version and warn when the checkout moved on since the start
 async function showCodeCommit() {
