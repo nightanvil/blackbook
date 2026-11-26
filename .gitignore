@@ -42,3 +42,6 @@ abnahme/
 
 # Personal notes and screenshots
 local/
+
+# Local instructions for Claude
+CLAUDE.local.md
