@@ -454,7 +454,7 @@ def create_app(
         plan = make_plan(body)
         if not plan.ok:
             raise HTTPException(400, "; ".join(plan.errors))
-        snapshots.before_write(f"creating {plan.target_ref}")
+        snapshots.before_write(f"{'saving' if plan.mode == 'edit' else 'creating'} {plan.target_ref}")
         written = builder.apply(card, plan, backup)
         return {"ref": plan.target_ref, "written": written}
 
