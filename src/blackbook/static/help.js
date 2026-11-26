@@ -29,7 +29,19 @@
 <p>When blackbook starts, it checks GitHub for a newer version. If there is one, a bar at the top offers <b>Update now</b>. After the update blackbook stops, start it again as usual. Settings, backup and card stay untouched.</p>
 ${todo}`,
     },
-    { id: "library", title: "Library", html: `<p>Factory and user patches with their tags and samples.</p>${todo}` },
+    {
+      id: "library", title: "Library",
+      html: `
+<p>All patches on the card: the factory patches from 1010music and your own user patches.</p>
+<ul>
+  <li><b>Search</b> finds patches by name or tag.</li>
+  <li><b>Source</b> shows only user patches (the default), only factory patches or all.</li>
+  <li><b>Type</b> filters by One-shot, Multisample, Loop, Slicer or Shredder.</li>
+  <li><b>Tags</b> on the left: click one or more to show only patches with all of them.</li>
+</ul>
+<p>Click a patch to see its samples. <b>Play preview</b> plays the patch's <code>preview.wav</code>, the play button next to a sample plays that sample. <code>Esc</code> or the Stop button at the top stops playback.</p>
+<p>For your own patches you can change the tags and save them. One-shot and multisample patches can be opened in the builder: <b>Edit in builder</b> changes the patch itself, <b>Use as template</b> starts a new patch from it. Factory patches can only be used as templates.</p>`,
+    },
     { id: "build", title: "Build", html: `<p>One-shot kits on 16 pads and multisample instruments, new or based on an existing patch.</p>${todo}` },
     { id: "projects", title: "Projects", html: `<p>The projects on the card.</p>${todo}` },
     { id: "backup", title: "Backup", html: `<p>Snapshots of the card in a backup folder, with history, diff and restore.</p><p><b>The backup folder must be outside the blackbook folder.</b> An update or a new installation can delete the blackbook folder, and a backup inside it would be lost. blackbook does not accept such a folder.</p>${todo}` },

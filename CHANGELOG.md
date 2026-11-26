@@ -5,6 +5,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-26
+
+### Documentation
+
+- Help: the Library section explains search, filters, tags, playback, editing and templates.
+
 ## [0.1.2] - 2026-11-26
 
 ### Changed
@@ -48,7 +54,8 @@ First public, very early version.
 - Update check against GitHub releases with in-place update and restart prompt.
 - Dark and light theme, built-in help, Ko-fi and GitHub links, running version in the top bar with a restart hint after code changes.
 
-[Unreleased]: https://github.com/nightanvil/blackbook/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/nightanvil/blackbook/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/nightanvil/blackbook/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/nightanvil/blackbook/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/nightanvil/blackbook/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/nightanvil/blackbook/releases/tag/v0.1.0
