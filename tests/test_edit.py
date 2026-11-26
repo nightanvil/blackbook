@@ -338,3 +338,18 @@ def test_restart_and_shutdown_stop_the_server(card: Path, tmp_path: Path, monkey
         assert stops == [1] and not app.state.restart_requested
         client.post("/api/restart")
         assert stops == [1, 1] and app.state.restart_requested
+
+
+def test_load_shortens_window_of_shorter_file(card: Path, tmp_path: Path, monkeypatch) -> None:
+    from .conftest import make_wav
+
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    kit = build_kit(card, tmp_path)
+    make_wav(kit / "BD.wav", frames=300)
+    app = create_app(card, [], tmp_path / "copies")
+    with TestClient(app) as client:
+        data = client.get("/api/patch/load", params={"ref": "UserPatches\\OneShots\\Kit"}).json()
+        pad = next(p for p in data["pads"] if p["slot"] == 0)
+        assert (pad["start"], pad["length"], pad["frames"]) == (0, 300, 300)
+        # Slots 0 and 2 hold BD.wav, shown on the device as pads 9 and 11
+        assert data["adjusted"] == ["pad 9", "pad 11"]

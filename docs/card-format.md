@@ -173,21 +173,23 @@ Parameters are integers in device-internal units, for example `gaindb="6800"`, `
 | Attribute | Unit | Verified |
 |---|---|---|
 | `gaindb` | thousandths of dB (`-6300` = -6.3 dB) | yes, compared with the device display |
-| `pitch` | thousandths of semitones (`2230` = +2.23) | derived from files only |
-| `dualfilcutoff` | tenths of percent, -1000 (low-pass closed) to 1000 (high-pass closed), 0 open | range from the manual |
-| `res`, `overdrive`, `fx1send`, `fx2send` | tenths of percent, 0 to 1000 | range from the manual; `fx1send` as delay and `fx2send` as reverb is assumed |
-| `panpos` | -1000 (left) to 1000 (right) | derived from files only |
-| `envattack`, `envdecay`, `envsus`, `envrel`, `velamount`, `lfoamount`, `lforate` | tenths of percent, 0 to 1000 | range from the manual |
-| `samtrigtype` | launch: 0 Trigger, 1 Gate, 2 Toggle | assumed from the manual order |
-| `polymode` | 0 Mono, 1 Poly 2, 2 Poly 4, 3 Poly 6, 4 Poly 8, 5 Poly X | assumed from the manual order |
-| `chokegrp` | 0 None, 1 to 4 groups A to D | 0 and 1 seen in files |
-| `interpqual` | 0 Normal, 1 HighQ | assumed |
-| `lfowave` | 0 Rev Saw to 8 Random in the manual order | assumed, 0 and 8 seen in files |
-| `lfobeatsync`, `lfokeytrig` | beat sync and restart, 0 off, 1 on | assumed |
-| `lforatebeatsync` | 0 = 8 bars to 14 = 1/64 in the manual order | assumed, 0 and 6 seen in files |
+| `pitch` | thousandths of semitones (`2230` = +2.23) | yes, probe patch |
+| `dualfilcutoff` | tenths of percent, -1000 (low-pass closed) to 1000 (high-pass closed), 0 open | yes, probe patch |
+| `res`, `overdrive`, `fx1send`, `fx2send` | tenths of percent, 0 to 1000 | yes, probe patch; `fx1send` is delay, `fx2send` is reverb |
+| `panpos` | -1000 (left) to 1000 (right) | yes, probe patch |
+| `envattack`, `envdecay`, `envsus`, `envrel`, `velamount`, `lfoamount`, `lforate` | tenths of percent, 0 to 1000 | yes, probe patch |
+| `samtrigtype` | launch: 0 Trigger, 1 Gate, 2 Toggle | yes, probe patch |
+| `polymode` | 0 Mono, 1 Poly 2, 2 Poly 4, 3 Poly 6, 4 Poly 8, 5 Poly X | yes, probe patch |
+| `chokegrp` | 0 None, 1 to 4 groups A to D | yes, probe patch |
+| `interpqual` | 0 Normal, 1 HighQ | yes, probe patch |
+| `lfowave` | 0 Rev Saw to 8 Random in the manual order | yes, probe patch |
+| `lfobeatsync`, `lfokeytrig` | beat sync and restart, 0 off, 1 on | yes, probe patch |
+| `lforatebeatsync` | 0 = 8 bars to 14 = 1/64 in the manual order | yes, probe patch |
 | `samstart`, `samlen` | playback start and length in frames (`samasst`) | yes |
 
-The ranges and the assumed encodings are kept in `src/blackbook/padparams.py`.
+The ranges and encodings are kept in `src/blackbook/padparams.py`. They were confirmed with a probe patch: written by blackbook with extreme and choice values on all 16 pads, checked and saved on the device (firmware 1.1).
+
+The device writes `velscreentrig="100"` on every `saminst` cell; blackbook's template does the same. Patches saved by firmware 1.1 have `<session version="2">`, older patches and the factory content `version="1"`; the device reads both.
 
 ### Dependencies when renaming
 

@@ -13,17 +13,23 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
+import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import threading
+import time
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
 CONFIG_NAME = "blackbook-backup.toml"
 MIRROR = "card"
+INSTANCE_FILE = "blackbook-instance.json"
+# A lock without heartbeat for this long belongs to a blackbook that ended without cleaning up
+INSTANCE_STALE_SECONDS = 300
 MTIME_TOLERANCE = 2.0  # FAT32 stores modification times with 2 second resolution
 
 DEFAULT_CONFIG = """\
@@ -76,6 +82,16 @@ GITATTRIBUTES = """\
 *.xml diff
 *.mml diff
 """
+
+
+
+def in_use_message(info: dict) -> str:
+    when = time.strftime("%H:%M", time.localtime(float(info.get("heartbeat", 0))))
+    return (
+        f"the backup folder is in use by blackbook on {info.get('host', 'another computer')} (last seen {when}). "
+        "Two blackbook instances writing to the same backup can damage it, for example through folder sync. "
+        "Close the other blackbook; after 5 minutes without a sign of it this one takes over."
+    )
 
 
 class SnapshotError(Exception):
@@ -253,6 +269,59 @@ class SnapshotRepo:
     def config(self) -> Config:
         return Config.load(self.config_path)
 
+    # ---------- instance lock ----------
+
+    @property
+    def instance_path(self) -> Path:
+        # Inside .git: never part of a snapshot, but synchronized with the folder
+        return self.target / ".git" / INSTANCE_FILE
+
+    def foreign_instance(self) -> dict | None:
+        """The other blackbook that currently uses this backup, or None."""
+        try:
+            info = json.loads(self.instance_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        host, pid = info.get("host"), info.get("pid")
+        if host == socket.gethostname() and pid == os.getpid():
+            return None
+        if time.time() - float(info.get("heartbeat", 0)) > INSTANCE_STALE_SECONDS:
+            return None
+        if host == socket.gethostname() and os.name != "nt" and isinstance(pid, int):
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                return None
+            except OSError:
+                pass
+        return info
+
+    def claim(self) -> None:
+        """Mark this blackbook as the user of the backup; repeated as a heartbeat."""
+        if not (self.target / ".git").is_dir() or self.foreign_instance():
+            return
+        data = {"host": socket.gethostname(), "pid": os.getpid(), "heartbeat": time.time()}
+        try:
+            self.instance_path.write_text(json.dumps(data), encoding="utf-8")
+        except OSError:
+            pass
+
+    def release(self) -> None:
+        try:
+            info = json.loads(self.instance_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        if info.get("host") == socket.gethostname() and info.get("pid") == os.getpid():
+            try:
+                self.instance_path.unlink()
+            except OSError:
+                pass
+
+    def require_free(self) -> None:
+        other = self.foreign_instance()
+        if other:
+            raise SnapshotError(in_use_message(other))
+
     # ---------- git ----------
 
     def git(self, *args: str, binary: bool = False) -> str | bytes:
@@ -356,8 +425,10 @@ class SnapshotRepo:
         uncommitted in the mirror, the next snapshot includes them.
         """
         with self.lock:
+            self.require_free()
             if not self.initialized:
                 self.init()
+            self.claim()
             self.sync_from_card(card_root)
             self.git("add", "--all", ".")
             status = self.git("status", "--porcelain")
@@ -419,6 +490,7 @@ class SnapshotRepo:
         The current card state is committed first. Within the restored scope the card
         afterwards matches the commit exactly: files missing in the commit are deleted.
         """
+        self.require_free()
         commit = self.git("rev-parse", "--verify", commit + "^{commit}").strip()
         self.snapshot(card_root, f"Before restore of {prefix or 'everything'} from {commit[:10]}")
 
@@ -465,6 +537,8 @@ class SnapshotRepo:
         }
         if not self.initialized:
             return info
+        other = self.foreign_instance()
+        info["in_use_by"] = in_use_message(other) if other else ""
         if self.has_commits():
             info["commits"] = int(self.git("rev-list", "--count", "HEAD").strip())
             last = self.log(1)[0]

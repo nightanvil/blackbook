@@ -269,3 +269,60 @@ def test_card_found_after_start(card: Path, tmp_path: Path, monkeypatch) -> None
             time.sleep(0.05)
         assert client.get("/api/info").json()["card"] == str(card.resolve())
     assert settings.get("card_path") == str(card.resolve())
+
+
+def test_find_references(card: Path) -> None:
+    from blackbook.references import find_references
+
+    refs = find_references(card, "samples/pack/bd.WAV")
+    assert [(r.xml, r.kind) for r in refs] == [("Projects/Song/project.xml", "project")]
+    assert [r.xml for r in find_references(card, "Projects/Song/RC000001.wav")] == ["Projects/Song/project.xml"]
+    kick = find_references(card, "Patches/OneShots/Kit A/Kick.wav")
+    assert [(r.xml, r.samlen) for r in kick] == [("Patches/OneShots/Kit A/patch.xml", 4410)]
+    assert [r.xml for r in find_references(card, "Samples/Pack/Missing.wav")] == ["Projects/Song/project.xml"]
+    assert find_references(card, "Samples/Pack/SD.wav") == []
+
+
+def test_restore_check_for_single_wav(card: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    (card / "bb2-stng.mml").write_text("settings")
+    app = create_app(card, [], tmp_path / "copies", snapshot_target=tmp_path / "bk")
+    with TestClient(app) as client:
+        client.put("/api/backup/target", json={"path": str(tmp_path / "bk")})
+        client.post("/api/backup/snapshot", json={"message": "First"})
+        first = client.get("/api/backup/log").json()[0]["id"]
+        make_wav(card / "Samples" / "Pack" / "BD.wav", frames=500)
+        check = client.get("/api/backup/restore-check", params={"commit": first, "path": "Samples/Pack/BD.wav"}).json()
+        assert check["is_wav"] and check["in_snapshot"]
+        assert (check["frames_snapshot"], check["frames_now"]) == (2000, 500)
+        assert [r["xml"] for r in check["references"]] == ["Projects/Song/project.xml"]
+        missing = client.get("/api/backup/restore-check", params={"commit": first, "path": "Samples/Pack/New.wav"}).json()
+        assert missing["in_snapshot"] is False
+        assert client.get("/api/backup/restore-check", params={"commit": first, "path": "Projects/Song"}).json() == {"is_wav": False}
+
+
+def test_instance_lock(card: Path, repo: SnapshotRepo, monkeypatch) -> None:
+    import json
+    import socket
+
+    from blackbook.snapshot import SnapshotError
+
+    repo.snapshot(card, "Initial")
+    # The own instance never blocks itself
+    repo.claim()
+    assert repo.foreign_instance() is None
+    # A fresh lock of another computer blocks snapshots and restores
+    repo.instance_path.write_text(json.dumps({"host": "other-pc", "pid": 1, "heartbeat": time.time()}))
+    assert repo.foreign_instance()["host"] == "other-pc"
+    assert "other-pc" in repo.status()["in_use_by"]
+    with pytest.raises(SnapshotError, match="in use by blackbook on other-pc"):
+        repo.snapshot(card, "Blocked")
+    # A stale lock is taken over
+    repo.instance_path.write_text(json.dumps({"host": "other-pc", "pid": 1, "heartbeat": time.time() - 600}))
+    assert repo.foreign_instance() is None
+    repo.claim()
+    assert json.loads(repo.instance_path.read_text())["host"] == socket.gethostname()
+    repo.release()
+    assert not repo.instance_path.exists()
+    # The lock file is never part of a snapshot
+    assert not any("blackbook-instance" in f for f in repo.files_at("HEAD"))

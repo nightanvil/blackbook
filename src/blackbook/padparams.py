@@ -1,8 +1,8 @@
 """Per-pad parameters of one-shot patches: XML name, range and display.
 
 XML values are integers. Numeric parameters are shown as xml / scale in the given unit. Ranges follow
-the device manual (blackbox 2 firmware 1.1, one-shot track). Parameters marked unverified have choice
-values whose XML encoding is assumed from the order in the manual and not yet confirmed on the device.
+the device manual (blackbox 2 firmware 1.1, one-shot track). Choice values follow the order in the manual;
+all encodings were confirmed with a probe patch saved on the device.
 """
 
 from __future__ import annotations
@@ -30,7 +30,6 @@ class Param:
     step: float = 0.1
     unit: str = "%"
     options: list[str] = field(default_factory=list)
-    verified: bool = True
     # Shown only when another parameter has a given XML value: (key, value)
     when: tuple[str, int] | None = None
 
@@ -49,30 +48,30 @@ PARAMS: list[Param] = [
     Param("res", "Res", "Sound", "number"),
     Param("panpos", "Pan", "Sound", "number", -100, 100, unit="% L/R"),
     Param("overdrive", "Overdrive", "Sound", "number"),
-    Param("fx1send", "Delay", "Sound", "number", verified=False),
-    Param("fx2send", "Reverb", "Sound", "number", verified=False),
+    Param("fx1send", "Delay", "Sound", "number"),
+    Param("fx2send", "Reverb", "Sound", "number"),
     Param("reverse", "Reverse", "Setup", "toggle"),
-    Param("samtrigtype", "Launch", "Setup", "choice", options=["Trigger", "Gate", "Toggle"], verified=False),
+    Param("samtrigtype", "Launch", "Setup", "choice", options=["Trigger", "Gate", "Toggle"]),
     Param(
         "polymode", "Poly", "Setup", "choice",
-        options=["Mono", "Poly 2", "Poly 4", "Poly 6", "Poly 8", "Poly X"], verified=False,
+        options=["Mono", "Poly 2", "Poly 4", "Poly 6", "Poly 8", "Poly X"],
     ),
-    Param("chokegrp", "Choke Grp", "Setup", "choice", options=["None", "A", "B", "C", "D"], verified=False),
-    Param("interpqual", "Interp", "Setup", "choice", options=["Normal", "HighQ"], verified=False),
+    Param("chokegrp", "Choke Grp", "Setup", "choice", options=["None", "A", "B", "C", "D"]),
+    Param("interpqual", "Interp", "Setup", "choice", options=["Normal", "HighQ"]),
     Param("envattack", "Attack", "Env/LFO", "number"),
     Param("envdecay", "Decay", "Env/LFO", "number"),
     Param("envsus", "Sustain", "Env/LFO", "number"),
     Param("envrel", "Release", "Env/LFO", "number"),
     Param("velamount", "Velocity", "Env/LFO", "number"),
-    Param("lfowave", "LFO Shape", "Env/LFO", "choice", options=LFO_SHAPES, verified=False),
+    Param("lfowave", "LFO Shape", "Env/LFO", "choice", options=LFO_SHAPES),
     Param("lfoamount", "LFO Depth", "Env/LFO", "number"),
-    Param("lfobeatsync", "Beat Sync", "Env/LFO", "toggle", verified=False),
+    Param("lfobeatsync", "Beat Sync", "Env/LFO", "toggle"),
     Param("lforate", "LFO Rate", "Env/LFO", "number", when=("lfobeatsync", 0)),
     Param(
         "lforatebeatsync", "LFO Rate", "Env/LFO", "choice",
-        options=LFO_SYNC_RATES, verified=False, when=("lfobeatsync", 1),
+        options=LFO_SYNC_RATES, when=("lfobeatsync", 1),
     ),
-    Param("lfokeytrig", "Restart", "Env/LFO", "toggle", verified=False),
+    Param("lfokeytrig", "Restart", "Env/LFO", "toggle"),
 ]
 
 BY_KEY = {p.key: p for p in PARAMS}

@@ -25,7 +25,11 @@
         <button data-view="backup">Backup</button>
       </nav>
       <div class="topright">
-        <button id="stop-btn" class="small" hidden title="Stop playback (Esc)">■ Stop</button>
+        <div class="audioctl" role="group" aria-label="Playback">
+          <button id="stop-btn" class="iconbtn" type="button" disabled title="Stop playback (Esc)" aria-label="Stop playback"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg></button>
+          <button id="loop-btn" class="iconbtn" type="button" title="Loop: repeat samples, pads and selections" aria-label="Loop"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12"/><path d="M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/></svg></button>
+          <input id="volume" type="range" min="0" max="1" step="0.01" value="1" title="Volume" aria-label="Volume">
+        </div>
         <div id="card-state"></div>
         <button id="eject-btn" class="small" type="button" hidden title="Eject the card so you can unplug the blackbox or leave microSD mode safely">Eject</button>
         <span class="sep"></span>
@@ -79,10 +83,11 @@
         <div class="browser-head">
           <select id="br-root"></select>
           <input id="br-filter" type="search" placeholder="Filter">
+          <label class="check" title="Play a sample when you click its row"><input id="br-preview" type="checkbox" checked>Preview</label>
         </div>
         <div id="br-crumbs" class="crumbs"></div>
         <div id="br-list" class="list compact"></div>
-        <div class="hint muted">Drag WAVs onto pads or the zone list. Click to listen. Drop files or folders from your file manager here to import them into the folder shown above.</div>
+        <div class="hint muted">Drag WAVs onto pads or the zone list. Click to listen (Preview on) or use the play button. Drop files or folders from your file manager here to import them into the folder shown above.</div>
       </aside>
 
       <div class="builder">
@@ -207,6 +212,7 @@
   <dialog id="audio-editor">
     <div class="dialog-body">
       <div class="ae-head"><h2 id="ae-title">Edit audio</h2><span class="muted" id="ae-format"></span></div>
+      <div class="muted path" id="ae-path"></div>
       <div class="ae-toolbar" id="ae-toolbar"></div>
       <canvas id="ae-wave" class="ae-wave"></canvas>
       <div class="ae-status muted" id="ae-status"></div>

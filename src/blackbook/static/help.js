@@ -45,7 +45,7 @@ ${todo}`,
     },
     { id: "build", title: "Build", html: `<p>One-shot kits on 16 pads and multisample instruments, new or based on an existing patch.</p>
 <h3>One-shot pads</h3>
-<p>Click a pad to select and hear it. The pad editor below the grid has the same tabs as the pad dashboard on the device:</p>
+<p>Click a pad to select and hear it. Drag a pad onto another to move it; a filled pad swaps places. <b>Copy</b>, <b>Paste</b> and <b>Clear</b> work as on the device (Ctrl+C, Ctrl+V, Ctrl+X); Clear keeps the pad in the clipboard, so Paste brings it back. The pad editor below the grid has the same tabs as the pad dashboard on the device:</p>
 <ul>
   <li><b>Sound:</b> level, pitch, filter, resonance, pan, overdrive, delay and reverb send.</li>
   <li><b>Setup:</b> reverse, launch (trigger, gate, toggle), polyphony, choke group, interpolation.</li>
@@ -54,10 +54,11 @@ ${todo}`,
 </ul>
 <p>In the <b>WAV</b> tab the waveform shows the part the pad plays: drag the white lines. <b>Edit audio</b> opens the editor: select with the mouse, then trim, delete, silence, fade, reverse, change the gain or normalize. Undo and redo with Ctrl+Z and Ctrl+Shift+Z, Space plays. With <b>Snap to zero</b> every edge lands on a zero crossing, so the sample starts and ends without a click. <b>Use edited sample</b> puts the result on the pad as a new file; the original stays untouched, saving the patch copies the new file into the patch folder.</p>
 <p>Clicking a pad plays it with its level, pitch, pan, reverse, start and length. Filter, resonance, overdrive, envelope, LFO, delay and reverb are not reproduced on the computer, you hear them on the device. The Env/LFO tab draws the envelope (times from the device manual, curve shape approximated) and the LFO shape.</p>
-<p>Drag a slider or type a value. A double click on a slider sets the value of a new pad. Values marked <b>?</b> are written in the order of the device manual; that the device reads them the same way is not confirmed yet.</p>
+<p>The loop switch and the volume slider in the header apply to all playback. In the sample browser every row has a play button; switch off <b>Preview</b> if clicking a row should not play it.</p>
+<p>Drag a slider or type a value. A double click on a slider sets the value of a new pad.</p>
 ${todo}` },
     { id: "projects", title: "Projects", html: `<p>The projects on the card.</p>${todo}` },
-    { id: "backup", title: "Backup", html: `<p>Snapshots of the card in a backup folder, with history, diff and restore.</p><p><b>The backup folder must be outside the blackbook folder.</b> An update or a new installation can delete the blackbook folder, and a backup inside it would be lost. blackbook does not accept such a folder.</p>${todo}` },
+    { id: "backup", title: "Backup", html: `<p>Snapshots of the card in a backup folder, with history, diff and restore.</p><p>Restoring a single WAV brings back only that file. blackbook lists the patches and projects that use it and warns when its length no longer fits; restore the whole patch or project folder to keep everything consistent.</p><p>Only one running blackbook may use a backup folder. If the folder is shared between computers through sync, close blackbook on one computer before you start it on the other.</p><p><b>The backup folder must be outside the blackbook folder.</b> An update or a new installation can delete the blackbook folder, and a backup inside it would be lost. blackbook does not accept such a folder.</p>${todo}` },
     {
       id: "git", title: "What is git",
       html: `

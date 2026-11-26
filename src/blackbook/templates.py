@@ -68,6 +68,7 @@ SAMINST_PARAMS = [
     ("envsus", "1000"),
     ("envrel", "200"),
     ("velamount", "0"),
+    ("velscreentrig", "100"),
     ("outputbus", "0"),
     ("polymode", "0"),
     ("chokegrp", "0"),

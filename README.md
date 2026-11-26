@@ -14,7 +14,7 @@ blackbook is free and stays free. If it helps you, you can buy me a coffee on [K
 
 | Status | What |
 |---|---|
-| In progress | One-shot patches: confirm the value encoding on the device; audio editor for library and project samples |
+| In progress | Audio editor for library and project samples |
 | Next | Slicer, loop, shredder, multisample loop points |
 | Later | External editor (Reaper), project tools (pack, clean, rename), sample organization, card and firmware tools |
 | Done | Library, tags, one-shot pad editor with all device settings, waveform and audio editor, multisample basics, backup, installer, updates, eject |
@@ -28,7 +28,7 @@ blackbook is free and stays free. If it helps you, you can buy me a coffee on [K
 - **Audio editor:** waveform view, trim, fades, gain, normalize and reverse with undo, edges snap to zero crossings so nothing clicks.
 - **Templates:** any one-shot or multisample patch, also factory patches, as a starting point for a new one.
 - **Projects:** missing samples and unused files per project.
-- **Backup:** snapshots of the card with history, comparison and restore. Automatic when the card is connected, and before and after blackbook writes.
+- **Backup:** snapshots of the card with history, comparison and restore. Automatic when the card is connected, and before and after blackbook writes. Restoring a single WAV shows where it is used.
 
 What comes next is in the roadmap at the top. Tell me what you need most.
 

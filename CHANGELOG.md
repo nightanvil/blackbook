@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ### Added
 
+- Pads: drag a pad onto another pad to move it, a filled pad swaps places. Copy, Paste and Clear as on the device (also Ctrl+C, Ctrl+V, Ctrl+X); Clear keeps the pad in the clipboard, Paste brings it back.
+- Header: loop switch and volume slider for all playback; the stop button keeps its place.
+- Sample browser: play and stop button in every row, and a Preview switch to stop rows from playing when clicked.
+- Pad editor and audio editor show the full path of the sample.
+- Restoring a single WAV from the backup explains that only the file comes back and lists the patches and projects that use it, with a note when the length no longer fits.
+- Backup events are collapsed, scrollable and filterable, so the snapshot history stays in view.
+- The backup folder is locked to one running blackbook. A second instance, for example on another computer sharing the folder through sync, gets a clear message instead of writing to the same backup.
 - Pad preview: clicking a pad or its play button plays it with level, pitch, pan, reverse, start and length. Filter, resonance, overdrive, envelope, LFO and the effect sends are not emulated and are heard on the device only.
 - Envelope and LFO graphics in the Env/LFO tab. The envelope times follow the device manual, the curve shape is an approximation.
 - Waveform in the WAV tab of a one-shot pad: drag start and end of the part the pad plays.
@@ -17,11 +24,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ### Changed
 
+- All one-shot pad settings are confirmed on the device; the ? marks are gone. New pads get `velscreentrig="100"` like pads saved on the device.
+- The edit notice in the builder appears once when a patch is loaded: Keep editing, Save as new patch instead, or Discard and start empty. After a save the editing continues without asking again.
+- Sliders run the full width without a box around them; number fields fit values like -24.00.
+- The header adapts to narrow windows.
 - Restoring from the backup asks in a blackbook dialog instead of a browser dialog.
 - New icon in the top bar, the help, the browser tab and the README.
 
 ### Fixed
 
+- A pad whose file on the card is shorter than the patch expects (for example after restoring a WAV) no longer blocks saving: start and length are shortened to the file and blackbook says so.
 - After every change to the card, blackbook writes all cached data to the card, so removing it right after a save no longer leaves an empty patch.xml.
 - A patch with an empty or damaged patch.xml shows an explanation instead of "Internal Server Error".
 

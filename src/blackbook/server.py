@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import tomllib
@@ -29,7 +30,8 @@ from .cardpath import INVALID_NAME_CHARS, resolve_sample_reference
 from .eject import EjectError, eject
 from .mapping import Zone, assign_key_ranges, automap, note_name
 from .patchindex import FACTORY_TAGS
-from .snapshot import CONFIG_NAME, SnapshotError, SnapshotRepo, default_target, git_executable
+from .references import find_references
+from .snapshot import CONFIG_NAME, MIRROR, SnapshotError, SnapshotRepo, default_target, git_executable
 from .wav import WavError, read_audio, read_info
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -239,8 +241,13 @@ class SnapshotService:
 
     def watch(self) -> None:
         present = False
+        last_claim = 0.0
         while not self._stop.is_set():
             try:
+                repo = self.repo
+                if repo is not None and repo.initialized and time.time() - last_claim > 60:
+                    repo.claim()
+                    last_claim = time.time()
                 now = self.card_present()
                 if not now and self.on_card_found is not None:
                     cards = find_cards()
@@ -257,6 +264,8 @@ class SnapshotService:
 
     def stop(self) -> None:
         self._stop.set()
+        if self.repo is not None:
+            self.repo.release()
 
 
 PROGRAM_FOLDER_MESSAGE = (
@@ -598,6 +607,16 @@ def create_app(
         except (WavError, OSError):
             return None
 
+    def window_within(attrs: dict[str, str], frames: int | None, slot: int, adjusted: list[str]) -> dict:
+        """Playback window of a pad, shortened when the file on the card is shorter than the patch says."""
+        start = int(attrs.get("samstart", 0) or 0)
+        length = int(attrs.get("samlen", 0) or 0)
+        if frames is not None and start + length > frames:
+            start = min(start, max(0, frames - 1))
+            length = frames - start
+            adjusted.append(f"pad {builder.pad_number(slot)}")
+        return {"start": start, "length": length, "frames": frames}
+
     @app.get("/api/patch/load")
     def patch_load(ref: str) -> dict:
         """Builder state of an existing one-shot or multisample patch."""
@@ -631,6 +650,7 @@ def create_app(
         if track_type == "samtrack":
             pads = []
             missing = []
+            adjusted: list[str] = []
             for i, cell in enumerate(all_cells):
                 if cell.type != "saminst" or "celldisppos" not in cell.attrs:
                     continue
@@ -650,12 +670,10 @@ def create_app(
                         "filename": filename,
                         "loop_mode": int(a.get("loopmodes", 0) or 0),
                         "params": padparams.read(a),
-                        "start": int(nxt.attrs.get("samstart", 0) or 0),
-                        "length": int(nxt.attrs.get("samlen", 0) or 0),
-                        "frames": wav_frames(source),
+                        **window_within(nxt.attrs, wav_frames(source), slot, adjusted),
                     }
                 )
-            result.update(type="oneshot", pads=pads, missing=missing)
+            result.update(type="oneshot", pads=pads, missing=missing, adjusted=adjusted)
         elif track_type == "multisamtrack":
             inst = next((c for c in all_cells if c.type == "saminst"), None)
             zones = []
@@ -928,6 +946,43 @@ def create_app(
     def backup_diff(id: str, path: str) -> dict:
         repo = snapshots.require()
         return {"diff": snapshot_call(repo.file_diff, id, path)}
+
+    @app.get("/api/backup/restore-check")
+    def backup_restore_check(commit: str, path: str) -> dict:
+        """What a restore of a single WAV affects: where it is used and whether its length changes."""
+        repo = snapshots.require()
+        rel = path.strip("/")
+        if not rel.lower().endswith(".wav"):
+            return {"is_wav": False}
+
+        def frames_of(data: bytes) -> int | None:
+            with tempfile.TemporaryDirectory() as tmp:
+                file = Path(tmp) / "snapshot.wav"
+                file.write_bytes(data)
+                try:
+                    return read_info(file).frames
+                except (WavError, OSError):
+                    return None
+
+        try:
+            data = repo.git("show", f"{commit}:{MIRROR}/{rel}", binary=True)
+            frames_snapshot = frames_of(data)
+            in_snapshot = True
+        except SnapshotError:
+            frames_snapshot, in_snapshot = None, False
+        current = card.root / rel
+        try:
+            frames_now = read_info(current).frames if current.is_file() else None
+        except (WavError, OSError):
+            frames_now = None
+        refs = find_references(card.root, rel) if snapshots.card_present() else []
+        return {
+            "is_wav": True,
+            "in_snapshot": in_snapshot,
+            "frames_snapshot": frames_snapshot,
+            "frames_now": frames_now,
+            "references": [asdict(r) for r in refs],
+        }
 
     @app.post("/api/backup/restore")
     def backup_restore(body: RestoreIn) -> dict:

@@ -295,6 +295,28 @@ function deinterleave(buffer, channelCount) {
   return channels;
 }
 
+// Shared audio output: one context with a master gain, volume and loop apply to all Web Audio playback
+const audioOut = {
+  ctx: null,
+  master: null,
+  volume: 1,
+  loop: false,
+  context() {
+    if (!this.ctx) {
+      this.ctx = new AudioContext();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = this.volume;
+      this.master.connect(this.ctx.destination);
+    }
+    if (this.ctx.state === "suspended") this.ctx.resume();
+    return this.ctx;
+  },
+  setVolume(value) {
+    this.volume = value;
+    if (this.master) this.master.gain.value = value;
+  },
+};
+
 // Plays a frame range of the view's audio and moves its playhead
 const wavePlayer = {
   ctx: null,
@@ -305,14 +327,14 @@ const wavePlayer = {
   play(view, start, end, onEnd) {
     this.stop();
     if (!view.frames) return;
-    this.ctx = this.ctx || new AudioContext();
-    if (this.ctx.state === "suspended") this.ctx.resume();
+    this.ctx = audioOut.context();
     const length = Math.max(1, end - start);
     const buffer = this.ctx.createBuffer(view.channels.length, length, view.rate);
     view.channels.forEach((data, c) => buffer.copyToChannel(data.subarray(start, end), c));
     const node = this.ctx.createBufferSource();
     node.buffer = buffer;
-    node.connect(this.ctx.destination);
+    node.loop = audioOut.loop;
+    node.connect(audioOut.master);
     const t0 = this.ctx.currentTime;
     node.onended = () => {
       if (this.node !== node) return;
@@ -321,16 +343,19 @@ const wavePlayer = {
       view.playhead = null;
       view.draw();
       if (onEnd) onEnd();
+      if (typeof markPlaying === "function") markPlaying();
     };
     node.start();
     this.node = node;
     this.view = view;
     const tick = () => {
-      view.playhead = start + Math.min(length, (this.ctx.currentTime - t0) * view.rate);
+      const played = (this.ctx.currentTime - t0) * view.rate;
+      view.playhead = start + (node.loop ? played % length : Math.min(length, played));
       view.draw();
       this.raf = requestAnimationFrame(tick);
     };
     tick();
+    if (typeof markPlaying === "function") markPlaying();
   },
 
   stop() {
@@ -341,6 +366,7 @@ const wavePlayer = {
     }
     cancelAnimationFrame(this.raf);
     if (this.view) { this.view.playhead = null; this.view.draw(); }
+    if (typeof markPlaying === "function") markPlaying();
   },
 
   get playing() { return this.node !== null; },

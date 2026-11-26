@@ -157,6 +157,12 @@ The Backup view lists all snapshots. A snapshot shows its changed files grouped 
 
 Within the restored scope the card matches the snapshot exactly: files that do not exist in the snapshot are deleted. Before every restore a snapshot of the current state is created, after it a snapshot with the subject `Restore <scope> from <commit>`.
 
+Restoring a single WAV brings back only the file. Before the restore blackbook lists every patch and project that references it (`src/blackbook/references.py`) and notes when the restored length is shorter than a `samlen` in those files. References are not adjusted; restoring the whole patch or project folder keeps them consistent. When a patch is loaded whose file is shorter than its `samlen`, the builder shortens start and length to the file and says so.
+
+### Instance lock
+
+`.git/blackbook-instance.json` in the backup folder holds host, process id and a heartbeat of the blackbook using the backup, renewed every minute and removed on exit. Another instance refuses snapshots and restores while the heartbeat is younger than 5 minutes. The file lives inside `.git`, so it is never part of a snapshot but is synchronized with the folder.
+
 ## 4. Organization
 
 - library with filters, audition and waveform

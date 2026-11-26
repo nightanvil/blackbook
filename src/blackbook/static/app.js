@@ -88,7 +88,61 @@ const player = document.getElementById("player");
 
 function setPlaying(source) {
   state.playing = source;
-  document.getElementById("stop-btn").hidden = !source;
+  markPlaying();
+}
+
+// Elements with data-src show a stop state while their source plays
+function markPlaying() {
+  const active = state.playing && !player.paused ? state.playing : null;
+  document.querySelectorAll("[data-src]").forEach((node) => node.classList.toggle("playing", node.dataset.src === active));
+  document.getElementById("stop-btn").disabled = !active && !wavePlayer.playing && !padPreview.node;
+}
+
+function stopAll() {
+  stop();
+  wavePlayer.stop();
+  padPreview.stop();
+  markPlaying();
+}
+
+function loadPrefs() {
+  try {
+    const prefs = JSON.parse(localStorage.getItem("blackbook-audio") || "{}");
+    return { volume: prefs.volume ?? 1, loop: !!prefs.loop, preview: prefs.preview ?? true };
+  } catch (_) { return { volume: 1, loop: false, preview: true }; }
+}
+
+function savePrefs() {
+  try {
+    localStorage.setItem("blackbook-audio", JSON.stringify({ volume: audioOut.volume, loop: audioOut.loop, preview: state.autoPreview }));
+  } catch (_) { /* storage unavailable */ }
+}
+
+function setupAudioControls() {
+  const prefs = loadPrefs();
+  const volume = document.getElementById("volume");
+  const loop = document.getElementById("loop-btn");
+  const preview = document.getElementById("br-preview");
+  const applyVolume = (v) => { audioOut.setVolume(v); player.volume = v; volume.title = `Volume ${Math.round(v * 100)} %`; };
+  volume.value = prefs.volume;
+  applyVolume(prefs.volume);
+  audioOut.loop = prefs.loop;
+  player.loop = prefs.loop;
+  loop.classList.toggle("on", prefs.loop);
+  state.autoPreview = prefs.preview;
+  preview.checked = prefs.preview;
+  volume.addEventListener("input", () => { applyVolume(Number(volume.value)); savePrefs(); });
+  volume.addEventListener("dblclick", () => { volume.value = 1; applyVolume(1); savePrefs(); });
+  loop.addEventListener("click", () => {
+    audioOut.loop = !audioOut.loop;
+    player.loop = audioOut.loop;
+    loop.classList.toggle("on", audioOut.loop);
+    // Running Web Audio playback follows the switch
+    if (padPreview.node) padPreview.node.loop = audioOut.loop;
+    if (wavePlayer.node) wavePlayer.node.loop = audioOut.loop;
+    savePrefs();
+  });
+  preview.addEventListener("change", () => { state.autoPreview = preview.checked; savePrefs(); });
 }
 
 function stop() {
@@ -113,13 +167,13 @@ function play(source) {
 }
 
 player.addEventListener("ended", () => setPlaying(null));
-document.getElementById("stop-btn").addEventListener("click", stop);
+player.addEventListener("pause", markPlaying);
+player.addEventListener("play", markPlaying);
+document.getElementById("stop-btn").addEventListener("click", stopAll);
 document.addEventListener("keydown", (ev) => {
   if (ev.key === "F1") { ev.preventDefault(); openHelp(); return; }
   if (ev.key === "Escape" && !document.getElementById("help").hidden) { closeHelp(); return; }
-  if (ev.key === "Escape" && state.playing) stop();
-  if (ev.key === "Escape" && wavePlayer.playing) wavePlayer.stop();
-  if (ev.key === "Escape") padPreview.stop();
+  if (ev.key === "Escape") stopAll();
 });
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -128,6 +182,13 @@ function noteName(n) { return NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 1); }
 function padNumber(slot) { return slot >= 8 ? slot - 7 : slot + 9; }
 const PAD_SLOTS_BY_NUMBER = [8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7];
 function baseName(source) { return source.split("/").pop(); }
+// Readable location of a source id: card files as card paths, inbox and libraries with their root name
+function sourcePath(source) {
+  const [root, rel] = [source.slice(0, source.indexOf(":")), source.slice(source.indexOf(":") + 1)];
+  const known = (state.roots || []).find((r) => r.id === root);
+  const base = known ? known.path.replace(/[\\/]+$/, "") : root;
+  return `${base}/${rel}`;
+}
 function fmtSeconds(s) { return s ? s.toFixed(2) + " s" : ""; }
 
 function tagChips(container, selected, onChange) {
@@ -309,7 +370,7 @@ async function showPatch(ref) {
   const isMulti = data.track_type === "multisamtrack";
   const rows = data.samples.filter((s) => s.filename).map((s) =>
     el("tr", {},
-      el("td", {}, el("button", { class: "small", disabled: !s.source, onclick: () => play(s.source) }, "▶")),
+      el("td", {}, el("button", { class: "small playbtn", disabled: !s.source, "data-src": s.source || "", onclick: () => play(s.source) })),
       el("td", {}, s.filename, s.source ? null : el("span", { class: "err" }, " (missing)")),
       el("td", { class: "muted" }, isMulti
         ? `${s.root_name}  keys ${noteName(s.key_low)}-${noteName(s.key_high)}  vel ${s.vel_low}-${s.vel_high}`
@@ -330,7 +391,7 @@ async function showPatch(ref) {
     editButtons,
     el("div", { class: "label" }, "Preview"),
     data.preview
-      ? el("button", { onclick: () => play(data.preview) }, "▶ Play preview")
+      ? el("button", { class: "playbtn wide", "data-src": data.preview, onclick: () => play(data.preview) }, "Preview")
       : el("span", { class: "muted" }, "no preview.wav"),
     el("div", { class: "label" }, "Tags" + (isUser ? "" : " (factory, read only)")),
     tagBox,
@@ -338,6 +399,7 @@ async function showPatch(ref) {
     el("div", { class: "label" }, `Samples (${rows.length})`),
     el("table", {}, el("tbody", {}, rows))
   );
+  markPlaying();
 }
 
 // ---------- browser ----------
@@ -386,14 +448,17 @@ function renderBrowser() {
         class: "row",
         draggable: "true",
         title: e.info,
-        onclick: () => play(source),
+        "data-src": source,
+        onclick: () => { if (state.autoPreview) play(source); },
         ondragstart: (ev) => {
           ev.dataTransfer.setData("application/x-blackbook", JSON.stringify([source]));
           ev.dataTransfer.effectAllowed = "copy";
         },
-      }, el("span", { class: "name" }, e.name), el("span", { class: "meta" }, fmtSeconds(e.duration)));
+      }, el("span", { class: "name" }, e.name), el("span", { class: "meta" }, fmtSeconds(e.duration)),
+      el("button", { class: "small playbtn", title: "Play or stop", onclick: (ev) => { ev.stopPropagation(); play(source); } }));
     })
   );
+  markPlaying();
 }
 
 document.getElementById("br-filter").addEventListener("input", renderBrowser);
@@ -564,8 +629,8 @@ document.getElementById("plan-apply").addEventListener("click", async () => {
     document.getElementById("plan-dialog").close();
     toast(`Written ${result.ref.replaceAll("\\", "/")} (${result.written.length} files). Use Eject before you unplug the card.`);
     await loadLibrary();
-    // Continue with the saved patch in edit mode
-    await loadIntoBuilder(result.ref, "edit", false);
+    // Continue with the saved patch in edit mode without asking again
+    await loadIntoBuilder(result.ref, "edit", false, true);
   } catch (err) {
     toast(err.message, true);
   }
@@ -586,6 +651,29 @@ function renderPads() {
           renderPads();
         },
       }, el("span", { class: "num" }, padNumber(slot)), el("span", { class: "sample" }, pad ? (pad.source ? baseName(pad.source) : pad.filename + " (missing)") : ""));
+      if (pad) {
+        node.draggable = true;
+        node.title = "Drag onto another pad to move it there; a filled pad swaps places";
+        node.addEventListener("dragstart", (ev) => {
+          ev.dataTransfer.setData("application/x-blackbook-pad", String(slot));
+          ev.dataTransfer.effectAllowed = "move";
+        });
+      }
+      node.addEventListener("drop", (ev) => {
+        const from = ev.dataTransfer.getData("application/x-blackbook-pad");
+        if (from === "") return;
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        node.classList.remove("over");
+        const source = Number(from);
+        if (source === slot) return;
+        const moving = state.pads[source];
+        const target = state.pads[slot];
+        if (target) state.pads[source] = target; else delete state.pads[source];
+        state.pads[slot] = moving;
+        state.selectedPad = slot;
+        renderPads();
+      });
       makeDropTarget(node, (sources) => {
         // Several dropped files fill the following pads in pad number order
         const start = PAD_SLOTS_BY_NUMBER.indexOf(slot);
@@ -616,8 +704,7 @@ const PAD_TABS = ["Sound", "Setup", "Env/LFO", "WAV"];
 function paramControl(pad, param) {
   const params = pad.params;
   const value = params[param.key] ?? param.default;
-  const mark = param.verified ? null : el("span", { class: "unverified", title: "The file encoding of this value is not yet confirmed on the device" }, "?");
-  const label = el("span", { class: "plabel" }, param.label, mark);
+  const label = el("span", { class: "plabel" }, param.label);
   const rerender = () => renderPadEditor();
   if (param.kind === "toggle") {
     return el("label", { class: "check" },
@@ -643,7 +730,7 @@ function paramControl(pad, param) {
   slider.addEventListener("input", () => set(slider.value, slider));
   // Double click on the slider resets to the default of a new pad
   slider.addEventListener("dblclick", () => set(param.default / param.scale, null));
-  return el("label", { class: "pnum" }, el("span", { class: "plabel" }, param.label, mark, el("span", { class: "unit" }, param.unit)), el("span", { class: "prow" }, slider, number));
+  return el("label", { class: "pnum" }, el("span", { class: "plabel" }, param.label, el("span", { class: "unit" }, param.unit)), el("span", { class: "prow" }, slider, number));
 }
 
 // ---------- waveform and audio editor ----------
@@ -819,6 +906,7 @@ async function openAudioEditor(slot) {
     el("div", { class: "grp" }, undoBtn, redoBtn));
 
   document.getElementById("ae-title").textContent = `Edit audio: ${session.name}`;
+  document.getElementById("ae-path").textContent = sourcePath(session.source);
   document.getElementById("ae-format").textContent = `${session.bits} bit, ${session.sample_rate / 1000} kHz, ${session.channels === 1 ? "mono" : "stereo"}`;
 
   const keys = (ev) => {
@@ -881,8 +969,7 @@ async function previewPad(pad) {
   const frames = audio.channels[0].length;
   const start = Math.min(pad.start ?? 0, frames - 1);
   const length = Math.max(1, Math.min(pad.length && pad.length > 0 ? pad.length : frames - start, frames - start));
-  const ctx = padPreview.ctx = padPreview.ctx || new AudioContext();
-  if (ctx.state === "suspended") ctx.resume();
+  const ctx = audioOut.context();
   const buffer = ctx.createBuffer(audio.channels.length, length, audio.rate);
   audio.channels.forEach((data, c) => {
     const part = data.slice(start, start + length);
@@ -896,11 +983,13 @@ async function previewPad(pad) {
   gain.gain.value = Math.pow(10, (p.gaindb || 0) / 1000 / 20);
   const pan = ctx.createStereoPanner();
   pan.pan.value = Math.max(-1, Math.min(1, (p.panpos || 0) / 1000));
-  node.connect(gain).connect(pan).connect(ctx.destination);
-  node.onended = () => { if (padPreview.node === node) padPreview.node = null; };
+  node.loop = audioOut.loop;
+  node.connect(gain).connect(pan).connect(audioOut.master);
+  node.onended = () => { if (padPreview.node === node) padPreview.node = null; markPlaying(); };
   padPreview.node = node;
   padPreview.pad = pad;
   node.start();
+  markPlaying();
 }
 
 // Envelope times at 100 % from the device manual: attack about 9 s, decay and release about 38 s
@@ -978,12 +1067,58 @@ function envLfoGraphics() {
     el("figure", {}, graph("lfo-graph"), el("figcaption", { class: "muted" }, "LFO shape and depth")));
 }
 
+// Pad clipboard as on the device: Clear and Copy keep the pad, Paste puts it on the selected pad
+function copyPad(slot) {
+  const pad = state.pads[slot];
+  if (!pad) return;
+  state.padClipboard = structuredClone(pad);
+  toast(`Pad ${padNumber(slot)} copied`);
+  renderPadEditor();
+}
+
+function clearPad(slot) {
+  const pad = state.pads[slot];
+  if (!pad) return;
+  state.padClipboard = structuredClone(pad);
+  delete state.pads[slot];
+  toast(`Pad ${padNumber(slot)} cleared. Paste brings it back.`);
+  renderPads();
+}
+
+function pastePad(slot) {
+  if (slot == null || !state.padClipboard) return;
+  state.pads[slot] = structuredClone(state.padClipboard);
+  state.selectedPad = slot;
+  renderPads();
+}
+
+function clipboardLabel() {
+  const c = state.padClipboard;
+  return c ? (c.source ? baseName(c.source) : c.filename) : "";
+}
+
+document.addEventListener("keydown", (ev) => {
+  if (!(ev.ctrlKey || ev.metaKey) || ev.altKey) return;
+  if (!document.getElementById("view-build").classList.contains("active") || state.buildType !== "oneshot") return;
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(ev.target.tagName) || document.querySelector("dialog[open]")) return;
+  const key = ev.key.toLowerCase();
+  const slot = state.selectedPad;
+  if (slot == null) return;
+  if (key === "c") { ev.preventDefault(); copyPad(slot); }
+  else if (key === "x") { ev.preventDefault(); clearPad(slot); }
+  else if (key === "v") { ev.preventDefault(); pastePad(slot); }
+});
+
 function renderPadEditor() {
   const panel = document.getElementById("pad-editor");
   const slot = state.selectedPad;
   const pad = slot != null ? state.pads[slot] : null;
   if (!pad) {
-    panel.replaceChildren(el("span", { class: "muted" }, slot == null ? "Select a pad." : `Pad ${padNumber(slot)} is empty. Drop a WAV onto it.`));
+    fill(panel,
+      el("span", { class: "muted" }, slot == null ? "Select a pad." : `Pad ${padNumber(slot)} is empty. Drop a WAV onto it.`),
+      slot != null && state.padClipboard
+        ? el("button", { class: "small", style: "margin-left:10px", title: "Ctrl+V", onclick: () => pastePad(slot) }, `Paste ${clipboardLabel()}`)
+        : null);
     return;
   }
 
@@ -991,7 +1126,7 @@ function renderPadEditor() {
     panel.replaceChildren(
       el("strong", {}, `Pad ${padNumber(slot)}: ${pad.filename}`),
       el("p", { class: "err" }, "The file of this pad is missing on the card. The pad stays unchanged unless you drop a new sample onto it or clear it."),
-      el("button", { class: "small", onclick: () => { delete state.pads[slot]; renderPads(); } }, "Clear"));
+      el("button", { class: "small", onclick: () => clearPad(slot) }, "Clear"));
     return;
   }
 
@@ -1010,18 +1145,19 @@ function renderPadEditor() {
         : "▶ plays the pad with level, pitch, pan, reverse, start and length. Filter, resonance, overdrive, delay and reverb are heard on the device only."));
     }
   }
-  const unverified = (state.padParams || []).some((p) => p.group === tab && !p.verified);
 
   fill(panel,
     el("div", { class: "pad-head" },
-      el("strong", {}, `Pad ${padNumber(slot)}: ${baseName(pad.source)}`),
+      el("span", { class: "pad-title" }, el("strong", {}, `Pad ${padNumber(slot)}: ${baseName(pad.source)}`), el("span", { class: "muted path" }, sourcePath(pad.source))),
       el("span", {},
         el("button", { class: "small", title: "Preview with level, pitch, pan, reverse, start and length", onclick: () => previewPad(pad) }, "▶"), " ",
-        el("button", { class: "small", onclick: () => { delete state.pads[slot]; renderPads(); } }, "Clear"))),
+        el("button", { class: "small", title: "Copy pad with all settings (Ctrl+C)", onclick: () => copyPad(slot) }, "Copy"), " ",
+        state.padClipboard ? el("button", { class: "small", title: `Replace this pad with ${clipboardLabel()} (Ctrl+V)`, onclick: () => pastePad(slot) }, "Paste") : null,
+        state.padClipboard ? " " : null,
+        el("button", { class: "small", title: "Remove the sample from this pad; Paste brings it back (Ctrl+X)", onclick: () => clearPad(slot) }, "Clear"))),
     el("div", { class: "tabs" }, PAD_TABS.map((name) =>
       el("button", { class: name === tab ? "active" : "", onclick: () => { state.padTab = name; renderPadEditor(); } }, name))),
     ...content,
-    unverified ? el("p", { class: "muted hint-small" }, "Values marked ? are written in the order of the device manual; their file encoding is not yet confirmed on the device.") : null,
   );
   if (tab === "Env/LFO") refreshPadGraphics(pad);
 }
@@ -1119,7 +1255,8 @@ function renderMode() {
   const name = document.getElementById("b-name");
   name.readOnly = state.mode === "edit";
   document.querySelectorAll(".seg button").forEach((b) => { b.disabled = state.mode !== "new"; });
-  if (state.mode === "new") {
+  // The edit notice is shown once when a patch is loaded; after "Keep editing" or a save it stays away
+  if (state.mode === "new" || (state.mode === "edit" && state.editAcknowledged)) {
     banner.hidden = true;
     return;
   }
@@ -1131,9 +1268,12 @@ function renderMode() {
   fill(banner,
     el("span", { class: "grow" }, ...text),
     state.mode === "edit"
+      ? el("button", { class: "small primary", title: "Edit this patch; saving overwrites it", onclick: () => { state.editAcknowledged = true; renderMode(); } }, "Keep editing")
+      : null,
+    state.mode === "edit"
       ? el("button", { class: "small", title: "Keep the original and save the changes under a new name", onclick: () => { state.mode = "copy"; document.getElementById("b-name").value += " copy"; renderMode(); } }, "Save as new patch instead")
       : null,
-    el("button", { class: "small", title: "Discard the loaded patch and start with an empty builder", onclick: resetBuilder }, "Close"));
+    el("button", { class: "small", title: "Discard all changes and start with an empty builder", onclick: resetBuilder }, "Discard and start empty"));
 }
 
 function resetBuilder() {
@@ -1150,7 +1290,7 @@ function resetBuilder() {
   renderMode();
 }
 
-async function loadIntoBuilder(ref, mode, switchView = true) {
+async function loadIntoBuilder(ref, mode, switchView = true, acknowledged = false) {
   let data;
   try {
     data = await api("GET", "/api/patch/load?ref=" + encodeURIComponent(ref));
@@ -1160,6 +1300,7 @@ async function loadIntoBuilder(ref, mode, switchView = true) {
   }
   state.mode = mode;
   state.baseRef = ref;
+  state.editAcknowledged = acknowledged;
   state.buildTags = new Set(data.tags);
   tagChips(document.getElementById("b-tags"), state.buildTags);
   document.getElementById("b-name").value = mode === "edit" ? data.name : data.name + " copy";
@@ -1175,6 +1316,10 @@ async function loadIntoBuilder(ref, mode, switchView = true) {
   }
   renderMode();
   if (data.missing && data.missing.length) toast(`${data.missing.length} referenced files are missing on the card`, true);
+  else if (data.adjusted && data.adjusted.length) {
+    showMessage("Sample shorter than the patch",
+      `The file on the card is shorter than the patch expects (${data.adjusted.join(", ")}), for example after restoring a WAV from the backup. Start and length were shortened to the file. Saving the patch writes the shortened values.`);
+  }
   if (switchView) document.querySelector('nav button[data-view="build"]').click();
 }
 
@@ -1218,6 +1363,26 @@ function groupKey(path) {
   return path;
 }
 
+function eventsBox(events) {
+  const filter = el("input", { type: "search", placeholder: "Filter events", value: state.eventsFilter || "" });
+  const body = el("tbody");
+  const renderRows = () => {
+    const q = (state.eventsFilter || "").toLowerCase();
+    const shown = events.filter((e) => !q || e.text.toLowerCase().includes(q) || e.time.includes(q));
+    fill(body, shown.length
+      ? shown.map((e) => el("tr", {}, el("td", { class: "muted" }, e.time), el("td", {}, e.text)))
+      : el("tr", {}, el("td", { class: "muted" }, "No matching events.")));
+  };
+  filter.addEventListener("input", () => { state.eventsFilter = filter.value; renderRows(); });
+  renderRows();
+  const box = el("details", { class: "events", open: !!state.eventsOpen },
+    el("summary", { class: "label" }, `Events since start (${events.length})`),
+    filter,
+    el("div", { class: "events-scroll" }, el("table", { class: "facts" }, body)));
+  box.addEventListener("toggle", () => { state.eventsOpen = box.open; });
+  return box;
+}
+
 async function loadBackup() {
   const status = await api("GET", "/api/backup/status");
   const target = document.getElementById("bk-target");
@@ -1233,13 +1398,13 @@ async function loadBackup() {
   }
   facts.push(["Card", status.card_present ? "connected" : "not connected"]);
   if (status.git_missing) facts.unshift(["Problem", el("span", { class: "err" }, status.git_missing)]);
+  if (status.in_use_by) facts.unshift(["Problem", el("span", { class: "err" }, status.in_use_by.charAt(0).toUpperCase() + status.in_use_by.slice(1))]);
   if (status.inside_program) facts.unshift(["Problem", el("span", { class: "err" }, "The backup folder is inside the blackbook folder. An update or a new installation could delete it. Choose a folder outside with Browse, then move or delete the old one.")]);
   const events = status.events || [];
   state.backupStamp = `${status.commits}|${events.length ? events[0].time + events[0].text : ""}`;
   fill(document.getElementById("bk-status"),
     el("table", { class: "facts" }, el("tbody", {}, facts.map(([k, v]) => el("tr", {}, el("td", { class: "muted" }, k), el("td", {}, v))))),
-    events.length ? el("div", { class: "label" }, "Events since start") : null,
-    events.length ? el("table", { class: "facts" }, el("tbody", {}, events.map((e) => el("tr", {}, el("td", { class: "muted" }, e.time), el("td", {}, e.text))))) : null);
+    events.length ? eventsBox(events) : null);
   state.backupInitialized = status.initialized;
   setBackupBusy(!!state.backupBusy, document.getElementById("bk-snapshot").textContent);
 
@@ -1262,11 +1427,40 @@ async function loadBackup() {
   if (!log.length) document.getElementById("bk-log").append(el("p", { class: "muted", style: "padding:10px" }, "No snapshots yet."));
 }
 
+// Explanation for restoring a single WAV: only the file comes back, patches and projects stay as they are
+async function wavRestoreNote(commit, path) {
+  let check;
+  try {
+    check = await api("GET", `/api/backup/restore-check?commit=${encodeURIComponent(commit)}&path=${encodeURIComponent(path)}`);
+  } catch (_) { return ""; }
+  if (!check.is_wav) return "";
+  const lines = ["", "", "Only this WAV file is restored. Patches and projects that use it are not changed."];
+  if (!check.in_snapshot) lines.push("The file does not exist in this snapshot, so it is deleted from the card.");
+  const refs = check.references || [];
+  if (refs.length) {
+    lines.push("", `Used in ${refs.length} place${refs.length === 1 ? "" : "s"}:`);
+    const shown = refs.slice(0, 12).map((r) => `  ${r.kind === "project" ? "Project" : "Patch"}: ${r.xml.split("/").slice(0, -1).join("/")}  (length ${r.samlen} frames)`);
+    lines.push(...shown);
+    if (refs.length > 12) lines.push(`  and ${refs.length - 12} more`);
+  } else {
+    lines.push("", "No patch or project on the card uses this file.");
+  }
+  const mismatch = check.frames_snapshot != null && refs.some((r) => r.samlen && r.samlen > check.frames_snapshot);
+  if (check.frames_snapshot != null && check.frames_now != null && check.frames_snapshot !== check.frames_now) {
+    lines.push("", `The length changes from ${check.frames_now} to ${check.frames_snapshot} frames.`);
+  }
+  if (mismatch) {
+    lines.push("Some of the places above play more frames than the restored file has. Restore the whole patch or project folder instead to keep everything consistent.");
+  }
+  return lines.join("\n");
+}
+
 async function restore(commit, path, label) {
   const scope = path ? `"${path}"` : "ALL backed up folders";
+  const wavNote = path ? await wavRestoreNote(commit, path) : "";
   const ok = await confirmDialog(
     "Restore from backup",
-    `Restore ${scope} from snapshot ${commit.slice(0, 10)}?\n\nThe current card state is saved as a snapshot first. Within the restored scope, files that do not exist in the snapshot are deleted from the card.`,
+    `Restore ${scope} from snapshot ${commit.slice(0, 10)}?\n\nThe current card state is saved as a snapshot first. Within the restored scope, files that do not exist in the snapshot are deleted from the card.${wavNote}`,
     "Restore");
   if (!ok) return;
   try {
@@ -1682,6 +1876,7 @@ async function refreshBackupIfVisible() {
 // ---------- start ----------
 
 async function start() {
+  setupAudioControls();
   const info = await api("GET", "/api/info");
   state.padParams = await api("GET", "/api/padparams");
   state.roots = info.roots;
