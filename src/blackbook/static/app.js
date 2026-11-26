@@ -208,6 +208,12 @@ async function loadLibrary() {
   renderLibrary();
 }
 
+// Patch folder names on the card and their names in the UI
+const TYPE_LABELS = { OneShots: "One-shot", SampInst: "Multisample", Loops: "Loop", Slicer: "Slicer", Shredder: "Shredder" };
+const TRACK_LABELS = { samtrack: "One-shot", multisamtrack: "Multisample", looptrack: "Loop", slicertrack: "Slicer", granslicertrack: "Shredder" };
+
+function typeLabel(type) { return TYPE_LABELS[type] || type; }
+
 function renderLibrary() {
   const search = document.getElementById("lib-search").value.toLowerCase();
   const source = document.getElementById("lib-source").value;
@@ -219,7 +225,7 @@ function renderLibrary() {
     (!source || p.root === source) &&
     (!type || p.type === type) &&
     [...state.libTags].every((t) => p.tags.includes(t))
-  ).sort((a, b) => (b.is_user - a.is_user) || a.name.localeCompare(b.name) || a.type.localeCompare(b.type));
+  ).sort((a, b) => (b.is_user - a.is_user) || a.name.localeCompare(b.name) || typeLabel(a.type).localeCompare(typeLabel(b.type)));
 
   list.replaceChildren(
     ...items.map((p) =>
@@ -229,7 +235,7 @@ function renderLibrary() {
       },
       p.is_user ? el("span", { class: "badge user" }, "user") : el("span", { class: "badge factory" }, "factory"),
       el("span", { class: "name", title: p.tags.length ? "Tags: " + p.tags.join(", ") : "untagged" }, p.name),
-      el("span", { class: "meta" }, p.type))
+      el("span", { class: "meta" }, typeLabel(p.type)))
     )
   );
   if (!items.length) list.append(el("p", { class: "muted", style: "padding:12px" }, "No patches match."));
@@ -299,7 +305,7 @@ async function showPatch(ref) {
 
   fill(detail,
     el("h2", {}, summary ? summary.name : ref),
-    el("div", { class: "muted" }, ref.replaceAll("\\", " / "), "  ·  ", data.track_type),
+    el("div", { class: "muted" }, ref.replaceAll("\\", " / "), "  ·  ", TRACK_LABELS[data.track_type] || data.track_type),
     editButtons,
     el("div", { class: "label" }, "Preview"),
     data.preview
