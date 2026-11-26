@@ -31,34 +31,26 @@ Details in [docs/funktionen.md](docs/funktionen.md).
 
 ## Einrichtung
 
-Der Bootstrap legt die gesamte Toolchain im Repo an. Systemweit wird nichts installiert, vorausgesetzt wird nur `curl` oder `wget` (Linux, macOS) bzw. PowerShell (Windows).
+Der Bootstrap legt die gesamte Toolchain im Repo an. Systemweit wird nichts installiert. Voraussetzung ist ein beliebiges Python ab 3.8 zum Starten des Bootstraps, auf allen Plattformen derselbe Befehl.
 
 | Ordner | Inhalt |
 |---|---|
-| `.tools/uv/` | Paketmanager uv |
+| `.tools/uv/` | Paketmanager uv, als Release von GitHub geladen und per SHA-256 geprüft |
 | `.tools/python/` | Python-Interpreter, von uv verwaltet |
 | `.tools/cache/` | Download-Cache |
 | `.venv/` | virtuelle Umgebung mit allen Abhängigkeiten |
 
-Linux und macOS:
-
-```bash
-./bootstrap.sh          # Laufzeit-Abhängigkeiten
-./bootstrap.sh --dev    # zusätzlich pytest und ruff
-./bootstrap.sh --clean  # .tools und .venv vorher löschen
+```
+python bootstrap.py            # Laufzeit-Abhängigkeiten
+python bootstrap.py --dev      # zusätzlich pytest und ruff
+python bootstrap.py --clean    # .tools und .venv vorher löschen
 ```
 
-Windows:
+Unter Linux und macOS heisst der Befehl je nach System `python3`.
 
-```powershell
-.\bootstrap.ps1
-.\bootstrap.ps1 -Dev
-.\bootstrap.ps1 -Clean
-```
+Der Bootstrap ist wiederholbar und ergänzt nur, was fehlt oder veraltet ist. Abhängigkeiten stehen in `requirements.txt` (Laufzeit) und `requirements-dev.txt` (Entwicklung). Versionen von uv und Python sind im Kopf von `bootstrap.py` festgelegt.
 
-Der Bootstrap ist wiederholbar und aktualisiert nur, was fehlt oder veraltet ist. Abhängigkeiten stehen in `requirements.txt` (Laufzeit) und `requirements-dev.txt` (Entwicklung). Versionen von uv und Python sind im Kopf beider Skripte festgelegt.
-
-`.tools/` und `.venv/` enthalten plattformspezifische Binärdateien. Wird das Repo zwischen Linux und Windows synchronisiert (zum Beispiel per Syncthing), sind beide Ordner von der Synchronisation auszuschliessen und auf jedem Rechner einzeln per Bootstrap anzulegen.
+`.tools/` und `.venv/` enthalten plattformspezifische Binärdateien. Wird das Repo zwischen Rechnern synchronisiert (zum Beispiel per Syncthing), sind beide Ordner von der Synchronisation auszuschliessen und auf jedem Rechner einzeln per Bootstrap anzulegen.
 
 ## Verzeichnisstruktur
 
@@ -72,8 +64,7 @@ blackbook/
 │   └── blackbook/          Python-Paket (Backend und ausgeliefertes Frontend)
 ├── tests/
 │   └── fixtures/           eigene, synthetische Testkarten (keine Factory-Inhalte)
-├── bootstrap.sh            Einrichtung Linux, macOS
-├── bootstrap.ps1           Einrichtung Windows
+├── bootstrap.py            Einrichtung der Toolchain im Repo
 ├── requirements.txt        Laufzeit-Abhängigkeiten
 ├── requirements-dev.txt    Entwicklungs-Abhängigkeiten
 ├── LICENSE
