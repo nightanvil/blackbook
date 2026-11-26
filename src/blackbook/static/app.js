@@ -829,6 +829,7 @@ async function loadBackup() {
   }
   facts.push(["Card", status.card_present ? "connected" : "not connected"]);
   if (status.git_missing) facts.unshift(["Problem", el("span", { class: "err" }, status.git_missing)]);
+  if (status.inside_program) facts.unshift(["Problem", el("span", { class: "err" }, "The backup folder is inside the blackbook folder. An update or a new installation could delete it. Choose a folder outside with Browse, then move or delete the old one.")]);
   const events = status.events || [];
   state.backupStamp = `${status.commits}|${events.length ? events[0].time + events[0].text : ""}`;
   fill(document.getElementById("bk-status"),
@@ -1072,8 +1073,10 @@ function pickFolder(start) {
     }
     current = data.path;
     document.getElementById("folder-path").textContent = data.path;
-    document.getElementById("folder-warn").textContent = data.is_card ? "This folder is on the blackbox card. Choose a folder on your computer." : "";
-    document.getElementById("folder-choose").disabled = data.is_card;
+    document.getElementById("folder-warn").textContent = data.is_card
+      ? "This folder is on the blackbox card. Choose a folder on your computer."
+      : data.is_program ? "This folder is inside the blackbook folder. An update or a new installation could delete it. Choose a folder outside." : "";
+    document.getElementById("folder-choose").disabled = data.is_card || data.is_program;
     fill(document.getElementById("folder-roots"), data.roots.map((r, i) => el("button", { class: "small", title: r, onclick: () => open(r) }, i === 0 ? "Home" : r)));
     const rows = [];
     if (data.parent) rows.push(el("div", { class: "row dir", onclick: () => open(data.parent) }, el("span", { class: "name" }, "..")));

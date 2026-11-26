@@ -32,7 +32,7 @@ ${todo}`,
     { id: "library", title: "Library", html: `<p>Factory and user patches with their tags and samples.</p>${todo}` },
     { id: "build", title: "Build", html: `<p>One-shot kits on 16 pads and multisample instruments, new or based on an existing patch.</p>${todo}` },
     { id: "projects", title: "Projects", html: `<p>The projects on the card.</p>${todo}` },
-    { id: "backup", title: "Backup", html: `<p>Snapshots of the card in a backup folder, with history, diff and restore.</p>${todo}` },
+    { id: "backup", title: "Backup", html: `<p>Snapshots of the card in a backup folder, with history, diff and restore.</p><p><b>The backup folder must be outside the blackbook folder.</b> An update or a new installation can delete the blackbook folder, and a backup inside it would be lost. blackbook does not accept such a folder.</p>${todo}` },
     {
       id: "git", title: "What is git",
       html: `

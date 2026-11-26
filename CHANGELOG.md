@@ -5,6 +5,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ## [Unreleased]
 
+### Changed
+
+- The backup folder can no longer be inside the blackbook folder, where an update or a new installation could delete it. The folder picker refuses it, and the Backup tab warns about an existing backup there.
+
+### Documentation
+
+- README and help explain why the backup must stay outside the blackbook folder.
+
 ## [0.1.0] - 2026-11-26
 
 First public, very early version.

@@ -183,6 +183,9 @@ Your settings, your backup and your card are not touched by an update.
 | Copies of changed index files | `backups/` in the blackbook folder | as an extra safety net |
 | Program and helpers | the blackbook folder, including `.tools` and `.venv` | no, can be downloaded again. `.tools` and `.venv` are created again on the next start if you delete them. |
 
+> [!CAUTION]
+> **Never keep the backup inside the blackbook folder.** When you update by hand or install blackbook again, the old blackbook folder is often deleted, and a backup inside it would be gone with it. blackbook refuses such a folder and warns if an existing backup is there. Keep it in your documents folder (the default) or on an external drive.
+
 The theme (dark or light) is stored in your browser.
 
 **Removing blackbook:** delete the blackbook folder. Your backup folder stays where it is, delete it separately if you want.

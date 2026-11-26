@@ -241,3 +241,15 @@ def test_backup_in_used_folder_gets_subfolder(card: Path, tmp_path: Path, monkey
         status = client.put("/api/backup/target", json={"path": str(documents)}).json()
     assert status["target"] == str((documents / "blackbook-backup").resolve())
     assert sorted(p.name for p in documents.iterdir()) == ["blackbook-backup", "letter.txt"]
+
+
+def test_backup_inside_program_folder_is_refused(card: Path, tmp_path: Path, monkeypatch) -> None:
+    program = tmp_path / "blackbook"
+    program.mkdir()
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    monkeypatch.setattr(settings, "REPO_DIR", program)
+    with TestClient(create_app(card, [], tmp_path / "copies")) as client:
+        refused = client.put("/api/backup/target", json={"path": str(program / "backup")})
+        assert refused.status_code == 400 and "blackbook folder" in refused.json()["detail"]
+        assert client.get("/api/fs/dirs", params={"path": str(program)}).json()["is_program"] is True
+        assert client.put("/api/backup/target", json={"path": str(tmp_path / "outside")}).status_code == 200

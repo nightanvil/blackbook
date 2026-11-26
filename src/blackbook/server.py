@@ -220,6 +220,19 @@ class SnapshotService:
         self._stop.set()
 
 
+PROGRAM_FOLDER_MESSAGE = (
+    "the backup folder must not be inside the blackbook folder: an update or a new installation "
+    "could delete it. Choose a folder outside, for example in your documents folder."
+)
+
+
+def inside_program(path: Path) -> bool:
+    """True when path is the blackbook installation folder or inside it."""
+    resolved = path.expanduser().resolve()
+    program = settings.REPO_DIR.resolve()
+    return resolved == program or resolved.is_relative_to(program)
+
+
 def code_commit() -> str:
     """Short commit id of the blackbook checkout, empty outside a git checkout."""
     try:
@@ -607,6 +620,7 @@ def create_app(
         status = repo.status() if repo else {"target": None, "initialized": False}
         status["card_present"] = snapshots.card_present()
         status["events"] = list(snapshots.events)
+        status["inside_program"] = bool(repo) and inside_program(repo.target)
         return status
 
     @app.put("/api/backup/target")
@@ -616,6 +630,8 @@ def create_app(
             raise HTTPException(400, "absolute path required")
         if path.resolve() == card.root or path.resolve().is_relative_to(card.root):
             raise HTTPException(400, "the backup folder must not be on the card")
+        if inside_program(path):
+            raise HTTPException(400, PROGRAM_FOLDER_MESSAGE)
         # A folder that already holds other files gets its own subfolder for the backup
         try:
             foreign = path.is_dir() and any(path.iterdir()) and not (path / CONFIG_NAME).exists()
@@ -662,6 +678,7 @@ def create_app(
             "dirs": dirs,
             "roots": roots,
             "is_card": base.resolve() == card.root or base.resolve().is_relative_to(card.root),
+            "is_program": inside_program(base),
         }
 
     @app.post("/api/fs/mkdir")
