@@ -52,6 +52,12 @@ exclude = [
     "Thumbs.db",
 ]
 
+# Files the device rewrites on its own (last project, settings). They are backed up
+# with the next snapshot, but a change in them alone creates no automatic snapshot
+minor = [
+    "bb2-stng.mml",
+]
+
 # Create a snapshot automatically when the card is connected while blackbook runs
 snapshot_on_connect = true
 
@@ -79,6 +85,7 @@ class Config:
     exclude: list[str]
     snapshot_on_connect: bool
     snapshot_before_write: bool
+    minor: list[str]
 
     @classmethod
     def load(cls, path: Path) -> Config:
@@ -91,6 +98,7 @@ class Config:
             exclude=[str(p) for p in merged["exclude"]],
             snapshot_on_connect=bool(merged["snapshot_on_connect"]),
             snapshot_before_write=bool(merged["snapshot_before_write"]),
+            minor=[str(p) for p in merged["minor"]],
         )
 
     def roots(self) -> list[str]:
@@ -101,6 +109,9 @@ class Config:
 
     def excluded(self, name: str) -> bool:
         return any(fnmatch.fnmatch(name, pattern) for pattern in self.exclude)
+
+    def is_minor(self, path: str) -> bool:
+        return any(fnmatch.fnmatch(path, pattern) for pattern in self.minor)
 
 
 @dataclass
@@ -292,21 +303,31 @@ class SnapshotRepo:
 
     # ---------- snapshots ----------
 
-    def snapshot(self, card_root: Path, reason: str = "Snapshot") -> Commit | None:
-        """Mirror the card and commit. Returns None when nothing changed."""
+    def snapshot(self, card_root: Path, reason: str = "Snapshot", automatic: bool = False) -> Commit | None:
+        """Mirror the card and commit. Returns None when nothing changed.
+
+        An automatic snapshot whose changes are all minor files leaves them
+        uncommitted in the mirror, the next snapshot includes them.
+        """
         with self.lock:
             if not self.initialized:
                 self.init()
-            result = self.sync_from_card(card_root)
+            self.sync_from_card(card_root)
             self.git("add", "--all", ".")
             status = self.git("status", "--porcelain")
             if not status.strip():
                 return None
+            out = self.git("diff", "--cached", "--name-status", "-z", "--no-renames", "--relative=" + MIRROR)
+            fields = [f for f in out.split("\0") if f]
+            staged = list(zip(fields[0::2], fields[1::2]))
+            if automatic and staged and all(self.config().is_minor(path) for _, path in staged):
+                return None
 
-            groups = summarize(result.added + result.modified + result.deleted)
-            subject = (
-                f"{reason}: {len(result.added)} added, {len(result.modified)} modified, {len(result.deleted)} deleted"
-            )
+            added = sum(1 for st, _ in staged if st == "A")
+            deleted = sum(1 for st, _ in staged if st == "D")
+            modified = len(staged) - added - deleted
+            groups = summarize([path for _, path in staged])
+            subject = f"{reason}: {added} added, {modified} modified, {deleted} deleted"
             lines = [f"{key} ({count})" for key, count in sorted(groups.items())]
             if len(lines) > 60:
                 lines = [*lines[:60], f"... and {len(lines) - 60} more"]

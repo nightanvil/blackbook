@@ -165,3 +165,27 @@ def test_server_starts_without_card(tmp_path: Path, monkeypatch) -> None:
         assert client.get("/api/card/status").json() == {"present": False}
         assert client.get("/api/patches").json() == []
         assert client.get("/api/projects").json() == []
+
+
+def test_automatic_snapshot_skips_minor_changes_alone(card: Path, repo: SnapshotRepo) -> None:
+    settings_file = card / "bb2-stng.mml"
+    settings_file.write_text('<preset name="A"/>', encoding="utf-8")
+    repo.snapshot(card, "Initial")
+    settings_file.write_text('<preset name="B"/>', encoding="utf-8")
+    touch_later(settings_file)
+    assert repo.snapshot(card, "Card connected", automatic=True) is None
+    assert repo.snapshot(card, "Card connected", automatic=True) is None
+
+    make_wav(card / "Projects" / "Song" / "RC000003.wav")
+    commit = repo.snapshot(card, "Card connected", automatic=True)
+    changes = {c.path for c in repo.changes(commit.id)}
+    assert changes == {"bb2-stng.mml", "Projects/Song/RC000003.wav"}
+
+
+def test_manual_snapshot_keeps_minor_changes(card: Path, repo: SnapshotRepo) -> None:
+    settings_file = card / "bb2-stng.mml"
+    settings_file.write_text('<preset name="A"/>', encoding="utf-8")
+    repo.snapshot(card, "Initial")
+    settings_file.write_text('<preset name="B"/>', encoding="utf-8")
+    touch_later(settings_file)
+    assert repo.snapshot(card, "Manual") is not None

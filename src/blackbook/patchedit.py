@@ -81,7 +81,8 @@ class Editor:
     def result(self) -> str:
         text = self.text
         # Apply from the end so earlier offsets stay valid; inserts at equal positions keep their order
-        for start, end, new in sorted(self._replacements, key=lambda r: (r[0], r[1]), reverse=True):
+        ordered = sorted(enumerate(self._replacements), key=lambda r: (r[1][0], r[1][1], r[0]), reverse=True)
+        for _, (start, end, new) in ordered:
             text = text[:start] + new + text[end:]
         return text
 
@@ -96,10 +97,21 @@ def edit_oneshot(text: str, updates: dict[int, tuple[dict, dict]]) -> tuple[str,
             nxt = editor.cells[i + 1] if i + 1 < len(editor.cells) and editor.cells[i + 1].type == "samasst" else None
             slots[int(cell.attrs["celldisppos"])] = (cell, nxt)
 
-    for slot, (inst_values, asst_values) in updates.items():
+    # Pads the device never used have no cells; new ones go after the last sample cell
+    sample_cells = [c for c in editor.cells if c.type in ("saminst", "samasst")]
+    anchor = sample_cells[-1] if sample_cells else None
+    new_cells: list[str] = []
+
+    for slot, (inst_values, asst_values) in sorted(updates.items()):
         if slot not in slots:
-            number = slot - 7 if slot >= 8 else slot + 9
-            errors.append(f"pad {number} has no cell in the base patch")
+            if not asst_values.get("filename"):
+                continue
+            if anchor is None:
+                number = slot - 7 if slot >= 8 else slot + 9
+                errors.append(f"pad {number}: base patch has no sample cells to place it next to")
+                continue
+            new_cells += templates.saminst_cell({**inst_values, "celldisppos": slot}, anchor.indent)
+            new_cells += templates.samasst_cell(asst_values, anchor.indent)
             continue
         inst, asst = slots[slot]
         editor.update_params(inst, inst_values)
@@ -109,6 +121,8 @@ def edit_oneshot(text: str, updates: dict[int, tuple[dict, dict]]) -> tuple[str,
                 editor.insert(inst.end, "\n".join(lines) + "\n")
             else:
                 editor.update_params(asst, asst_values)
+    if new_cells:
+        editor.insert(anchor.end, "\n".join(new_cells) + "\n")
     return editor.result(), errors
 
 

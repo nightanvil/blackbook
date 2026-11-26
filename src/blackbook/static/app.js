@@ -36,6 +36,11 @@ function el(tag, attrs = {}, ...children) {
   return node;
 }
 
+// replaceChildren that skips null children, as el() does
+function fill(node, ...children) {
+  node.replaceChildren(...children.flat().filter((c) => c != null));
+}
+
 async function api(method, url, body) {
   const options = { method, headers: {} };
   if (body !== undefined) {
@@ -226,7 +231,7 @@ async function showPatch(ref) {
         el("button", { onclick: () => loadIntoBuilder(ref, "copy") }, "Use as template"))
     : el("div", { class: "muted", style: "margin-top:10px" }, "Editing of this patch type is not supported yet.");
 
-  detail.replaceChildren(
+  fill(detail,
     el("h2", {}, summary ? summary.name : ref),
     el("div", { class: "muted" }, ref.replaceAll("\\", " / "), "  ·  ", data.track_type),
     editButtons,
@@ -444,7 +449,7 @@ document.getElementById("b-plan").addEventListener("click", async () => {
   }
   state.pendingBody = body;
   const content = document.getElementById("plan-content");
-  content.replaceChildren(
+  fill(content,
     el("p", {}, "Target: ", el("strong", {}, plan.target || "(invalid)")),
     plan.errors.length ? el("div", {}, el("div", { class: "label err" }, "Errors"), el("ul", { class: "msgs err" }, plan.errors.map((e) => el("li", {}, e)))) : null,
     plan.warnings.length ? el("div", {}, el("div", { class: "label warn" }, "Warnings"), el("ul", { class: "msgs warn" }, plan.warnings.map((w) => el("li", {}, w)))) : null,
@@ -647,7 +652,7 @@ function renderMode() {
   const text = state.mode === "edit"
     ? [el("strong", {}, `You are editing "${name_}".`), " Saving overwrites this patch on the card. A backup snapshot is made right before."]
     : [el("strong", {}, `Template: "${name_}".`), " Saving creates a new user patch with the name above. The original stays unchanged."];
-  banner.replaceChildren(
+  fill(banner,
     el("span", { class: "grow" }, ...text),
     state.mode === "edit"
       ? el("button", { class: "small", title: "Keep the original and save the changes under a new name", onclick: () => { state.mode = "copy"; document.getElementById("b-name").value += " copy"; renderMode(); } }, "Save as new patch instead")
@@ -820,6 +825,12 @@ async function showCommit(id, log) {
         el("td", {}, f.path),
         el("td", { class: "actions" },
           isText && f.status !== "A" ? el("button", { class: "small", onclick: async () => {
+            if (diffBox.dataset.path === f.path) {
+              delete diffBox.dataset.path;
+              diffBox.replaceChildren();
+              return;
+            }
+            diffBox.dataset.path = f.path;
             const result = await api("GET", `/api/backup/diff?id=${encodeURIComponent(id)}&path=${encodeURIComponent(f.path)}`);
             diffBox.replaceChildren(el("div", { class: "label" }, "Diff " + f.path), el("pre", {}, result.diff || "(no textual difference)"));
             diffBox.scrollIntoView({ behavior: "smooth" });

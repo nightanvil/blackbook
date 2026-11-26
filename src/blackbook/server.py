@@ -156,7 +156,7 @@ class SnapshotService:
         if not getattr(repo.config(), setting):
             return
         try:
-            commit = repo.snapshot(self.card.root, reason)
+            commit = repo.snapshot(self.card.root, reason, automatic=True)
             self.last_event = f"{reason}: " + (commit.subject if commit else "no changes")
         except (SnapshotError, OSError) as exc:
             self.last_event = f"{reason} failed: {exc}"
@@ -167,7 +167,7 @@ class SnapshotService:
             return
         if repo.config().snapshot_before_write:
             # A failing snapshot blocks the write
-            repo.snapshot(self.card.root, f"Before {what}")
+            repo.snapshot(self.card.root, f"Before {what}", automatic=True)
 
     def watch(self) -> None:
         present = False

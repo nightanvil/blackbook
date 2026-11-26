@@ -219,3 +219,48 @@ def test_import_dropped_files(card: Path, tmp_path: Path, monkeypatch) -> None:
         body = {"type": "oneshot", "name": "Dropped", "tags": [], "pads": [{"slot": 8, "source": first["source"]}]}
         assert client.post("/api/build/apply", json=body).status_code == 200
         assert (card / "UserPatches" / "OneShots" / "Dropped" / "Kick_Hard_.wav").is_file()
+
+
+DEVICE_PATCH = """<?xml version="1.0" encoding="UTF-8"?>
+<document>
+    <session version="1">
+        <track type="samtrack">
+            <params cellname="Sparse" trkgain="0"/>
+            <cell type="saminst">
+                <params gaindb="0" pitch="0" panpos="0" velscreentrig="100" celldisppos="8"/>
+            </cell>
+            <cell type="samasst">
+                <params filename="BD.wav" samstart="0" samlen="10" loopstart="0" loopend="10"/>
+                <slices/>
+            </cell>
+            <cell type="noteseq">
+                <params cellname="Seq 1"/>
+                <sequence>
+                    <seqevent pos="0" note="36"/>
+                </sequence>
+            </cell>
+            <cell type="saminst">
+                <params gaindb="0" pitch="0" panpos="0" celldisppos="12"/>
+            </cell>
+            <cell type="samasst">
+                <params filename="SD.wav" samstart="0" samlen="10" loopstart="0" loopend="10"/>
+                <slices/>
+            </cell>
+        </track>
+    </session>
+</document>
+"""
+
+
+def test_edit_adds_cells_for_pad_the_device_never_used() -> None:
+    # Pad 6 is celldisppos 13, which the device patch does not contain
+    sample = {"filename": "New.wav", "samstart": 0, "samlen": 5, "loopstart": 0, "loopend": 5}
+    xml, errors = patchedit.edit_oneshot(DEVICE_PATCH, {8: ({"gaindb": -3000}, {}), 13: ({"gaindb": 0}, sample)})
+    assert errors == []
+    all_cells = patchedit.cells(xml)
+    assert [c.type for c in all_cells] == ["saminst", "samasst", "noteseq", "saminst", "samasst", "saminst", "samasst"]
+    assert all_cells[0].attrs["gaindb"] == "-3000"
+    assert all_cells[-2].attrs["celldisppos"] == "13"
+    assert all_cells[-1].attrs["filename"] == "New.wav"
+    assert '<seqevent pos="0" note="36"/>' in xml
+    assert xml.endswith("        </track>\n    </session>\n</document>\n")
