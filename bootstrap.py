@@ -50,11 +50,11 @@ def uv_asset() -> str:
         sys.exit("Unsupported architecture: " + machine)
 
     if sys.platform.startswith("linux"):
-        return "uv-{}-unknown-linux-gnu.tar.gz".format(arch)
+        return f"uv-{arch}-unknown-linux-gnu.tar.gz"
     if sys.platform == "darwin":
-        return "uv-{}-apple-darwin.tar.gz".format(arch)
+        return f"uv-{arch}-apple-darwin.tar.gz"
     if IS_WINDOWS:
-        return "uv-{}-pc-windows-msvc.zip".format(arch)
+        return f"uv-{arch}-pc-windows-msvc.zip"
     sys.exit("Unsupported platform: " + sys.platform)
 
 
@@ -66,7 +66,7 @@ def download(url: str) -> bytes:
 def installed_uv_version():
     if not UV_BIN.exists():
         return None
-    result = subprocess.run([str(UV_BIN), "--version"], capture_output=True, text=True)
+    result = subprocess.run([str(UV_BIN), "--version"], capture_output=True, text=True, check=False)
     parts = result.stdout.split()
     return parts[1] if len(parts) > 1 else None
 
@@ -81,7 +81,7 @@ def install_uv() -> None:
     expected = download(url + ".sha256").decode().split()[0].lower()
     actual = hashlib.sha256(archive).hexdigest()
     if actual != expected:
-        sys.exit("Checksum mismatch for {}: expected {}, got {}".format(asset, expected, actual))
+        sys.exit(f"Checksum mismatch for {asset}: expected {expected}, got {actual}")
 
     # Only the uv and uvx binaries are extracted, by basename, to avoid path traversal
     wanted = {"uv" + EXE, "uvx" + EXE}
@@ -111,7 +111,8 @@ def install_uv() -> None:
 
 def run(*args) -> None:
     print("> " + " ".join(str(a) for a in args))
-    subprocess.run([str(a) for a in args], check=True)
+    # Relative entries in the requirements files are resolved against the repository
+    subprocess.run([str(a) for a in args], check=True, cwd=REPO_DIR)
 
 
 def main() -> None:
@@ -121,7 +122,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.clean:
-        print("Removing {} and {}".format(TOOLS_DIR, VENV_DIR))
+        print(f"Removing {TOOLS_DIR} and {VENV_DIR}")
         shutil.rmtree(TOOLS_DIR, ignore_errors=True)
         shutil.rmtree(VENV_DIR, ignore_errors=True)
 

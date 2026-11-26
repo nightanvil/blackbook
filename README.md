@@ -2,17 +2,50 @@
 
 Toolkit for the microSD card of the 1010music blackbox 2. Builds patches on the computer, integrates an external audio editor, keeps versioned backups of the card and organizes projects, patches and samples. All references in `project.xml`, `patch.xml` and `patchindex.xml` stay consistent.
 
-Status: concept phase, no working code yet.
+Status: prototype 0.1. Patches built with blackbook have not been verified on the device yet.
 
-## Features (planned)
+## Features
 
-- Patch builder: create and edit one-shot, multisample, loop, slicer and shredder patches on the computer, including tags
-- External editor: edit WAVs in Reaper or another editor, lengths and references are updated automatically
-- Backup: incremental, deduplicated snapshots, diff between any two states, restore down to single files
-- Organization: library with audition, bulk tagging, renaming with reference updates, batch rename, consistency checks
-- Safety: dry run with diff preview and a snapshot before every write
+| Feature | Status |
+|---|---|
+| Library: all factory and user patches with type and tag filter, audition of samples and `preview.wav` | prototype |
+| Tag editor for user patches, writes `UserPatches/patchindex.xml` | prototype |
+| Patch builder one-shot: 16 pads via drag and drop, gain, pitch, pan, choke group, reverse, loop | prototype |
+| Patch builder multisample: key and velocity mapping from file names, editable zones, keyboard view | prototype |
+| Generated `preview.wav` for new patches | prototype |
+| Project overview: missing references and unused WAVs per project | prototype |
+| Patch builder loop, slicer, shredder | planned |
+| External editor (Reaper) with automatic reference updates | planned |
+| Snapshot backup with diff and delta | planned |
+| Renaming with reference updates, batch rename | planned |
 
 Details in [docs/features.md](docs/features.md).
+
+## Usage
+
+```
+.venv/bin/blackbook --card /run/media/<user>/BB2                # Linux
+.venv\Scripts\blackbook --card E:\                              # Windows
+.venv/bin/blackbook --card <card> --library ~/Samples/Drums     # additional sample folder
+```
+
+The browser opens at `http://127.0.0.1:8765/`. The card path can also be set via `BLACKBOOK_CARD`.
+
+| Option | Meaning |
+|---|---|
+| `--card` | mounted card or a mirror of it |
+| `--library` | local sample folder shown in the builder's browser, repeatable; samples are copied into the patch |
+| `--backup-dir` | folder for copies of modified card files, default `backups/` in the repository |
+| `--port` | port of the local server, default 8765 |
+| `--no-browser` | do not open the browser |
+
+### Write behavior
+
+- New patches are created as new folders below `UserPatches/<type>/`. Existing folders are never overwritten.
+- Every write is reviewed in a dialog first: target folder, copied files, warnings, generated `patch.xml`.
+- Before `patchindex.xml` is modified, the original is copied to `backups/<session>/files/`. `backups/<session>/journal.json` lists every created folder and modified file.
+- Factory patches and factory tags are read only.
+- Gain is stored in thousandths of dB and pitch in thousandths of semitones. This mapping is derived from existing files and not confirmed by 1010music.
 
 ## Platforms
 
@@ -60,10 +93,19 @@ blackbook/
 │   ├── features.md         patch builder, external editor, backup, organization
 │   ├── card-format.md      structure of the microSD card and its XML files
 │   └── architecture.md     application structure and write rules
-├── src/
-│   └── blackbook/          Python package (backend and served frontend)
-├── tests/
-│   └── fixtures/           own synthetic test cards (no factory content)
+├── src/blackbook/
+│   ├── __main__.py         command line entry point
+│   ├── server.py           FastAPI application and API
+│   ├── card.py             reading patches, projects and sample folders
+│   ├── cardpath.py         card references, case-insensitive path resolution, name rules
+│   ├── patchindex.py       format-preserving patchindex.xml updates
+│   ├── wav.py              RIFF chunk parser, audio reading, 24 bit writer
+│   ├── mapping.py          multisample key and velocity mapping
+│   ├── templates.py        patch.xml generation
+│   ├── builder.py          change plans and writing of new patches
+│   ├── backup.py           copies of modified files and journal
+│   └── static/             browser UI (HTML, CSS, JavaScript)
+├── tests/                  pytest suite with synthetic test cards (no factory content)
 ├── bootstrap.py            toolchain setup inside the repository
 ├── requirements.txt        runtime dependencies
 ├── requirements-dev.txt    development dependencies

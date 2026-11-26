@@ -59,7 +59,7 @@ Factory content:
 | `project.xml` | 1 | 4 |
 | `patch.xml` | 68 | 78 |
 
-All files are UTF-8 with LF line endings. The device reads both variants. Files written by the device itself (`project.xml`, `patch.xml`, `patchindex.xml` in `UserPatches`, `bb2-stng.mml`) have a BOM.
+All files are UTF-8 with LF line endings. The device reads both variants. Files written by the device itself: `project.xml`, `patch.xml` and `bb2-stng.mml` have a BOM, `UserPatches/patchindex.xml` has none.
 
 The path separator in all XML files is the backslash, regardless of the computer's operating system.
 
@@ -175,6 +175,7 @@ Parameters are integers in device-internal units, for example `gaindb="6800"`, `
 
 - Recordings are named `RC` plus a six-digit number (`RC000001.wav`) and stored in the project folder. The number continues per project, including across Save As.
 - Save Patch copies all used WAVs into the patch folder, creates `preview.wav` and, if tags were chosen, writes an entry into `UserPatches/patchindex.xml`. The project keeps referencing the original WAVs.
+- Projects can reference WAVs that do not exist on the card. Example: the factory project `0-Renew` references `Choir-Emul-73.wav` and higher, while the factory patch `Choir` on the card only holds 40 files.
 - Next to a project, a folder `<project name> - autosave` is created with its own `project.xml` and its own copies of the recordings.
 - `bb2-stng.mml` stores the last loaded project in the element `<preset name="...">`.
 - Rename WAV on the device renames only files inside the project folder. If the file lives elsewhere, the device copies it under the new name into the project folder.

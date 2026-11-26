@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>blackbook</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <div class="brand">blackbook</div>
+    <nav>
+      <button data-view="library" class="active">Library</button>
+      <button data-view="build">Build</button>
+      <button data-view="projects">Projects</button>
+    </nav>
+    <div id="card-path" class="muted"></div>
+  </header>
+
+  <main>
+    <!-- Library -->
+    <section id="view-library" class="view active">
+      <aside class="filters">
+        <input id="lib-search" type="search" placeholder="Search patches">
+        <label>Source
+          <select id="lib-source">
+            <option value="">All</option>
+            <option value="Patches">Factory</option>
+            <option value="UserPatches">User</option>
+          </select>
+        </label>
+        <label>Type
+          <select id="lib-type">
+            <option value="">All</option>
+            <option>OneShots</option><option>SampInst</option><option>Loops</option>
+            <option>Slicer</option><option>Shredder</option>
+          </select>
+        </label>
+        <div class="label">Tags</div>
+        <div id="lib-tags" class="chips"></div>
+      </aside>
+      <div id="lib-list" class="list"></div>
+      <div id="lib-detail" class="detail"><p class="muted">Select a patch.</p></div>
+    </section>
+
+    <!-- Build -->
+    <section id="view-build" class="view">
+      <aside class="browser">
+        <div class="browser-head">
+          <select id="br-root"></select>
+          <input id="br-filter" type="search" placeholder="Filter">
+        </div>
+        <div id="br-crumbs" class="crumbs"></div>
+        <div id="br-list" class="list compact"></div>
+        <div class="hint muted">Drag WAVs onto pads or the zone list. Click to listen.</div>
+      </aside>
+
+      <div class="builder">
+        <div class="builder-head">
+          <div class="seg">
+            <button data-type="oneshot" class="active">One-shot</button>
+            <button data-type="multisample">Multisample</button>
+          </div>
+          <input id="b-name" placeholder="Patch name" maxlength="64">
+          <button id="b-plan" class="primary">Review &amp; save</button>
+        </div>
+
+        <div id="b-oneshot">
+          <div id="pads" class="pads"></div>
+          <div id="pad-editor" class="panel"></div>
+        </div>
+
+        <div id="b-multisample" hidden>
+          <div class="ms-tools">
+            <label>Gaps
+              <select id="ms-gap">
+                <option value="split">split between samples</option>
+                <option value="up">extend upwards</option>
+                <option value="down">extend downwards</option>
+              </select>
+            </label>
+            <button id="ms-add-folder">Add all WAVs of current folder</button>
+            <button id="ms-remap">Recalculate key ranges</button>
+            <button id="ms-clear">Clear</button>
+          </div>
+          <div id="ms-keyboard" class="keyboard"></div>
+          <div id="ms-drop" class="dropzone">
+            <table id="ms-table">
+              <thead><tr><th>File</th><th>Root</th><th>Keys</th><th>Velocity</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+            <p id="ms-empty" class="muted">Drop WAVs here.</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="label">Tags</div>
+          <div id="b-tags" class="chips"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Projects -->
+    <section id="view-projects" class="view">
+      <div id="proj-list" class="table-wrap"></div>
+    </section>
+  </main>
+
+  <dialog id="plan-dialog">
+    <div class="dialog-body">
+      <h2>Review</h2>
+      <div id="plan-content"></div>
+    </div>
+    <div class="dialog-actions">
+      <button id="plan-cancel">Cancel</button>
+      <button id="plan-apply" class="primary">Write to card</button>
+    </div>
+  </dialog>
+
+  <div id="toast"></div>
+  <audio id="player"></audio>
+  <script src="/static/app.js"></script>
+</body>
+</html>

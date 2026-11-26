@@ -2,3 +2,7 @@
 fastapi>=0.115
 uvicorn[standard]>=0.32
 watchdog>=5.0
+numpy>=2.0
+
+# The blackbook package itself, editable
+-e .

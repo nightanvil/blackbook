@@ -1,0 +1,510 @@
+"use strict";
+
+const state = {
+  patches: [],
+  tags: [],
+  libTags: new Set(),
+  selectedRef: null,
+  roots: [],
+  browse: { root: "card", path: "Samples", entries: [] },
+  buildType: "oneshot",
+  pads: {},
+  selectedPad: null,
+  zones: [],
+  buildTags: new Set(),
+  pendingBody: null,
+};
+
+// ---------- helpers ----------
+
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs)) {
+    if (key === "class") node.className = value;
+    else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+    else if (value === true) node.setAttribute(key, "");
+    else if (value !== false && value != null) node.setAttribute(key, value);
+  }
+  for (const child of children.flat()) {
+    if (child == null) continue;
+    node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+  }
+  return node;
+}
+
+async function api(method, url, body) {
+  const options = { method, headers: {} };
+  if (body !== undefined) {
+    options.headers["Content-Type"] = "application/json";
+    options.body = JSON.stringify(body);
+  }
+  const response = await fetch(url, options);
+  if (!response.ok) {
+    let detail = response.statusText;
+    try { detail = (await response.json()).detail || detail; } catch (_) { /* ignore */ }
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+  return response.json();
+}
+
+function toast(message, isError = false) {
+  const node = document.getElementById("toast");
+  node.textContent = message;
+  node.style.color = isError ? "var(--err)" : "";
+  node.classList.add("show");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => node.classList.remove("show"), 3500);
+}
+
+function play(source) {
+  if (!source) return;
+  const player = document.getElementById("player");
+  player.src = "/api/audio?src=" + encodeURIComponent(source);
+  player.play().catch((err) => toast("Playback failed: " + err.message, true));
+}
+
+const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+function noteName(n) { return NOTE_NAMES[n % 12] + (Math.floor(n / 12) - 1); }
+function baseName(source) { return source.split("/").pop(); }
+function fmtSeconds(s) { return s ? s.toFixed(2) + " s" : ""; }
+
+function tagChips(container, selected, onChange) {
+  container.replaceChildren(
+    ...state.tags.map((tag) =>
+      el("span", {
+        class: "chip" + (selected.has(tag) ? " on" : ""),
+        onclick: () => {
+          selected.has(tag) ? selected.delete(tag) : selected.add(tag);
+          tagChips(container, selected, onChange);
+          onChange && onChange();
+        },
+      }, tag)
+    )
+  );
+}
+
+// ---------- navigation ----------
+
+document.querySelectorAll("nav button").forEach((button) => {
+  button.addEventListener("click", () => {
+    document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", b === button));
+    document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === "view-" + button.dataset.view));
+    if (button.dataset.view === "projects") loadProjects();
+  });
+});
+
+// ---------- library ----------
+
+async function loadLibrary() {
+  [state.patches, state.tags] = await Promise.all([api("GET", "/api/patches"), api("GET", "/api/tags")]);
+  tagChips(document.getElementById("lib-tags"), state.libTags, renderLibrary);
+  renderLibrary();
+}
+
+function renderLibrary() {
+  const search = document.getElementById("lib-search").value.toLowerCase();
+  const source = document.getElementById("lib-source").value;
+  const type = document.getElementById("lib-type").value;
+  const list = document.getElementById("lib-list");
+
+  const items = state.patches.filter((p) =>
+    (!search || p.name.toLowerCase().includes(search)) &&
+    (!source || p.root === source) &&
+    (!type || p.type === type) &&
+    [...state.libTags].every((t) => p.tags.includes(t))
+  );
+
+  list.replaceChildren(
+    ...items.map((p) =>
+      el("div", {
+        class: "row" + (p.ref === state.selectedRef ? " selected" : ""),
+        onclick: () => showPatch(p.ref),
+      },
+      el("span", { class: "name" }, p.name),
+      p.is_user ? el("span", { class: "badge user" }, "user") : null,
+      el("span", { class: "meta" }, p.type),
+      el("span", { class: "meta" }, p.tags.length ? p.tags.join(", ") : "untagged"))
+    )
+  );
+  if (!items.length) list.append(el("p", { class: "muted", style: "padding:12px" }, "No patches match."));
+}
+
+["lib-search", "lib-source", "lib-type"].forEach((id) =>
+  document.getElementById(id).addEventListener("input", renderLibrary)
+);
+
+async function showPatch(ref) {
+  state.selectedRef = ref;
+  renderLibrary();
+  const detail = document.getElementById("lib-detail");
+  detail.replaceChildren(el("p", { class: "muted" }, "Loading..."));
+  let data;
+  try {
+    data = await api("GET", "/api/patch?ref=" + encodeURIComponent(ref));
+  } catch (err) {
+    detail.replaceChildren(el("p", { class: "err" }, err.message));
+    return;
+  }
+  const summary = state.patches.find((p) => p.ref === ref);
+  const isUser = summary && summary.is_user;
+  const tags = new Set(data.tags);
+  const tagBox = el("div", { class: "chips" });
+
+  const saveButton = el("button", {
+    class: "primary small",
+    disabled: true,
+    onclick: async () => {
+      try {
+        const result = await api("PUT", "/api/patch/tags", { ref, tags: [...tags] });
+        summary.tags = result.tags;
+        saveButton.disabled = true;
+        renderLibrary();
+        toast("Tags saved");
+      } catch (err) {
+        toast(err.message, true);
+      }
+    },
+  }, "Save tags");
+
+  if (isUser) {
+    tagChips(tagBox, tags, () => { saveButton.disabled = false; });
+  } else {
+    tagBox.replaceChildren(...data.tags.map((t) => el("span", { class: "chip static on" }, t)));
+    if (!data.tags.length) tagBox.append(el("span", { class: "muted" }, "untagged"));
+  }
+
+  const isMulti = data.track_type === "multisamtrack";
+  const rows = data.samples.filter((s) => s.filename).map((s) =>
+    el("tr", {},
+      el("td", {}, el("button", { class: "small", disabled: !s.source, onclick: () => play(s.source) }, "▶")),
+      el("td", {}, s.filename, s.source ? null : el("span", { class: "err" }, " (missing)")),
+      el("td", { class: "muted" }, isMulti
+        ? `${s.root_name}  keys ${noteName(s.key_low)}-${noteName(s.key_high)}  vel ${s.vel_low}-${s.vel_high}`
+        : s.slot != null ? "pad " + (s.slot + 1) : "")
+    )
+  );
+
+  detail.replaceChildren(
+    el("h2", {}, summary ? summary.name : ref),
+    el("div", { class: "muted" }, ref.replaceAll("\\", " / "), "  ·  ", data.track_type),
+    el("div", { class: "label" }, "Preview"),
+    data.preview
+      ? el("button", { onclick: () => play(data.preview) }, "▶ Play preview")
+      : el("span", { class: "muted" }, "no preview.wav"),
+    el("div", { class: "label" }, "Tags" + (isUser ? "" : " (factory, read only)")),
+    tagBox,
+    isUser ? el("div", { style: "margin-top:8px" }, saveButton) : null,
+    el("div", { class: "label" }, `Samples (${rows.length})`),
+    el("table", {}, el("tbody", {}, rows))
+  );
+}
+
+// ---------- browser ----------
+
+async function loadBrowser() {
+  const select = document.getElementById("br-root");
+  select.replaceChildren(...state.roots.map((r) => el("option", { value: r.id }, r.id === "card" ? "Card" : r.path)));
+  select.value = state.browse.root;
+  select.addEventListener("change", () => openFolder(select.value, ""));
+  try {
+    await openFolder("card", "Samples");
+  } catch (_) {
+    await openFolder("card", "");
+  }
+}
+
+async function openFolder(root, path) {
+  const data = await api("GET", `/api/browse?root=${encodeURIComponent(root)}&path=${encodeURIComponent(path)}`);
+  state.browse = { root, path: data.path, entries: data.entries };
+  document.getElementById("br-filter").value = "";
+  renderBrowser();
+}
+
+function renderBrowser() {
+  const { root, path, entries } = state.browse;
+  const filter = document.getElementById("br-filter").value.toLowerCase();
+
+  const crumbs = document.getElementById("br-crumbs");
+  const parts = path ? path.split("/") : [];
+  crumbs.replaceChildren(
+    el("span", { onclick: () => openFolder(root, "") }, root === "card" ? "Card" : root),
+    ...parts.flatMap((part, i) => [" / ", el("span", { onclick: () => openFolder(root, parts.slice(0, i + 1).join("/")) }, part)])
+  );
+
+  const list = document.getElementById("br-list");
+  const visible = entries.filter((e) => !filter || e.name.toLowerCase().includes(filter));
+  list.replaceChildren(
+    ...visible.map((e) => {
+      if (e.kind === "dir") {
+        return el("div", { class: "row dir", onclick: () => openFolder(root, e.path) }, el("span", { class: "name" }, e.name));
+      }
+      const source = `${root}:${e.path}`;
+      return el("div", {
+        class: "row",
+        draggable: "true",
+        title: e.info,
+        onclick: () => play(source),
+        ondragstart: (ev) => {
+          ev.dataTransfer.setData("application/x-blackbook", JSON.stringify([source]));
+          ev.dataTransfer.effectAllowed = "copy";
+        },
+      }, el("span", { class: "name" }, e.name), el("span", { class: "meta" }, fmtSeconds(e.duration)));
+    })
+  );
+}
+
+document.getElementById("br-filter").addEventListener("input", renderBrowser);
+
+function droppedSources(ev) {
+  const raw = ev.dataTransfer.getData("application/x-blackbook");
+  return raw ? JSON.parse(raw) : [];
+}
+
+function makeDropTarget(node, onDrop) {
+  node.addEventListener("dragover", (ev) => { ev.preventDefault(); node.classList.add("over"); });
+  node.addEventListener("dragleave", () => node.classList.remove("over"));
+  node.addEventListener("drop", (ev) => {
+    ev.preventDefault();
+    node.classList.remove("over");
+    const sources = droppedSources(ev);
+    if (sources.length) onDrop(sources);
+  });
+}
+
+// ---------- builder: common ----------
+
+document.querySelectorAll(".seg button").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.buildType = button.dataset.type;
+    document.querySelectorAll(".seg button").forEach((b) => b.classList.toggle("active", b === button));
+    document.getElementById("b-oneshot").hidden = state.buildType !== "oneshot";
+    document.getElementById("b-multisample").hidden = state.buildType !== "multisample";
+  });
+});
+
+function buildBody() {
+  const body = {
+    type: state.buildType,
+    name: document.getElementById("b-name").value,
+    tags: [...state.buildTags],
+  };
+  if (state.buildType === "oneshot") {
+    body.pads = Object.entries(state.pads).map(([slot, pad]) => ({ slot: Number(slot), ...pad }));
+  } else {
+    body.zones = state.zones.map((z) => ({
+      source: z.source, root: z.root, key_low: z.key_low, key_high: z.key_high,
+      vel_low: z.vel_low, vel_high: z.vel_high, vel_root: z.vel_root,
+    }));
+  }
+  return body;
+}
+
+document.getElementById("b-plan").addEventListener("click", async () => {
+  const body = buildBody();
+  let plan;
+  try {
+    plan = await api("POST", "/api/build/plan", body);
+  } catch (err) {
+    toast(err.message, true);
+    return;
+  }
+  state.pendingBody = body;
+  const content = document.getElementById("plan-content");
+  content.replaceChildren(
+    el("p", {}, "Target: ", el("strong", {}, plan.target || "(invalid)")),
+    plan.errors.length ? el("div", {}, el("div", { class: "label err" }, "Errors"), el("ul", { class: "msgs err" }, plan.errors.map((e) => el("li", {}, e)))) : null,
+    plan.warnings.length ? el("div", {}, el("div", { class: "label warn" }, "Warnings"), el("ul", { class: "msgs warn" }, plan.warnings.map((w) => el("li", {}, w)))) : null,
+    el("div", { class: "label" }, `Files (${plan.files.length} samples, patch.xml, preview.wav ${plan.preview_seconds} s)`),
+    el("table", {}, el("tbody", {}, plan.files.map((f) => el("tr", {}, el("td", {}, f.name), el("td", { class: "muted" }, f.info), el("td", { class: "muted" }, f.source))))),
+    el("div", { class: "label" }, "Tags"),
+    el("div", {}, plan.tags.length ? plan.tags.join(", ") : el("span", { class: "muted" }, "none, the patch gets no index entry")),
+    el("details", {}, el("summary", { class: "label" }, "patch.xml"), el("pre", {}, plan.xml))
+  );
+  document.getElementById("plan-apply").disabled = !plan.ok;
+  document.getElementById("plan-dialog").showModal();
+});
+
+document.getElementById("plan-cancel").addEventListener("click", () => document.getElementById("plan-dialog").close());
+
+document.getElementById("plan-apply").addEventListener("click", async () => {
+  try {
+    const result = await api("POST", "/api/build/apply", state.pendingBody);
+    document.getElementById("plan-dialog").close();
+    toast(`Written ${result.ref.replaceAll("\\", "/")} (${result.written.length} files)`);
+    await loadLibrary();
+  } catch (err) {
+    toast(err.message, true);
+  }
+});
+
+// ---------- builder: one-shot ----------
+
+function renderPads() {
+  const grid = document.getElementById("pads");
+  grid.replaceChildren(
+    ...Array.from({ length: 16 }, (_, slot) => {
+      const pad = state.pads[slot];
+      const node = el("div", {
+        class: "pad" + (pad ? " filled" : "") + (state.selectedPad === slot ? " selected" : ""),
+        onclick: () => {
+          state.selectedPad = slot;
+          if (pad) play(pad.source);
+          renderPads();
+        },
+      }, el("span", { class: "num" }, slot + 1), el("span", { class: "sample" }, pad ? baseName(pad.source) : ""));
+      makeDropTarget(node, (sources) => {
+        sources.forEach((source, i) => {
+          if (slot + i < 16) state.pads[slot + i] = { source, gain: 0, pitch: 0, pan: 0, choke_group: 0, reverse: false, loop: false };
+        });
+        state.selectedPad = slot;
+        renderPads();
+      });
+      return node;
+    })
+  );
+  renderPadEditor();
+}
+
+function renderPadEditor() {
+  const panel = document.getElementById("pad-editor");
+  const slot = state.selectedPad;
+  const pad = slot != null ? state.pads[slot] : null;
+  if (!pad) {
+    panel.replaceChildren(el("span", { class: "muted" }, slot == null ? "Select a pad." : `Pad ${slot + 1} is empty. Drop a WAV onto it.`));
+    return;
+  }
+  const field = (label, key, attrs) =>
+    el("label", {}, label, el("input", { type: "number", value: pad[key], ...attrs, oninput: (ev) => { pad[key] = Number(ev.target.value); } }));
+  const check = (label, key) =>
+    el("label", { class: "check" }, el("input", { type: "checkbox", checked: pad[key], onchange: (ev) => { pad[key] = ev.target.checked; } }), label);
+
+  panel.replaceChildren(
+    el("div", { style: "display:flex;justify-content:space-between;margin-bottom:10px" },
+      el("strong", {}, `Pad ${slot + 1}: ${baseName(pad.source)}`),
+      el("span", {},
+        el("button", { class: "small", onclick: () => play(pad.source) }, "▶"), " ",
+        el("button", { class: "small", onclick: () => { delete state.pads[slot]; renderPads(); } }, "Clear"))),
+    el("div", { class: "pad-form" },
+      field("Gain (dB)", "gain", { step: "0.1", min: "-60", max: "12" }),
+      field("Pitch (semitones)", "pitch", { step: "0.01", min: "-24", max: "24" }),
+      field("Pan (-1000..1000)", "pan", { step: "1", min: "-1000", max: "1000" }),
+      field("Choke group (0 = off)", "choke_group", { step: "1", min: "0", max: "16" }),
+      check("Reverse", "reverse"),
+      check("Loop", "loop")),
+    el("p", { class: "muted", style: "margin:10px 0 0;font-size:12px" }, "Gain and pitch are stored in thousandths. The unit mapping to the device display is unverified.")
+  );
+}
+
+// ---------- builder: multisample ----------
+
+const msDrop = document.getElementById("ms-drop");
+makeDropTarget(msDrop, (sources) => addZones(sources));
+
+async function addZones(sources) {
+  const known = new Set(state.zones.map((z) => z.source));
+  const fresh = [...new Set(sources)].filter((s) => !known.has(s));
+  if (!fresh.length) return;
+  const gap_rule = document.getElementById("ms-gap").value;
+  try {
+    const added = await api("POST", "/api/multisample/automap", { sources: fresh, gap_rule });
+    const remapped = await api("POST", "/api/multisample/remap", { zones: [...state.zones, ...added], gap_rule });
+    // Keep detection warnings, the remap only recalculates key ranges
+    state.zones = remapped.map((z, i) => ({ ...z, warnings: ([...state.zones, ...added][i].warnings) || [] }));
+  } catch (err) {
+    toast(err.message, true);
+    return;
+  }
+  renderZones();
+}
+
+document.getElementById("ms-add-folder").addEventListener("click", () => {
+  const { root, entries } = state.browse;
+  const sources = entries.filter((e) => e.kind === "wav").map((e) => `${root}:${e.path}`);
+  if (!sources.length) return toast("No WAVs in the current folder", true);
+  addZones(sources);
+});
+
+document.getElementById("ms-remap").addEventListener("click", async () => {
+  if (!state.zones.length) return;
+  state.zones = await api("POST", "/api/multisample/remap", { zones: state.zones, gap_rule: document.getElementById("ms-gap").value });
+  renderZones();
+});
+
+document.getElementById("ms-clear").addEventListener("click", () => { state.zones = []; renderZones(); });
+
+function renderZones() {
+  const tbody = document.querySelector("#ms-table tbody");
+  document.getElementById("ms-empty").hidden = state.zones.length > 0;
+  const num = (zone, key, min, max) =>
+    el("input", { type: "number", min, max, value: zone[key], oninput: (ev) => { zone[key] = Number(ev.target.value); renderKeyboard(); } });
+
+  tbody.replaceChildren(
+    ...state.zones.map((zone, i) =>
+      el("tr", {},
+        el("td", {}, el("button", { class: "small", onclick: () => play(zone.source) }, "▶"), " ", baseName(zone.source),
+          zone.warnings && zone.warnings.length ? el("div", { class: "warn", style: "font-size:12px" }, zone.warnings.join("; ")) : null),
+        el("td", {}, num(zone, "root", 0, 127), " ", el("span", { class: "muted" }, noteName(zone.root))),
+        el("td", {}, num(zone, "key_low", 0, 127), " - ", num(zone, "key_high", 0, 127)),
+        el("td", {}, num(zone, "vel_low", 0, 127), " - ", num(zone, "vel_high", 0, 127)),
+        el("td", {}, el("button", { class: "small", onclick: () => { state.zones.splice(i, 1); renderZones(); } }, "✕")))
+    )
+  );
+  renderKeyboard();
+}
+
+function renderKeyboard() {
+  const kb = document.getElementById("ms-keyboard");
+  const width = 100 / 128;
+  const roots = [...new Set(state.zones.map((z) => z.root))].sort((a, b) => a - b);
+  const nodes = [];
+  for (let octave = 0; octave < 11; octave++) {
+    nodes.push(el("span", { class: "oct", style: `left:${octave * 12 * width}%` }, "C" + (octave - 1)));
+  }
+  state.zones.forEach((z) => {
+    const hue = (roots.indexOf(z.root) * 47) % 360;
+    const top = 100 - (z.vel_high / 127) * 100;
+    const height = ((z.vel_high - z.vel_low + 1) / 128) * 100;
+    nodes.push(el("div", {
+      class: "zone",
+      title: `${baseName(z.source)}: ${noteName(z.key_low)}-${noteName(z.key_high)}, vel ${z.vel_low}-${z.vel_high}`,
+      style: `left:${z.key_low * width}%;width:${(z.key_high - z.key_low + 1) * width}%;top:${top}%;height:${height}%;background:hsl(${hue} 45% 40%)`,
+    }));
+    nodes.push(el("div", { class: "root", style: `left:${(z.root + 0.5) * width}%` }));
+  });
+  kb.replaceChildren(...nodes);
+}
+
+// ---------- projects ----------
+
+async function loadProjects() {
+  const wrap = document.getElementById("proj-list");
+  wrap.replaceChildren(el("p", { class: "muted" }, "Loading..."));
+  const projects = await api("GET", "/api/projects");
+  wrap.replaceChildren(
+    el("table", {},
+      el("thead", {}, el("tr", {}, ["Project", "WAVs in folder", "References", "Missing", "Unused in folder"].map((h) => el("th", {}, h)))),
+      el("tbody", {}, projects.map((p) =>
+        el("tr", {},
+          el("td", {}, p.name, p.is_autosave ? el("span", { class: "badge", style: "margin-left:6px" }, "autosave") : null),
+          el("td", {}, p.wav_files),
+          el("td", {}, p.references),
+          el("td", { class: p.missing.length ? "err" : "muted", title: p.missing.join("\n") }, p.missing.length || "0"),
+          el("td", { class: p.unused.length ? "warn" : "muted", title: p.unused.join("\n") }, p.unused.length ? p.unused.join(", ") : "0"))
+      )))
+  );
+}
+
+// ---------- start ----------
+
+async function start() {
+  const info = await api("GET", "/api/info");
+  state.roots = info.roots;
+  document.getElementById("card-path").textContent = info.card;
+  await loadLibrary();
+  tagChips(document.getElementById("b-tags"), state.buildTags);
+  renderPads();
+  renderZones();
+  await loadBrowser();
+}
+
+start().catch((err) => toast(err.message, true));

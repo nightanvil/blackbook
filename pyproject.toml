@@ -1,12 +1,15 @@
 [project]
 name = "blackbook"
-version = "0.0.1"
+version = "0.1.0"
 description = "Local organizer for 1010music blackbox 2 microSD cards"
 license = "MIT"
 license-files = ["LICENSE"]
 readme = "README.md"
 requires-python = ">=3.12"
 # Dependencies are maintained in requirements.txt and requirements-dev.txt
+
+[project.scripts]
+blackbook = "blackbook.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -16,4 +19,7 @@ build-backend = "hatchling.build"
 packages = ["src/blackbook"]
 
 [tool.ruff]
-line-length = 100
+line-length = 120
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
