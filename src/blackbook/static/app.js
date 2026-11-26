@@ -95,7 +95,6 @@ function setPlaying(source) {
 function markPlaying() {
   const active = state.playing && !player.paused ? state.playing : null;
   document.querySelectorAll("[data-src]").forEach((node) => node.classList.toggle("playing", node.dataset.src === active));
-  document.getElementById("stop-btn").disabled = !active && !wavePlayer.playing && !padPreview.node;
 }
 
 function stopAll() {
@@ -169,7 +168,6 @@ function play(source) {
 player.addEventListener("ended", () => setPlaying(null));
 player.addEventListener("pause", markPlaying);
 player.addEventListener("play", markPlaying);
-document.getElementById("stop-btn").addEventListener("click", stopAll);
 document.addEventListener("keydown", (ev) => {
   if (ev.key === "F1") { ev.preventDefault(); openHelp(); return; }
   if (ev.key === "Escape" && !document.getElementById("help").hidden) { closeHelp(); return; }
@@ -421,6 +419,7 @@ async function loadBrowser() {
 async function openFolder(root, path) {
   const data = await api("GET", `/api/browse?root=${encodeURIComponent(root)}&path=${encodeURIComponent(path)}`);
   state.browse = { root, path: data.path, entries: data.entries };
+  document.getElementById("br-root").value = root;
   document.getElementById("br-filter").value = "";
   renderBrowser();
 }
@@ -1288,6 +1287,8 @@ function resetBuilder() {
   renderPads();
   renderZones();
   renderMode();
+  // A new build starts with the sample browser at the top of the card
+  openFolder("card", "").catch(() => {});
 }
 
 async function loadIntoBuilder(ref, mode, switchView = true, acknowledged = false) {
@@ -1568,11 +1569,17 @@ async function pollCard() {
   try {
     present = (await api("GET", "/api/card/status")).present;
   } catch (_) { /* server unreachable */ }
+  if (present) state.cardEjected = false;
   const indicator = document.getElementById("card-state");
-  indicator.textContent = present ? "Card connected" : "Card not connected: switch the blackbox to microSD mode";
-  indicator.title = state.cardPath || "";
-  indicator.className = present ? "ok" : "err";
-  document.getElementById("eject-btn").hidden = !present;
+  const text = present
+    ? `Card connected${state.cardPath ? ": " + state.cardPath : ""}`
+    : state.cardEjected
+      ? "Card ejected, safe to remove. blackbook finds it again when you connect it."
+      : "Card not connected: switch the blackbox to microSD mode";
+  indicator.title = text;
+  indicator.setAttribute("aria-label", text);
+  indicator.className = "iconbtn cardicon " + (present ? "ok" : state.cardEjected ? "off" : "err");
+  document.getElementById("eject-btn").disabled = !present;
   document.getElementById("b-plan").disabled = !present;
   if (present && state.cardPresent === false) {
     toast("Card connected again, library reloaded");
@@ -1586,16 +1593,15 @@ async function pollCard() {
 document.getElementById("eject-btn").addEventListener("click", async (ev) => {
   const button = ev.currentTarget;
   button.disabled = true;
-  button.textContent = "Ejecting ...";
   try {
     await api("POST", "/api/card/eject");
+    state.cardEjected = true;
     await pollCard();
     await showMessage("Card ejected", "You can now unplug the blackbox or leave microSD mode.\n\nWhen you connect the card again, blackbook finds it by itself.");
   } catch (err) {
     await showMessage("The card could not be ejected", err.message);
   } finally {
-    button.disabled = false;
-    button.textContent = "Eject";
+    button.disabled = !state.cardPresent;
   }
 });
 

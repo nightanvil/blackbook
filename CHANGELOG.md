@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 ### Added
 
 - Pads: drag a pad onto another pad to move it, a filled pad swaps places. Copy, Paste and Clear as on the device (also Ctrl+C, Ctrl+V, Ctrl+X); Clear keeps the pad in the clipboard, Paste brings it back.
-- Header: loop switch and volume slider for all playback; the stop button keeps its place.
+- Header: loop switch and volume slider for all playback. Card state and eject are icons: green connected, red not connected, grey ejected.
 - Sample browser: play and stop button in every row, and a Preview switch to stop rows from playing when clicked.
 - Pad editor and audio editor show the full path of the sample.
 - Restoring a single WAV from the backup explains that only the file comes back and lists the patches and projects that use it, with a note when the length no longer fits.
@@ -27,7 +27,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 - All one-shot pad settings are confirmed on the device; the ? marks are gone. New pads get `velscreentrig="100"` like pads saved on the device.
 - The edit notice in the builder appears once when a patch is loaded: Keep editing, Save as new patch instead, or Discard and start empty. After a save the editing continues without asking again.
 - Sliders run the full width without a box around them; number fields fit values like -24.00.
-- The header adapts to narrow windows.
+- The header adapts to narrow windows. Playback stops with the play buttons or Escape; the stop button in the header is gone.
+- Starting a new build shows the sample browser at the top of the card.
 - Restoring from the backup asks in a blackbook dialog instead of a browser dialog.
 - New icon in the top bar, the help, the browser tab and the README.
 

@@ -71,7 +71,6 @@ body {
 }
 .topright { display: flex; gap: 6px; align-items: center; justify-content: flex-end; min-width: 0; }
 .topright > * { flex: none; }
-.topright #card-state { flex: 0 1 auto; min-width: 24px; }
 /* Narrow windows: tighter views, then the volume slider and the PID give way */
 @media (max-width: 1250px) { .topbar nav button { padding: 7px 9px; } .topinner { gap: 8px; } }
 @media (max-width: 1050px) {
@@ -88,9 +87,14 @@ body {
   .topbar nav button { padding: 7px 6px; }
 }
 .sep { width: 1px; height: 18px; background: var(--panel-3); margin: 0 4px; }
-#card-state { font-size: 12px; padding: 3px 10px; border-radius: 12px; background: var(--panel-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Card state as an icon: green connected, red not connected, grey ejected */
+#card-state { cursor: help; }
+#card-state:hover { background: none; }
 #card-state.ok { color: var(--ok); }
 #card-state.err { color: var(--err); }
+#card-state.off { color: var(--muted); }
+#eject-btn:disabled { opacity: .35; cursor: default; }
+#eject-btn:disabled:hover { background: none; color: var(--muted); }
 .iconbtn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 32px; padding: 0; background: transparent; border: none; color: var(--muted); border-radius: var(--radius); }
 .iconbtn:hover { color: var(--text); background: var(--panel-2); }
 .iconbtn svg, .iconbtn img { display: block; }

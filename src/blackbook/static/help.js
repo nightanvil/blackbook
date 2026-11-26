@@ -80,8 +80,8 @@ ${todo}` },
     {
       id: "card", title: "Card and microSD mode",
       html: `
-<p>While the blackbox is in microSD mode, the computer sees the card like a USB stick and the blackbox itself cannot be used. Leave microSD mode to play, switch back to work with blackbook. blackbook notices both and shows the state at the top right.</p>
-<p>Before you unplug the blackbox or leave microSD mode, click <b>Eject</b> at the top right. blackbook writes everything to the card and ejects it through the operating system. If another program still uses the card, for example a file manager window that shows a folder on the card, blackbook says so: close it and click Eject again. When you connect the card again, blackbook finds it by itself.</p>
+<p>While the blackbox is in microSD mode, the computer sees the card like a USB stick and the blackbox itself cannot be used. Leave microSD mode to play, switch back to work with blackbook. blackbook notices both and shows the state at the top right: the card icon is green when the card is connected, red when it is not, grey after Eject.</p>
+<p>Before you unplug the blackbox or leave microSD mode, click the <b>eject icon</b> (triangle over a line) at the top right. blackbook writes everything to the card and ejects it through the operating system. If another program still uses the card, for example a file manager window that shows a folder on the card, blackbook says so: close it and click Eject again. When you connect the card again, blackbook finds it by itself.</p>
 ${todo}`,
     },
     {

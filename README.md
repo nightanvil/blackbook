@@ -146,7 +146,7 @@ blackbook opens in your browser at <http://127.0.0.1:8765/>. If the browser does
 
 Connect the blackbox 2 over USB and switch it to **microSD mode** (or put its card into a card reader). blackbook finds the card by itself, also when you connect it later.
 
-Before you unplug the blackbox or leave microSD mode, click **Eject** at the top right. blackbook writes everything to the card and ejects it, then it is safe to remove.
+Before you unplug the blackbox or leave microSD mode, click the **eject icon** (triangle over a line) at the top right. blackbook writes everything to the card and ejects it, then it is safe to remove.
 
 A window with text (the terminal) stays open while blackbook runs. **Keep it open** while you work. To stop blackbook, click the power button at the top right, close that window or press `Ctrl+C` in it. The round arrow next to it restarts blackbook. The number after the version at the top left is the process id (PID) of blackbook, useful when you need to end it in the task manager.
 
