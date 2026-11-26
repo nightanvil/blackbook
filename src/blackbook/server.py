@@ -552,6 +552,12 @@ def create_app(
     @app.post("/api/build/plan")
     def build_plan(body: BuildIn) -> dict:
         plan = make_plan(body)
+        repo = snapshots.repo
+        if repo is None or not repo.initialized:
+            plan.warnings.append(
+                "No backup is set up, this change is not saved in a snapshot. Set up the backup in the Backup tab "
+                "or keep your own copy of the card."
+            )
         return {
             "ok": plan.ok,
             "target": card.relative(plan.target_dir) if plan.target_dir.is_relative_to(card.root) else "",

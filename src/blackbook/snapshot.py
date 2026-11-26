@@ -145,8 +145,8 @@ class FileChange:
 
 
 GIT_MISSING = (
-    "git is not installed. The backup needs it: on Windows install Git for Windows from https://git-scm.com, "
-    "on Linux the package 'git', on macOS run 'xcode-select --install'. Then restart blackbook."
+    "git is not installed, so blackbook cannot make backups. Everything else works. "
+    "How to install git: see 'What is git' in the help (?). Then close blackbook and start it again."
 )
 
 

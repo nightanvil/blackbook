@@ -32,6 +32,24 @@ ${todo}`,
     { id: "projects", title: "Projects", html: `<p>The projects on the card.</p>${todo}` },
     { id: "backup", title: "Backup", html: `<p>Snapshots of the card in a backup folder, with history, diff and restore.</p>${todo}` },
     {
+      id: "git", title: "What is git",
+      html: `
+<p>git is a free program that keeps every version of a set of files. blackbook uses it as a <b>time machine for your card</b>:</p>
+<ul>
+  <li>A <b>snapshot</b> stores the state of the card at one moment: when you connect the card, before blackbook writes and after it has written.</li>
+  <li>In <b>Backup</b> you see all snapshots and what changed, and you can bring back a file, a folder or the whole card.</li>
+  <li>Unchanged files are stored only once. The snapshots stay in a folder on your computer, nothing is uploaded.</li>
+</ul>
+<p>You never use git yourself, it only has to be installed. <b>Without git</b> blackbook works the same, only Backup is switched off. Then copy the whole card to your computer yourself before you write to it.</p>
+<h3>Install git</h3>
+<ul>
+  <li><b>Windows:</b> in PowerShell <code>winget install --id Git.Git -e --source winget</code>, or the installer from <a href="https://git-scm.com/downloads/win" target="_blank" rel="noopener noreferrer">git-scm.com</a> (click Next on every page).</li>
+  <li><b>macOS:</b> in Terminal <code>xcode-select --install</code>.</li>
+  <li><b>Linux:</b> <code>sudo apt install git</code> (Ubuntu, Debian, Mint), <code>sudo dnf install git</code> (Fedora), <code>sudo pacman -S git</code> (Arch, CachyOS), <code>sudo zypper install git</code> (openSUSE).</li>
+</ul>
+<p>Then close blackbook (the terminal window) and start it again.</p>`,
+    },
+    {
       id: "card", title: "Card and microSD mode",
       html: `
 <p>While the blackbox is in microSD mode, the computer sees the card like a USB stick and the blackbox itself cannot be used. Leave microSD mode to play, switch back to work with blackbook. blackbook notices both and shows the state at the top right.</p>

@@ -167,9 +167,12 @@ def main() -> None:
     run(UV_BIN, "pip", "install", "--python", VENV_PYTHON, "-r", requirements)
     STAMP.write_text(stamp_value(args.dev))
 
-    activate = r".venv\Scripts\activate" if IS_WINDOWS else "source .venv/bin/activate"
     print()
-    print("Done. Activate with: " + activate)
+    if args.if_needed:
+        print("Setup finished.")
+    else:
+        activate = r".venv\Scripts\activate" if IS_WINDOWS else "source .venv/bin/activate"
+        print("Done. Activate with: " + activate)
 
 
 if __name__ == "__main__":
