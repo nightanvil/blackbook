@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ## [Unreleased]
 
+### Documentation
+
+- README: blackbook updates itself, stated at the top and in Updating. Windows is tested; macOS is not tested and needs feedback from Mac users.
+
 ## [0.1.3] - 2026-11-26
 
 ### Documentation

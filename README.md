@@ -7,6 +7,9 @@
 
 blackbook is free and stays free. If it helps you, you can buy me a coffee on [Ko-fi](https://ko-fi.com/nightanvil).
 
+> [!TIP]
+> **blackbook updates itself.** You install it once. When a new version is out, blackbook shows a bar at the top: click **Update now**, then **OK**, and start blackbook again. No new download, no new setup, your settings and your backup stay. Details: [Updating](#updating).
+
 **Roadmap**
 
 | Status | What |
@@ -125,12 +128,12 @@ If it says "command not found", install it with the command for your distributio
    bash start.sh
    ```
 
-**Windows** (not tested yet)
+**Windows** (tested)
 
 1. Open the blackbook folder and double-click **`start.bat`**.
 2. If Windows shows "Windows protected your PC", click **More info**, then **Run anyway**. This appears because blackbook is not signed by a company.
 
-**macOS** (not tested yet)
+**macOS** (not tested, see [Tested systems](#tested-systems))
 
 1. In the Finder, right-click **`start.command`**, choose **Open** and confirm. Later a double-click is enough.
 
@@ -171,6 +174,8 @@ The built-in help (**?** at the top right, or `F1`) explains more.
 
 ## Updating
 
+**You never have to download blackbook again.** It updates itself from inside the program.
+
 When blackbook starts, it asks GitHub whether a newer version exists. Nothing about you or your card is sent, it only reads the version number of the latest release.
 
 If there is a new version, a bar at the top shows it:
@@ -205,11 +210,11 @@ The theme (dark or light) is stored in your browser.
 
 | System | Status |
 |---|---|
-| Linux | tested |
-| Windows | should work, not tested yet |
-| macOS | should work, not tested yet |
+| Linux | tested, including the update |
+| Windows | tested, including the update |
+| macOS | **not tested**, should work |
 
-Feedback from Windows and macOS users is very welcome.
+I have no Mac and cannot test blackbook on macOS. If you use a Mac, please try it and [tell me](https://github.com/nightanvil/blackbook/issues) whether it works, what went wrong, or that everything was fine. That helps everyone else on a Mac.
 
 ## Feedback
 
