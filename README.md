@@ -1,18 +1,18 @@
 # blackbook
 
-Lokaler Organizer für die microSD-Karte des 1010music blackbox 2. Verwaltet Projekte, Patches und Samples, vergibt Tags und benennt Dateien um, wobei alle Verweise in `project.xml`, `patch.xml` und `patchindex.xml` konsistent bleiben.
+Werkzeug für die microSD-Karte des 1010music blackbox 2. Baut Patches am Rechner, bindet einen externen Audio-Editor ein, sichert die Karte versioniert und organisiert Projekte, Patches und Samples. Alle Verweise in `project.xml`, `patch.xml` und `patchindex.xml` bleiben dabei konsistent.
 
 Status: Konzeptphase, noch kein lauffähiger Code.
 
 ## Funktionsumfang (geplant)
 
-- Bibliothek: Übersicht aller Projekte, Patches und Samples mit Filter, Vorhören und Wellenform
-- Tagging: Tags für Patches einzeln oder in Masse setzen, schreibt `patchindex.xml`
-- Umbenennen: WAVs, Patch-Ordner und Projekte umbenennen, inklusive aller abhängigen XML-Verweise
-- Batch-Rename nach frei definierbarem Namensschema
-- Recordings aus Projekten als UserPatch übernehmen
-- Prüfungen: kaputte Verweise, verwaiste WAVs, Duplikate, Speicherverbrauch
-- Sicherheit: Dry-Run mit Diff-Vorschau und Backup vor jedem Schreibvorgang
+- Patch-Builder: OneShot-, Multisample-, Loop-, Slicer- und Shredder-Patches am Rechner erstellen und bearbeiten, inklusive Tags
+- Externer Editor: WAVs in Reaper oder einem anderen Editor bearbeiten, Längen und Verweise werden automatisch nachgezogen
+- Backup: inkrementelle Snapshots mit Deduplizierung, Diff zwischen beliebigen Ständen, Wiederherstellung bis auf Dateiebene
+- Organisation: Bibliothek mit Vorhören, Tagging in Masse, Umbenennen inklusive Verweise, Batch-Rename, Prüfungen
+- Sicherheit: Dry-Run mit Diff-Vorschau und Snapshot vor jedem Schreibvorgang
+
+Details in [docs/funktionen.md](docs/funktionen.md).
 
 ## Plattformen
 
@@ -34,6 +34,7 @@ Status: Konzeptphase, noch kein lauffähiger Code.
 ```
 blackbook/
 ├── docs/
+│   ├── funktionen.md       Patch-Builder, externer Editor, Backup, Organisation
 │   ├── kartenformat.md     Aufbau der microSD-Karte und der XML-Dateien
 │   └── architektur.md      Aufbau der Anwendung und Schreibregeln
 ├── src/

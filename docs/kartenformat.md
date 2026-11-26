@@ -106,6 +106,41 @@ Samples werden ausschliesslich über das Attribut `filename` in `<cell type="sam
 
 Beide Formen in `project.xml` kommen im Factory Content vor und werden vom Gerät geladen.
 
+### Längen und Positionen
+
+`samstart`, `samlen`, `loopstart`, `loopend` und `<slice pos>` sind Angaben in Sample-Frames. Beispiel: `Chords_Junos_24_0_127.wav` hat 118461 Frames bei 44,1 kHz stereo, die zugehörige Cell hat `samlen="118461"`.
+
+Diese Werte stehen auch in jeder `project.xml`, die das WAV nutzt. Eine Änderung der WAV-Länge betrifft damit alle referenzierenden Dateien.
+
+### OneShot-Patches
+
+Ein OneShot-Patch hat 16 Pads. Jedes Pad ist eine `saminst`-Cell mit `celldisppos` 0 bis 15, gefolgt von einer `samasst`-Cell mit dem WAV. Ein Pad ohne Sample hat keine `samasst`-Cell.
+
+### Multisample-Patches
+
+Jedes WAV ist eine `samasst`-Cell mit Key- und Velocity-Bereich:
+
+```xml
+<params filename="Chords_Junos_25_0_127.wav" rootnote="25"
+        keyrangebottom="25" keyrangetop="25"
+        velrangebottom="0" velrangetop="128" ... />
+```
+
+- Notennummern 0 bis 127 (MIDI).
+- Obergrenze der Velocity ist im Factory Content 128, nicht 127.
+- Das tiefste Sample reicht bis Note 0, das höchste bis Note 127.
+- Factory-Dateinamen folgen dem Muster `<Name>_<Note>_<VelVon>_<VelBis>.wav`.
+
+### WAV-Dateien im Factory Content
+
+- PCM 24 Bit überwiegt, dazu 16 Bit.
+- Samplerate 44,1 und 48 kHz, mono und stereo.
+- 1269 Dateien haben einen `JUNK`-Chunk vor dem `fmt`-Chunk. WAVs sind daher chunkweise zu lesen, nicht über feste Header-Offsets.
+
+### Parameterwerte
+
+Parameter sind Ganzzahlen in geräteinternen Einheiten, zum Beispiel `gaindb="6800"`, `trkgain="-9200"`, `envsus="1000"`. Die Umrechnung in die am Gerät angezeigten Werte ist nicht dokumentiert.
+
 ### Abhängigkeiten beim Umbenennen
 
 | Umbenannt wird | Anzupassen |
@@ -131,3 +166,7 @@ Beide Formen in `project.xml` kommen im Factory Content vor und werden vom Gerä
 - Toleranz des Geräts gegenüber geänderter Attributreihenfolge, Einrückung, Zeilenenden und fehlendem BOM
 - Unterstützung frei definierter Tags
 - Gross- und Kleinschreibung bei Pfaden (FAT32 und exFAT sind case-insensitive, Linux-Dateisysteme eines Spiegels nicht)
+- Umrechnung der Parameterwerte in Anzeigewerte (dB, Prozent, Millisekunden)
+- Unterstützte WAV-Formate über den Factory Content hinaus (32 Bit Float, 96 kHz)
+- Verwendung von Cue-Markern im WAV durch das Gerät
+- Maximale Länge von Datei- und Patch-Namen
