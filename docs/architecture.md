@@ -9,7 +9,7 @@
 | Operations | rename, tag, move, delete as a change plan |
 | Patch builder | generates `patch.xml` from built-in templates per patch type and the UI input |
 | WAV module | reads WAV chunks (format, frames, cue markers), computes waveform data for the UI |
-| Editor bridge | launches external editors, generates Reaper projects, watches for changed WAVs |
+| Audio editor | edit sessions with undo in memory (`audioedit.py`), waveform view with zoom, selection and zero crossing snapping in the browser (`static/waveform.js`) |
 | Snapshot service | git backup of the card: mirror, commit, history, diff, restore, card connection watcher |
 | Eject | flushes all writes and ejects the card through the operating system: `udisksctl` (fallback `gio`) on Linux, `diskutil` on macOS, volume lock, dismount and eject via the Windows API |
 | Server control | `/api/shutdown` ends uvicorn cleanly, `/api/restart` does the same and starts blackbook again with the same arguments: `os.execv` on Linux and macOS (same PID), a child process in the same console on Windows |

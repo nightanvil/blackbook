@@ -14,10 +14,10 @@ blackbook is free and stays free. If it helps you, you can buy me a coffee on [K
 
 | Status | What |
 |---|---|
-| In progress | One-shot patches complete: filter, envelope, LFO, sends, launch, poly |
-| Next | Slicer, loop, shredder, multisample loop points, waveform view |
-| Later | External audio editor (Reaper), project tools (pack, clean, rename), sample organization, card and firmware tools |
-| Done | Library, tags, one-shot and multisample basics, backup, installer, updates |
+| In progress | One-shot patches: confirm the value encoding on the device; audio editor for library and project samples |
+| Next | Slicer, loop, shredder, multisample loop points |
+| Later | External editor (Reaper), project tools (pack, clean, rename), sample organization, card and firmware tools |
+| Done | Library, tags, one-shot pad editor with all device settings, waveform and audio editor, multisample basics, backup, installer, updates, eject |
 
 ## What it does
 
@@ -25,6 +25,7 @@ blackbook is free and stays free. If it helps you, you can buy me a coffee on [K
 - **Tags:** tag your own patches, as on the device.
 - **Build:** one-shot kits on 16 pads with all pad settings of the device (sound, setup, envelope, LFO, start and length), and multisample instruments, by drag and drop. Key and velocity ranges are read from the file names.
 - **Edit:** change your own patches in place. Sequences, modulation and everything blackbook does not know stay untouched.
+- **Audio editor:** waveform view, trim, fades, gain, normalize and reverse with undo, edges snap to zero crossings so nothing clicks.
 - **Templates:** any one-shot or multisample patch, also factory patches, as a starting point for a new one.
 - **Projects:** missing samples and unused files per project.
 - **Backup:** snapshots of the card with history, comparison and restore. Automatic when the card is connected, and before and after blackbook writes.

@@ -65,43 +65,41 @@ Gaps between samples are filled by a selectable rule: extend upwards, extend dow
 - `samlen`, `loopend` and slice positions within the sample length
 - patch name unique within its type folder
 
-## 2. External audio editor
+## 2. Audio editor
 
-Opens a WAV from the library, a patch or a project in an external editor and applies the result automatically.
+blackbook has its own waveform view and editor for WAV files. No external program is needed.
 
-### Workflow
+### Waveform in the pad editor
 
-1. Action "Open in editor" on a WAV.
-2. blackbook creates a snapshot of the original and starts the editor.
-3. A file watcher detects the written WAV.
-4. blackbook reads length and format again and updates all references to the WAV.
-5. The matching `.wav.pk` is deleted; the device recreates it.
+The WAV tab of a one-shot pad shows the sample with the playback window. The white lines set `samstart` and `samlen`; the file is not changed. Start and length can also be typed in frames.
 
-### Updates on changed length
+### Editing a sample
 
-All `samasst` entries in `patch.xml` and `project.xml` that point to the WAV are affected.
+"Edit audio" opens the editor for the sample of the selected pad.
 
-| Attribute | Rule |
+| Operation | Effect |
 |---|---|
-| `samlen` | new length in frames |
-| `samstart`, `loopstart`, `loopend` | value equal to the old length becomes the new length, otherwise clamped to the new length |
-| `<slice pos>` | clamped to the new length, optionally replaced by the cue markers of the WAV |
+| Trim to selection | keeps only the selection |
+| Delete | removes the selection |
+| Silence | replaces the selection with silence |
+| Fade in, fade out | equal power fade over the selection |
+| Reverse | selection or whole sample |
+| Gain | level change in dB, selection or whole sample |
+| Normalize | loudest peak to the given level in dB, selection or whole sample |
 
-Before writing, blackbook shows the affected files and changes.
+- Undo and redo up to 50 steps.
+- Mouse wheel zooms around the pointer, Shift+wheel scrolls; at close zoom the single samples are drawn.
+- Space plays the selection or from the cursor.
+- **Snap to zero** (on by default): selection edges and the playback window land on the nearest zero crossing of the channel sum, so cuts and pad starts do not click.
 
-### Reaper
+### Saving
 
-For Reaper, blackbook generates a project file (`.rpp`) in a working directory:
+"Use edited sample" writes the result as `<name>_edit.wav` into the local inbox (`.blackbook/inbox/edits/`) and puts it on the pad. Saving the patch copies it into the patch folder. The original file on the card is not changed. The edited file keeps bit depth, sample rate and channels of the original; samples outside the edited range are written back bit-identical.
 
-- A working copy of the original WAV is placed in the working directory and inserted as an item.
-- The render target is the original path on the card, with the format and sample rate of the original.
-- Markers in the Reaper project are written as cue markers into the WAV and serve as slice points for the slicer.
+### Planned
 
-A render in Reaper writes the WAV directly to its place, the file watcher handles the rest.
-
-### Other editors
-
-Any editor that edits WAVs destructively and saves in place (for example Audacity, Tenacity, ocenaudio) is integrated via a configurable launch command. The placeholder `{file}` stands for the path of the WAV.
+- Editing samples from the library and from projects, with the choice to overwrite the original: blackbook then lists every patch and project using the file and adjusts `samlen`, `loopstart`, `loopend` and slice positions.
+- An external editor (Reaper, Audacity and others) via a configurable launch command, using the same reference update.
 
 ## 3. Backup with diff and delta
 

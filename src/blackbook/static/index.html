@@ -204,6 +204,20 @@
     <div class="dialog-actions"><button id="update-ok" class="primary">OK, stop blackbook</button></div>
   </dialog>
 
+  <dialog id="audio-editor">
+    <div class="dialog-body">
+      <div class="ae-head"><h2 id="ae-title">Edit audio</h2><span class="muted" id="ae-format"></span></div>
+      <div class="ae-toolbar" id="ae-toolbar"></div>
+      <canvas id="ae-wave" class="ae-wave"></canvas>
+      <div class="ae-status muted" id="ae-status"></div>
+      <p class="hint hint-small">Drag to select, Shift+click extends the selection. Mouse wheel zooms, Shift+wheel scrolls, double click clears the selection. Space plays the selection or from the cursor. With "Snap to zero" every edge lands on a zero crossing, so cuts do not click.</p>
+    </div>
+    <div class="dialog-actions">
+      <button id="ae-cancel">Cancel</button>
+      <button id="ae-apply" class="primary">Use edited sample</button>
+    </div>
+  </dialog>
+
   <dialog id="message-dialog">
     <div class="dialog-body" id="message-content"></div>
     <div class="dialog-actions" id="message-actions"></div>
@@ -222,6 +236,7 @@
   <div id="toast"></div>
   <audio id="player"></audio>
   <script src="/static/help.js"></script>
+  <script src="/static/waveform.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

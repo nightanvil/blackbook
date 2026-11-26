@@ -118,6 +118,7 @@ document.addEventListener("keydown", (ev) => {
   if (ev.key === "F1") { ev.preventDefault(); openHelp(); return; }
   if (ev.key === "Escape" && !document.getElementById("help").hidden) { closeHelp(); return; }
   if (ev.key === "Escape" && state.playing) stop();
+  if (ev.key === "Escape" && wavePlayer.playing) wavePlayer.stop();
 });
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -643,27 +644,214 @@ function paramControl(pad, param) {
   return el("label", { class: "pnum" }, el("span", { class: "plabel" }, param.label, mark, el("span", { class: "unit" }, param.unit)), el("span", { class: "prow" }, slider, number));
 }
 
-async function ensureFrames(pad) {
-  if (pad.frames != null || !pad.source) return;
-  try {
-    pad.frames = (await api("GET", `/api/wavinfo?src=${encodeURIComponent(pad.source)}`)).frames;
-  } catch (_) { pad.frames = null; }
+// ---------- waveform and audio editor ----------
+
+state.snapZero = true;
+const pcmCache = new Map();
+
+async function loadPcm(source) {
+  if (pcmCache.has(source)) return pcmCache.get(source);
+  const response = await fetch("/api/pcm?src=" + encodeURIComponent(source));
+  if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || response.statusText);
+  const rate = Number(response.headers.get("X-Sample-Rate"));
+  const channels = deinterleave(await response.arrayBuffer(), Number(response.headers.get("X-Channels")));
+  const entry = { rate, channels };
+  pcmCache.set(source, entry);
+  // Keep the cache small, samples can be long
+  while (pcmCache.size > 6) pcmCache.delete(pcmCache.keys().next().value);
+  return entry;
 }
 
-function wavTab(pad) {
-  const frames = pad.frames;
-  if (frames == null) return [el("p", { class: "muted" }, "Reading the file ...")];
-  const start = pad.start ?? 0;
-  const length = pad.length ?? frames - start;
-  const field = (label, value, onchange) => el("label", {}, label,
-    el("input", { type: "number", min: 0, max: frames, step: 1, value, onchange: (ev) => { onchange(Math.round(Number(ev.target.value))); renderPadEditor(); } }));
+function snapToggle(onchange) {
+  return el("label", { class: "check", title: "Every edge lands on the nearest zero crossing, so the sample starts and ends without a click" },
+    el("input", { type: "checkbox", checked: state.snapZero, onchange: (ev) => { state.snapZero = ev.target.checked; if (onchange) onchange(); } }), "Snap to zero");
+}
+
+function fmtTime(frames, rate) {
+  return `${(frames / rate).toFixed(3)} s`;
+}
+
+function wavTab(pad, slot) {
+  const canvas = el("canvas", { class: "pad-wave" });
+  const startInput = el("input", { type: "number", min: 0, step: 1 });
+  const lengthInput = el("input", { type: "number", min: 0, step: 1 });
+  const info = el("span", { class: "muted" }, "Reading the file ...");
+  const view = new WaveView(canvas, {
+    mode: "region",
+    snap: () => state.snapZero,
+    onChange: () => {
+      pad.start = view.region.start;
+      pad.length = view.region.end - view.region.start;
+      syncInputs();
+    },
+  });
+  const syncInputs = () => {
+    const r = view.region;
+    if (!r) return;
+    startInput.value = r.start;
+    lengthInput.value = r.end - r.start;
+    info.textContent = `${view.frames} frames, plays ${fmtTime(r.end - r.start, view.rate)}`;
+  };
+  const setWindow = (start, length) => {
+    const frames = pad.frames;
+    pad.start = Math.min(Math.max(0, Math.round(start)), frames - 1);
+    pad.length = Math.min(Math.max(1, Math.round(length)), frames - pad.start);
+    view.region = { start: pad.start, end: pad.start + pad.length };
+    view.draw();
+    syncInputs();
+  };
+  startInput.addEventListener("change", () => {
+    const start = view.snapFrame(Number(startInput.value));
+    setWindow(start, view.region.end - start);
+  });
+  lengthInput.addEventListener("change", () => {
+    const start = view.region.start;
+    setWindow(start, view.snapFrame(start + Number(lengthInput.value)) - start);
+  });
+
+  loadPcm(pad.source).then(({ rate, channels }) => {
+    if (state.pads[slot] !== pad) return;
+    view.setAudio(channels, rate);
+    pad.frames = view.frames;
+    const start = Math.min(pad.start ?? 0, view.frames - 1);
+    const length = pad.length == null || pad.length <= 0 ? view.frames - start : Math.min(pad.length, view.frames - start);
+    view.region = { start, end: start + length };
+    if (pad.start != null || pad.length != null) { pad.start = start; pad.length = length; }
+    view.draw();
+    syncInputs();
+  }).catch((err) => { info.textContent = err.message; info.className = "err"; });
+
   return [
+    el("div", { class: "wav-tools" },
+      el("button", { class: "small", onclick: () => {
+        if (wavePlayer.playing) return wavePlayer.stop();
+        const r = view.region; if (r) wavePlayer.play(view, r.start, r.end);
+      } }, "▶ Play region"),
+      snapToggle(),
+      el("button", { class: "small", onclick: () => setWindow(0, pad.frames) }, "Whole file"),
+      el("button", { class: "small", onclick: () => openAudioEditor(slot) }, "Edit audio ..."),
+      info),
+    canvas,
     el("div", { class: "pad-form" },
-      field("Start (frames)", start, (v) => { pad.start = Math.min(Math.max(v, 0), frames); pad.length = Math.min(length, frames - pad.start); }),
-      field("Length (frames)", length, (v) => { pad.start = start; pad.length = Math.min(Math.max(v, 0), frames - start); }),
-      el("label", {}, "File", el("span", { class: "muted" }, `${frames} frames`)),
-      el("label", {}, " ", el("button", { class: "small", onclick: () => { pad.start = 0; pad.length = frames; renderPadEditor(); } }, "Whole file"))),
+      el("label", {}, "Start (frames)", startInput),
+      el("label", {}, "Length (frames)", lengthInput)),
+    el("p", { class: "muted hint-small" }, "Drag the white lines to set where the pad starts and stops. The file itself is not changed; Edit audio cuts, fades and normalizes the sample."),
   ];
+}
+
+async function openAudioEditor(slot) {
+  const pad = state.pads[slot];
+  if (!pad || !pad.source) return;
+  const dialog = document.getElementById("audio-editor");
+  const canvas = document.getElementById("ae-wave");
+  let session;
+  try {
+    session = await api("POST", "/api/audio-edit/open", { source: pad.source });
+  } catch (err) {
+    toast(err.message, true);
+    return;
+  }
+  // A fresh canvas per session drops the handlers of the previous editor view
+  const fresh = canvas.cloneNode(false);
+  canvas.replaceWith(fresh);
+  const v = new WaveView(fresh, { mode: "select", snap: () => state.snapZero, onChange: () => status() });
+
+  const reload = async () => {
+    const response = await fetch(`/api/audio-edit/${session.id}/pcm`);
+    v.setAudio(deinterleave(await response.arrayBuffer(), session.channels), session.sample_rate);
+    status();
+  };
+  const sel = () => v.selection || { start: 0, end: v.frames };
+  const status = () => {
+    const s = v.selection;
+    const rate = session.sample_rate;
+    document.getElementById("ae-status").textContent = s
+      ? `Selection ${s.start} to ${s.end} (${s.end - s.start} frames, ${fmtTime(s.end - s.start, rate)})  ·  file ${v.frames} frames, ${fmtTime(v.frames, rate)}`
+      : `No selection, operations apply to the whole sample  ·  file ${v.frames} frames, ${fmtTime(v.frames, rate)}`;
+    undoBtn.disabled = !session.can_undo;
+    redoBtn.disabled = !session.can_redo;
+  };
+  const run = async (op, value = 0, needsSelection = false) => {
+    if (needsSelection && !v.selection) { toast("Select a part of the sample first", true); return; }
+    const { start, end } = sel();
+    try {
+      session = await api("POST", `/api/audio-edit/${session.id}/op`, { op, start, end, value });
+    } catch (err) { toast(err.message, true); return; }
+    if (op === "crop") v.selection = null;
+    else if (op === "delete") v.selection = null;
+    await reload();
+  };
+  const history = async (which) => {
+    session = await api("POST", `/api/audio-edit/${session.id}/${which}`);
+    v.selection = null;
+    await reload();
+  };
+  const playToggle = () => {
+    if (wavePlayer.playing) return wavePlayer.stop();
+    const s = v.selection;
+    wavePlayer.play(v, s ? s.start : (v.cursor ?? 0), s ? s.end : v.frames);
+  };
+
+  const gainInput = el("input", { type: "number", value: 3, step: 0.5, title: "dB" });
+  const normInput = el("input", { type: "number", value: -0.3, step: 0.1, max: 0, title: "Peak level in dB" });
+  const undoBtn = el("button", { class: "small", title: "Undo (Ctrl+Z)", onclick: () => history("undo") }, "Undo");
+  const redoBtn = el("button", { class: "small", title: "Redo (Ctrl+Shift+Z)", onclick: () => history("redo") }, "Redo");
+  const btn = (label, title, fn) => el("button", { class: "small", title, onclick: fn }, label);
+  fill(document.getElementById("ae-toolbar"),
+    el("div", { class: "grp" }, btn("▶ / ■", "Play or stop (Space)", playToggle)),
+    el("div", { class: "grp" }, btn("+", "Zoom in", () => v.zoom(0.5)), btn("-", "Zoom out", () => v.zoom(2)),
+      btn("Fit", "Show the whole sample", () => v.fit()), btn("Zoom to selection", "", () => v.zoomToSelection())),
+    el("div", { class: "grp" }, snapToggle()),
+    el("div", { class: "grp" },
+      btn("Trim to selection", "Keep only the selection", () => run("crop", 0, true)),
+      btn("Delete", "Remove the selection (Del)", () => run("delete", 0, true)),
+      btn("Silence", "Replace the selection with silence", () => run("silence", 0, true))),
+    el("div", { class: "grp" },
+      btn("Fade in", "Fade in over the selection", () => run("fade_in", 0, true)),
+      btn("Fade out", "Fade out over the selection", () => run("fade_out", 0, true)),
+      btn("Reverse", "Reverse the selection or the whole sample", () => run("reverse"))),
+    el("div", { class: "grp" },
+      btn("Gain", "Change the level by the given dB", () => run("gain", Number(gainInput.value))), gainInput, el("span", { class: "muted" }, "dB")),
+    el("div", { class: "grp" },
+      btn("Normalize", "Raise the loudest peak to the given level", () => run("normalize", Number(normInput.value))), normInput, el("span", { class: "muted" }, "dB")),
+    el("div", { class: "grp" }, undoBtn, redoBtn));
+
+  document.getElementById("ae-title").textContent = `Edit audio: ${session.name}`;
+  document.getElementById("ae-format").textContent = `${session.bits} bit, ${session.sample_rate / 1000} kHz, ${session.channels === 1 ? "mono" : "stereo"}`;
+
+  const keys = (ev) => {
+    if (ev.target.tagName === "INPUT") return;
+    if (ev.key === " ") { ev.preventDefault(); playToggle(); }
+    else if (ev.key === "Delete" || ev.key === "Backspace") { ev.preventDefault(); run("delete", 0, true); }
+    else if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "z") { ev.preventDefault(); history(ev.shiftKey ? "redo" : "undo"); }
+    else if (ev.key === "+") v.zoom(0.5);
+    else if (ev.key === "-") v.zoom(2);
+  };
+  const finish = async (apply) => {
+    wavePlayer.stop();
+    dialog.removeEventListener("keydown", keys);
+    dialog.onclose = null;
+    if (apply && session.changed) {
+      try {
+        const saved = await api("POST", `/api/audio-edit/${session.id}/save`);
+        const current = state.pads[slot];
+        if (current) {
+          Object.assign(current, { source: saved.source, filename: null, start: null, length: null, frames: saved.frames });
+        }
+        toast(`Edited sample stored as ${saved.name}. It is copied into the patch when you save the patch.`);
+      } catch (err) { toast(err.message, true); }
+    } else {
+      api("DELETE", `/api/audio-edit/${session.id}`).catch(() => {});
+    }
+    dialog.close();
+    renderPads();
+  };
+  document.getElementById("ae-cancel").onclick = () => finish(false);
+  document.getElementById("ae-apply").onclick = () => finish(true);
+  dialog.onclose = () => finish(false);
+  dialog.addEventListener("keydown", keys);
+  dialog.showModal();
+  await reload();
 }
 
 function renderPadEditor() {
@@ -687,15 +875,14 @@ function renderPadEditor() {
   const tab = state.padTab || "Sound";
   let content;
   if (tab === "WAV") {
-    if (pad.frames == null) ensureFrames(pad).then(() => { if (state.pads[slot] === pad) renderPadEditor(); });
-    content = wavTab(pad);
+    content = wavTab(pad, slot);
   } else {
     const visible = (state.padParams || []).filter((p) => p.group === tab && (!p.when || (pad.params[p.when[0]] ?? 0) === p.when[1]));
     content = [el("div", { class: "pad-form" }, visible.map((p) => paramControl(pad, p)))];
   }
   const unverified = (state.padParams || []).some((p) => p.group === tab && !p.verified);
 
-  panel.replaceChildren(
+  fill(panel,
     el("div", { class: "pad-head" },
       el("strong", {}, `Pad ${padNumber(slot)}: ${baseName(pad.source)}`),
       el("span", {},

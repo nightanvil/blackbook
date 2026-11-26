@@ -17,11 +17,11 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import builder, padparams, patchedit, settings, updater
+from . import audioedit, builder, padparams, patchedit, settings, updater
 from .backup import Backup
 from .card import Card, browse
 from .carddetect import find_cards
@@ -30,7 +30,7 @@ from .eject import EjectError, eject
 from .mapping import Zone, assign_key_ranges, automap, note_name
 from .patchindex import FACTORY_TAGS
 from .snapshot import CONFIG_NAME, SnapshotError, SnapshotRepo, default_target, git_executable
-from .wav import WavError, read_info
+from .wav import WavError, read_audio, read_info
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -94,6 +94,17 @@ class PadIn(BaseModel):
     params: dict[str, int] = Field(default_factory=dict)
     start: int | None = None
     length: int | None = None
+
+
+class EditOpenIn(BaseModel):
+    source: str
+
+
+class EditOpIn(BaseModel):
+    op: str
+    start: int
+    end: int
+    value: float = 0.0
 
 
 class ZoneIn(BaseModel):
@@ -310,7 +321,8 @@ def create_app(
     @app.middleware("http")
     async def flush_after_write(request: Request, call_next):
         response = await call_next(request)
-        if request.method in WRITE_METHODS:
+        # Audio edit sessions live in memory until saved to the local inbox, no card write involved
+        if request.method in WRITE_METHODS and not request.url.path.startswith("/api/audio-edit/"):
             await run_in_threadpool(flush_to_disk)
         return response
 
@@ -497,6 +509,82 @@ def create_app(
                 for s in samples
             ],
         }
+
+    editor = audioedit.Editor()
+
+    def edit_session(session_id: str) -> audioedit.Session:
+        try:
+            return editor.get(session_id)
+        except audioedit.EditError as exc:
+            raise HTTPException(404, str(exc)) from exc
+
+    @app.get("/api/pcm")
+    def pcm(src: str) -> Response:
+        """Audio of a WAV as interleaved float32 for the waveform view."""
+        path = sources.resolve(src)
+        try:
+            info = read_info(path)
+            data, rate = read_audio(path, info)
+        except (WavError, OSError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        headers = {"X-Sample-Rate": str(rate), "X-Channels": str(data.shape[1])}
+        return Response(audioedit.pcm_bytes(data), media_type="application/octet-stream", headers=headers)
+
+    @app.post("/api/audio-edit/open")
+    def audio_edit_open(body: EditOpenIn) -> dict:
+        try:
+            return editor.open(sources.resolve(body.source), body.source).state()
+        except audioedit.EditError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.get("/api/audio-edit/{session_id}/pcm")
+    def audio_edit_pcm(session_id: str) -> Response:
+        session = edit_session(session_id)
+        return Response(audioedit.pcm_bytes(session.data), media_type="application/octet-stream")
+
+    @app.post("/api/audio-edit/{session_id}/op")
+    def audio_edit_op(session_id: str, body: EditOpIn) -> dict:
+        session = edit_session(session_id)
+        try:
+            editor.apply(session, body.op, body.start, body.end, body.value)
+        except audioedit.EditError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return session.state()
+
+    @app.post("/api/audio-edit/{session_id}/undo")
+    def audio_edit_undo(session_id: str) -> dict:
+        session = edit_session(session_id)
+        editor.undo(session)
+        return session.state()
+
+    @app.post("/api/audio-edit/{session_id}/redo")
+    def audio_edit_redo(session_id: str) -> dict:
+        session = edit_session(session_id)
+        editor.redo(session)
+        return session.state()
+
+    @app.post("/api/audio-edit/{session_id}/save")
+    def audio_edit_save(session_id: str) -> dict:
+        """Store the edited audio in the inbox; a patch save copies it into the patch folder."""
+        session = edit_session(session_id)
+        folder = sources.roots["inbox"] / "edits"
+        folder.mkdir(parents=True, exist_ok=True)
+        stem = Path(session.name).stem
+        if not stem.endswith("_edit"):
+            stem += "_edit"
+        target = audioedit.free_name(folder, stem)
+        try:
+            audioedit.write_wav(target, session.data, session.sample_rate, session.bits, session.is_float)
+        except (audioedit.EditError, OSError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        editor.close(session_id)
+        rel = target.relative_to(sources.roots["inbox"]).as_posix()
+        return {"source": f"inbox:{rel}", "name": target.name, "frames": len(session.data)}
+
+    @app.delete("/api/audio-edit/{session_id}")
+    def audio_edit_close(session_id: str) -> dict:
+        editor.close(session_id)
+        return {"ok": True}
 
     @app.get("/api/padparams")
     def pad_params() -> list[dict]:
