@@ -45,4 +45,35 @@ else
     .tools/uv/uv run --no-project --python 3.12 bootstrap.py --if-needed || fail "the setup failed, see the messages above."
 fi
 
+# git is only needed for the backup; offer to install it, but start in any case
+if [ "$(uname -s)" = "Darwin" ]; then
+    if ! xcode-select -p >/dev/null 2>&1; then
+        echo
+        echo "git is missing, the backup needs it. A window from Apple opens: click Install."
+        echo "blackbook starts now anyway. After the installation, close blackbook and start it again."
+        xcode-select --install >/dev/null 2>&1
+    fi
+elif ! command -v git >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then install="sudo apt-get install -y git"
+    elif command -v dnf >/dev/null 2>&1; then install="sudo dnf install -y git"
+    elif command -v pacman >/dev/null 2>&1; then install="sudo pacman -S --noconfirm git"
+    elif command -v zypper >/dev/null 2>&1; then install="sudo zypper install -y git"
+    else install=""
+    fi
+    echo
+    echo "git is missing. blackbook works without it, but cannot make backups of your card."
+    if [ -n "$install" ] && [ -t 0 ]; then
+        echo "It can be installed now with: $install"
+        printf "Install git now? Your password is asked, nothing is shown while you type it. [y/N] "
+        read -r answer
+        case "$answer" in
+            y | Y | yes | j | J | ja) $install || echo "The installation of git failed, blackbook starts without backup." ;;
+            *) echo "Skipped. blackbook starts without backup." ;;
+        esac
+    else
+        echo "Install the package 'git' with your package manager, then start blackbook again."
+    fi
+    echo
+fi
+
 .venv/bin/blackbook "$@" || fail "see the messages above."

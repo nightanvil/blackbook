@@ -187,6 +187,10 @@ document.getElementById("help").addEventListener("click", (ev) => { if (ev.targe
 
 // ---------- navigation ----------
 
+function showView(view) {
+  document.querySelector(`.topbar nav button[data-view="${view}"]`).click();
+}
+
 document.querySelectorAll("nav button").forEach((button) => {
   button.addEventListener("click", () => {
     document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", b === button));
@@ -808,6 +812,7 @@ async function loadBackup() {
   const status = await api("GET", "/api/backup/status");
   const target = document.getElementById("bk-target");
   if (status.target && document.activeElement !== target) target.value = status.target;
+  if (!status.target && !target.value && state.suggestedBackup) target.value = state.suggestedBackup;
 
   const facts = [];
   if (!status.target) facts.push(["Backup", "no folder set"]);
@@ -987,6 +992,47 @@ async function showCodeCommit() {
   box.title = stale ? `blackbook was updated to ${info.current_commit}. Close the terminal window and start blackbook again.` : "";
   box.className = stale ? "err" : "muted";
   document.title = info.commit ? `blackbook ${info.commit}` : "blackbook";
+  state.suggestedBackup = info.suggested_backup;
+  renderBackupBanner(info);
+}
+
+// Ask once per session to set up the backup while the card is connected and nothing is backed up
+function renderBackupBanner(info) {
+  const banner = document.getElementById("backup-banner");
+  const show = state.cardPresent && !info.backup_ready && !state.backupBannerDismissed;
+  banner.hidden = !show;
+  const key = show ? `${info.git_available}|${info.suggested_backup}` : "";
+  if (!show || banner.dataset.key === key) return;
+  banner.dataset.key = key;
+  const later = el("button", { class: "small", onclick: () => { state.backupBannerDismissed = true; banner.hidden = true; } }, "Later");
+  if (info.git_available) {
+    fill(banner,
+      el("span", { class: "grow" }, el("strong", {}, "Your card is not backed up yet. "), "blackbook can keep snapshots of the card in ", el("code", {}, info.suggested_backup), "."),
+      el("button", { class: "primary small", onclick: setupBackup }, "Set up backup"),
+      el("button", { class: "small", onclick: () => { showView("backup"); document.getElementById("bk-target").focus(); } }, "Other folder"),
+      later);
+  } else {
+    fill(banner,
+      el("span", { class: "grow" }, el("strong", {}, "Backups are off: git is not installed. "), "Everything else works."),
+      el("button", { class: "small", onclick: () => openHelp("git") }, "How to install git"),
+      later);
+  }
+}
+
+async function setupBackup(ev) {
+  const button = ev.currentTarget;
+  button.disabled = true;
+  button.textContent = "Setting up ...";
+  try {
+    const status = await api("POST", "/api/backup/setup");
+    toast(`Backup set up in ${status.target}, first snapshot taken`);
+    document.getElementById("backup-banner").hidden = true;
+    await loadBackup();
+  } catch (err) {
+    toast(err.message, true);
+    button.disabled = false;
+    button.textContent = "Set up backup";
+  }
 }
 
 // Reload the backup view when snapshots or events changed while it is shown

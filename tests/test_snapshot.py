@@ -213,3 +213,18 @@ def test_info_reports_code_commit(card: Path, tmp_path: Path, monkeypatch) -> No
     with TestClient(create_app(card, [], tmp_path / "copies")) as client:
         info = client.get("/api/info").json()
     assert info["commit"] == info["current_commit"]
+
+
+def test_backup_setup_uses_suggested_folder(card: Path, tmp_path: Path, monkeypatch) -> None:
+    from blackbook import server
+
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    monkeypatch.setattr(server, "default_target", lambda: tmp_path / "Documents" / "blackbook-backup")
+    (card / "bb2-stng.mml").write_text("settings")
+    with TestClient(create_app(card, [], tmp_path / "copies")) as client:
+        info = client.get("/api/info").json()
+        assert info["backup_ready"] is False
+        assert info["suggested_backup"].endswith("blackbook-backup")
+        status = client.post("/api/backup/setup").json()
+        assert status["initialized"] is True and status["commits"] == 1
+        assert client.get("/api/info").json()["backup_ready"] is True

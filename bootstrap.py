@@ -38,6 +38,15 @@ STAMP = VENV_DIR / ".bootstrap-stamp"
 
 RELEASE_URL = "https://github.com/astral-sh/uv/releases/download/{version}/{asset}"
 
+# Official portable git for Windows (MinGit from the Git for Windows project), used when git is missing
+MINGIT_VERSION = "2.56.1"
+MINGIT_URL = "https://github.com/git-for-windows/git/releases/download/v{version}.windows.1/{asset}"
+MINGIT_ASSETS = {
+    "x86_64": ("MinGit-{version}-64-bit.zip", "4a92850b6e917da4fd010669b614b55dccf5b0ec333a534cc4be4700dfefdafd"),
+    "aarch64": ("MinGit-{version}-arm64.zip", "96571e442e90523a90e5fd8661b4c4e43bc192910f3c6db938816e6955b4cc8c"),
+}
+GIT_DIR = TOOLS_DIR / "git"
+
 
 def uv_asset() -> str:
     """Return the uv release asset name for the current platform."""
@@ -58,6 +67,41 @@ def uv_asset() -> str:
     if IS_WINDOWS:
         return f"uv-{arch}-pc-windows-msvc.zip"
     sys.exit("Unsupported platform: " + sys.platform)
+
+
+def machine_arch() -> str:
+    machine = platform.machine().lower()
+    return {"x86_64": "x86_64", "amd64": "x86_64", "aarch64": "aarch64", "arm64": "aarch64"}.get(machine, machine)
+
+
+def install_mingit() -> None:
+    """Download MinGit into .tools/git on Windows when no git is installed."""
+    if not IS_WINDOWS or shutil.which("git") or (GIT_DIR / "cmd" / "git.exe").exists():
+        return
+    entry = MINGIT_ASSETS.get(machine_arch())
+    if entry is None:
+        print("No portable git for this architecture, the backup needs an installed git.")
+        return
+    asset, expected = entry[0].format(version=MINGIT_VERSION), entry[1]
+    url = MINGIT_URL.format(version=MINGIT_VERSION, asset=asset)
+    print("git not found, downloading the official portable git (MinGit) for the backup")
+    print("Downloading " + url)
+    archive = download(url)
+    actual = hashlib.sha256(archive).hexdigest()
+    if actual != expected:
+        sys.exit(f"Checksum mismatch for {asset}: expected {expected}, got {actual}")
+    tmp_dir = GIT_DIR.with_name("git.tmp")
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+    with zipfile.ZipFile(io.BytesIO(archive)) as zf:
+        for member in zf.infolist():
+            # Refuse entries that would end up outside the target folder
+            try:
+                (tmp_dir / member.filename).resolve().relative_to(tmp_dir.resolve())
+            except ValueError:
+                sys.exit("Unexpected path in " + asset + ": " + member.filename)
+        zf.extractall(tmp_dir)
+    shutil.rmtree(GIT_DIR, ignore_errors=True)
+    tmp_dir.rename(GIT_DIR)
 
 
 def download(url: str) -> bytes:
@@ -123,7 +167,8 @@ def stamp_value(dev: bool) -> str:
 
 def up_to_date(dev: bool) -> bool:
     try:
-        return VENV_PYTHON.exists() and STAMP.read_text().strip() == stamp_value(dev)
+        git_ok = not IS_WINDOWS or shutil.which("git") or (GIT_DIR / "cmd" / "git.exe").exists()
+        return bool(git_ok) and VENV_PYTHON.exists() and STAMP.read_text().strip() == stamp_value(dev)
     except OSError:
         return False
 
@@ -165,6 +210,7 @@ def main() -> None:
 
     requirements = REPO_DIR / ("requirements-dev.txt" if args.dev else "requirements.txt")
     run(UV_BIN, "pip", "install", "--python", VENV_PYTHON, "-r", requirements)
+    install_mingit()
     STAMP.write_text(stamp_value(args.dev))
 
     print()

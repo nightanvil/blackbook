@@ -21,10 +21,10 @@
 <h3>What you need</h3>
 <ul>
   <li>The blackbox 2 connected over USB and switched to <b>microSD mode</b>, or its card in a card reader. blackbook finds the card by itself.</li>
-  <li>For the backup: <b>git</b> (Linux: package <code>git</code>, Windows: <a href="https://git-scm.com" target="_blank" rel="noopener noreferrer">Git for Windows</a>).</li>
+  <li>For the backup: <b>git</b>. The start script takes care of it, see "What is git".</li>
 </ul>
 <h3>Before the first save</h3>
-<p>Open <b>Backup</b>, choose a folder on your computer (not on the card) and click <b>Snapshot now</b>. From then on blackbook saves a snapshot of the card before and after every write, and every time the card is connected.</p>
+<p>When the card is connected and nothing is backed up yet, a bar at the top offers <b>Set up backup</b>. One click creates <code>blackbook-backup</code> in your documents folder and takes the first snapshot. From then on blackbook saves a snapshot before and after every write, and every time the card is connected. <b>Other folder</b> lets you choose a different place in Backup.</p>
 ${todo}`,
     },
     { id: "library", title: "Library", html: `<p>Factory and user patches with their tags and samples.</p>${todo}` },
@@ -40,8 +40,8 @@ ${todo}`,
   <li>In <b>Backup</b> you see all snapshots and what changed, and you can bring back a file, a folder or the whole card.</li>
   <li>Unchanged files are stored only once. The snapshots stay in a folder on your computer, nothing is uploaded.</li>
 </ul>
-<p>You never use git yourself, it only has to be installed. <b>Without git</b> blackbook works the same, only Backup is switched off. Then copy the whole card to your computer yourself before you write to it.</p>
-<h3>Install git</h3>
+<p>You never use git yourself. On Windows blackbook brings its own copy, on macOS and Linux the start script offers to install it. <b>Without git</b> blackbook works the same, only Backup is switched off. Then copy the whole card to your computer yourself before you write to it.</p>
+<h3>Install git yourself</h3>
 <ul>
   <li><b>Windows:</b> in PowerShell <code>winget install --id Git.Git -e --source winget</code>, or the installer from <a href="https://git-scm.com/downloads/win" target="_blank" rel="noopener noreferrer">git-scm.com</a> (click Next on every page).</li>
   <li><b>macOS:</b> in Terminal <code>xcode-select --install</code>.</li>

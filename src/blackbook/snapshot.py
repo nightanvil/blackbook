@@ -16,6 +16,7 @@ import hashlib
 import os
 import shutil
 import subprocess
+import sys
 import threading
 import tomllib
 from dataclasses import dataclass, field
@@ -150,6 +151,33 @@ GIT_MISSING = (
 )
 
 
+# Portable git that bootstrap.py downloads on Windows when no git is installed
+PORTABLE_GIT = Path(__file__).resolve().parents[2] / ".tools" / "git" / "cmd" / "git.exe"
+
+
+def git_executable() -> str | None:
+    found = shutil.which("git")
+    if found:
+        return found
+    return str(PORTABLE_GIT) if PORTABLE_GIT.is_file() else None
+
+
+def default_target() -> Path:
+    """Suggested backup folder: blackbook-backup in the user's documents folder."""
+    documents = Path.home() / "Documents"
+    if sys.platform.startswith("linux"):
+        try:
+            result = subprocess.run(["xdg-user-dir", "DOCUMENTS"], capture_output=True, text=True, timeout=5, check=False)
+            out = result.stdout.strip()
+            if out and Path(out) != Path.home():
+                documents = Path(out)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    if not documents.is_dir():
+        documents = Path.home()
+    return documents / "blackbook-backup"
+
+
 def folder_size(path: Path) -> int:
     return sum(p.stat().st_size for p in path.rglob("*") if p.is_file()) if path.is_dir() else 0
 
@@ -207,8 +235,8 @@ class SnapshotRepo:
         return (self.target / ".git").is_dir() and self.config_path.is_file()
 
     def init(self) -> None:
-        if shutil.which("git") is None:
-            raise SnapshotError("git is not installed or not on PATH")
+        if git_executable() is None:
+            raise SnapshotError(GIT_MISSING)
         self.target.mkdir(parents=True, exist_ok=True)
         if not (self.target / ".git").is_dir():
             self.git("init", "--quiet", "--initial-branch=main")
@@ -228,18 +256,19 @@ class SnapshotRepo:
     # ---------- git ----------
 
     def git(self, *args: str, binary: bool = False) -> str | bytes:
-        if shutil.which("git") is None:
+        git = git_executable()
+        if git is None:
             raise SnapshotError(GIT_MISSING)
         env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C"}
         identity: list[str] = []
         if args and args[0] == "commit":
             # Fallback identity for machines without a git user configuration
             for key, value in (("user.name", "blackbook"), ("user.email", "blackbook@localhost")):
-                probe = subprocess.run(["git", "-C", str(self.target), "config", key], capture_output=True, check=False)
+                probe = subprocess.run([git, "-C", str(self.target), "config", key], capture_output=True, check=False)
                 if not probe.stdout.strip():
                     identity += ["-c", f"{key}={value}"]
         result = subprocess.run(
-            ["git", "-C", str(self.target), *identity, *args], capture_output=True, env=env, check=False
+            [git, "-C", str(self.target), *identity, *args], capture_output=True, env=env, check=False
         )
         if result.returncode != 0:
             raise SnapshotError(result.stderr.decode("utf-8", "replace").strip() or f"git {args[0]} failed")
@@ -432,7 +461,7 @@ class SnapshotRepo:
             "size_bytes": 0,
             "history_bytes": 0,
             "mirror_bytes": 0,
-            "git_missing": GIT_MISSING if shutil.which("git") is None else "",
+            "git_missing": GIT_MISSING if git_executable() is None else "",
         }
         if not self.initialized:
             return info

@@ -28,7 +28,7 @@ You do this once. blackbook sets itself up inside its own folder and changes not
 | | Needed? | Why |
 |---|---|---|
 | **Python** | **No**, you do not have to install it | blackbook is written in Python. If your computer has no Python, the start script downloads a private copy into the blackbook folder. Nothing is installed system-wide. |
-| **git** | **Recommended** | For the backup of your card. Without git, blackbook works, only the Backup tab is switched off. See [What is git?](#what-is-git) |
+| **git** | **Recommended**, mostly automatic | For the backup of your card, see [What is git?](#what-is-git). **Windows:** the start script downloads the official portable git into the blackbook folder, nothing to do. **macOS:** Apple's install window opens by itself, click **Install**. **Linux:** the start script offers to install it and asks for your password. Without git blackbook works, only the backup is switched off. |
 
 <details>
 <summary>I want to install Python myself anyway</summary>
@@ -45,9 +45,9 @@ Not needed, but possible. blackbook then uses your Python only for the setup and
 
 On the [GitHub page](https://github.com/nightanvil/blackbook) click the green **Code** button, then **Download ZIP**. Unpack the ZIP into a folder of your choice, for example your home folder or `Documents`. Do not put it on the blackbox card.
 
-### 2. Install git (recommended)
+### 2. git (usually nothing to do)
 
-Skip this step if you want to try blackbook without backups first. You can add git later at any time.
+The start script takes care of git, see the table above. Install it yourself only if that did not work, or if you prefer to do it before. You can add git later at any time.
 
 <details>
 <summary><b>Windows</b></summary>
@@ -143,13 +143,13 @@ blackbook uses git as a **time machine for your card**:
 - Files that did not change are stored only once, so many snapshots need little extra space.
 - The snapshots are kept in a folder on your computer that you choose. Nothing is uploaded anywhere.
 
-You never have to use git yourself, blackbook does everything in the background. It only has to be installed.
+You never have to use git yourself, blackbook does everything in the background, including setting up the backup folder.
 
 **Without git** blackbook works the same, only the Backup tab is switched off, and every save shows a reminder. Then please copy the whole card to your computer yourself before you write to it.
 
 ## First steps
 
-1. **Make a backup first.** Open **Backup**, choose a folder on your computer (not on the card) and click **Snapshot now**. From then on blackbook takes snapshots by itself. Without git: copy the whole card to your computer.
+1. **Set up the backup.** When the card is connected for the first time, a bar at the top offers it: click **Set up backup**. blackbook creates the folder `blackbook-backup` in your documents folder and takes the first snapshot. From then on it takes snapshots by itself. With **Other folder** you choose a different place (not on the card). Without git: copy the whole card to your computer yourself.
 2. Look around in **Library**. Nothing is written to the card unless you click **Write to card**.
 3. Every write shows a review first: what is copied, what changes.
 

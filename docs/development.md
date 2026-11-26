@@ -55,6 +55,7 @@ The bootstrap installs the complete toolchain inside the repository. Nothing is 
 | `.tools/uv/` | uv package manager, downloaded from GitHub releases and verified via SHA-256 |
 | `.tools/python/` | Python interpreter managed by uv |
 | `.tools/cache/` | download cache |
+| `.tools/git/` | Windows only, when no git is installed: official portable git (MinGit) from the Git for Windows releases, verified via SHA-256, used by the backup |
 | `.venv/` | virtual environment with all dependencies |
 
 ```

@@ -23,7 +23,7 @@ from .card import Card, browse
 from .cardpath import INVALID_NAME_CHARS, resolve_sample_reference
 from .mapping import Zone, assign_key_ranges, automap, note_name
 from .patchindex import FACTORY_TAGS
-from .snapshot import CONFIG_NAME, SnapshotError, SnapshotRepo
+from .snapshot import CONFIG_NAME, SnapshotError, SnapshotRepo, default_target, git_executable
 from .wav import WavError, read_info
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -217,7 +217,7 @@ def code_commit() -> str:
     """Short commit id of the blackbook checkout, empty outside a git checkout."""
     try:
         result = subprocess.run(
-            ["git", "-C", str(settings.REPO_DIR), "rev-parse", "--short", "HEAD"],
+            [git_executable() or "git", "-C", str(settings.REPO_DIR), "rev-parse", "--short", "HEAD"],
             capture_output=True, text=True, timeout=5, check=True,
         )
         return result.stdout.strip()
@@ -356,6 +356,9 @@ def create_app(
             "roots": [{"id": k, "path": str(v)} for k, v in sources.roots.items()],
             "backup": str(backup.dir),
             "commit": started_commit,
+            "backup_ready": bool(snapshots.repo and snapshots.repo.initialized),
+            "git_available": git_executable() is not None,
+            "suggested_backup": str(default_target()),
             "current_commit": code_commit(),
         }
 
@@ -608,6 +611,16 @@ def create_app(
         snapshots.repo = repo
         settings.set_value("backup_target", str(repo.target))
         return repo.status()
+
+    @app.post("/api/backup/setup")
+    def backup_setup() -> dict:
+        """Set up the suggested backup folder and take the first snapshot."""
+        status = backup_target(BackupTargetIn(path=str(default_target())))
+        if snapshots.card_present() and not snapshots.repo.has_commits():
+            commit = snapshot_call(snapshots.repo.snapshot, card.root, "Initial snapshot")
+            snapshots.record("Initial snapshot", commit)
+            status = snapshots.repo.status()
+        return status
 
     @app.post("/api/backup/snapshot")
     def backup_snapshot(body: SnapshotIn) -> dict:
