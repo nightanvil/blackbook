@@ -5,22 +5,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-26
+
 ### Added
 
+- One-shot pad editor with all pad settings of the device in four tabs: Sound (level, pitch, filter, resonance, pan, overdrive, delay, reverb), Setup (reverse, launch, poly, choke group, interpolation), Env/LFO (ADSR, velocity, LFO shape, depth, rate, beat sync, restart) and WAV (start and length).
+- Audio editor: trim, delete, silence, fade in and out, reverse, gain and normalize with undo and redo, zoom down to single samples, playback of the selection. Snap to zero puts every edge on a zero crossing, so cuts do not click. The edited sample goes onto the pad and into the patch folder when the patch is saved; the original stays untouched.
+- Waveform in the WAV tab of a one-shot pad: drag start and end of the part the pad plays.
+- Pad preview: clicking a pad or its play button plays it with level, pitch, pan, reverse, start and length. Filter, resonance, overdrive, envelope, LFO and the effect sends are not emulated and are heard on the device only.
+- Envelope and LFO graphics in the Env/LFO tab. The envelope times follow the device manual, the curve shape is an approximation.
 - Pads: drag a pad onto another pad to move it, a filled pad swaps places. Copy, Paste and Clear as on the device (also Ctrl+C, Ctrl+V, Ctrl+X); Clear keeps the pad in the clipboard, Paste brings it back.
+- Eject at the top right: writes everything to the card and ejects it through the operating system, so the blackbox can be unplugged or leave microSD mode safely.
+- Restart and stop buttons at the top right, so blackbook can be controlled without a terminal window. The version at the top left shows the process id (PID), and the red "restart needed" hint restarts blackbook when clicked.
 - Header: loop switch and volume slider for all playback. Card state and eject are icons: green connected, red not connected, grey ejected.
 - Sample browser: play and stop button in every row, and a Preview switch to stop rows from playing when clicked.
 - Pad editor and audio editor show the full path of the sample.
 - Restoring a single WAV from the backup explains that only the file comes back and lists the patches and projects that use it, with a note when the length no longer fits.
 - Backup events are collapsed, scrollable and filterable, so the snapshot history stays in view.
 - The backup folder is locked to one running blackbook. A second instance, for example on another computer sharing the folder through sync, gets a clear message instead of writing to the same backup.
-- Pad preview: clicking a pad or its play button plays it with level, pitch, pan, reverse, start and length. Filter, resonance, overdrive, envelope, LFO and the effect sends are not emulated and are heard on the device only.
-- Envelope and LFO graphics in the Env/LFO tab. The envelope times follow the device manual, the curve shape is an approximation.
-- Waveform in the WAV tab of a one-shot pad: drag start and end of the part the pad plays.
-- Audio editor: trim, delete, silence, fade in and out, reverse, gain and normalize with undo and redo, zoom down to single samples, playback of the selection. Snap to zero puts every edge on a zero crossing, so cuts do not click. The edited sample goes onto the pad and into the patch folder when the patch is saved; the original stays untouched.
-- One-shot pad editor with all pad settings of the device in four tabs: Sound (level, pitch, filter, resonance, pan, overdrive, delay, reverb), Setup (reverse, launch, poly, choke group, interpolation), Env/LFO (ADSR, velocity, LFO shape, depth, rate, beat sync, restart) and WAV (start and length).
-- Restart and stop buttons at the top right, so blackbook can be controlled without a terminal window. The version at the top left shows the process id (PID), and the red "restart needed" hint restarts blackbook when clicked.
-- Eject button at the top right: writes everything to the card and ejects it through the operating system, so the blackbox can be unplugged or leave microSD mode safely.
 
 ### Changed
 
@@ -40,6 +42,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ### Documentation
 
+- README: screenshots of the library, builder, pad editor and audio editor.
 - README: blackbook updates itself, stated at the top and in Updating. Windows is tested; macOS is not tested and needs feedback from Mac users.
 
 ## [0.1.3] - 2026-11-26
@@ -91,7 +94,8 @@ First public, very early version.
 - Update check against GitHub releases with in-place update and restart prompt.
 - Dark and light theme, built-in help, Ko-fi and GitHub links, running version in the top bar with a restart hint after code changes.
 
-[Unreleased]: https://github.com/nightanvil/blackbook/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/nightanvil/blackbook/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/nightanvil/blackbook/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/nightanvil/blackbook/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/nightanvil/blackbook/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/nightanvil/blackbook/compare/v0.1.0...v0.1.1
