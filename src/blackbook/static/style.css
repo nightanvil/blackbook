@@ -237,6 +237,12 @@ td input { width: 60px; padding: 3px 6px; }
 .tabs button { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 12px; color: var(--muted); }
 .tabs button.active { color: var(--text); border-bottom-color: var(--accent, var(--ok)); }
 .hint-small { margin: 10px 0 0; font-size: 12px; }
+.pgraphs { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.pgraphs figure { margin: 0; }
+.pgraphs figcaption { font-size: 11px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.pgraph { display: block; width: 100%; height: 90px; background: var(--panel-2); border-radius: var(--radius); }
+.pgraph .gaxis { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.pgraph .gline { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
 
 .ms-tools { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
 .ms-tools label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }

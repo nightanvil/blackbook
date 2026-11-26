@@ -69,6 +69,10 @@ Gaps between samples are filled by a selectable rule: extend upwards, extend dow
 
 blackbook has its own waveform view and editor for WAV files. No external program is needed.
 
+### Pad preview
+
+Clicking a pad plays it through Web Audio with level (`gaindb`), pitch, pan, reverse and the playback window (`samstart`, `samlen`). Filter, resonance, overdrive, envelope, LFO and the effect sends are not emulated: filter type, overdrive algorithm, envelope curve and LFO rate in Hz are unknown, and an inexact emulation would lead to wrong settings. The Env/LFO tab draws the envelope (attack up to about 9 s, decay and release up to about 38 s according to the manual, curve shape approximated) and the LFO shape with its depth.
+
 ### Waveform in the pad editor
 
 The WAV tab of a one-shot pad shows the sample with the playback window. The white lines set `samstart` and `samlen`; the file is not changed. Start and length can also be typed in frames.

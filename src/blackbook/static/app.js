@@ -119,6 +119,7 @@ document.addEventListener("keydown", (ev) => {
   if (ev.key === "Escape" && !document.getElementById("help").hidden) { closeHelp(); return; }
   if (ev.key === "Escape" && state.playing) stop();
   if (ev.key === "Escape" && wavePlayer.playing) wavePlayer.stop();
+  if (ev.key === "Escape") padPreview.stop();
 });
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -581,7 +582,7 @@ function renderPads() {
         class: "pad" + (pad ? " filled" : "") + (pad && !pad.source ? " missing" : "") + (state.selectedPad === slot ? " selected" : ""),
         onclick: () => {
           state.selectedPad = slot;
-          if (pad) play(pad.source);
+          if (pad) previewPad(pad);
           renderPads();
         },
       }, el("span", { class: "num" }, padNumber(slot)), el("span", { class: "sample" }, pad ? (pad.source ? baseName(pad.source) : pad.filename + " (missing)") : ""));
@@ -624,7 +625,7 @@ function paramControl(pad, param) {
   }
   if (param.kind === "choice") {
     return el("label", {}, label,
-      el("select", { onchange: (ev) => { params[param.key] = Number(ev.target.value); } },
+      el("select", { onchange: (ev) => { params[param.key] = Number(ev.target.value); refreshPadGraphics(pad); } },
         param.options.map((name, i) => el("option", { value: i, selected: i === value }, name))));
   }
   const shown = value / param.scale;
@@ -636,6 +637,7 @@ function paramControl(pad, param) {
     params[param.key] = Math.round(clamped * param.scale);
     if (from !== number) number.value = clamped.toFixed(digits);
     if (from !== slider) slider.value = clamped;
+    refreshPadGraphics(pad);
   };
   number.addEventListener("change", () => set(number.value, number));
   slider.addEventListener("input", () => set(slider.value, slider));
@@ -854,6 +856,128 @@ async function openAudioEditor(slot) {
   await reload();
 }
 
+// ---------- pad preview and graphics ----------
+
+// Preview of what can be reproduced close to the device: level, pitch, pan, reverse, start and length.
+// Filter, resonance, overdrive, envelope, LFO and the effect sends are left out on purpose.
+const padPreview = {
+  ctx: null,
+  node: null,
+  stop() {
+    if (this.node) { try { this.node.stop(); } catch (_) { /* already stopped */ } this.node = null; }
+  },
+};
+
+async function previewPad(pad) {
+  if (!pad || !pad.source) return;
+  // A second click on the same pad stops it, another pad takes over
+  const same = padPreview.node && padPreview.pad === pad;
+  padPreview.stop();
+  if (same) return;
+  stop();
+  let audio;
+  try { audio = await loadPcm(pad.source); } catch (err) { toast(err.message, true); return; }
+  const p = pad.params || {};
+  const frames = audio.channels[0].length;
+  const start = Math.min(pad.start ?? 0, frames - 1);
+  const length = Math.max(1, Math.min(pad.length && pad.length > 0 ? pad.length : frames - start, frames - start));
+  const ctx = padPreview.ctx = padPreview.ctx || new AudioContext();
+  if (ctx.state === "suspended") ctx.resume();
+  const buffer = ctx.createBuffer(audio.channels.length, length, audio.rate);
+  audio.channels.forEach((data, c) => {
+    const part = data.slice(start, start + length);
+    if (p.reverse) part.reverse();
+    buffer.copyToChannel(part, c);
+  });
+  const node = ctx.createBufferSource();
+  node.buffer = buffer;
+  node.playbackRate.value = Math.pow(2, (p.pitch || 0) / 1000 / 12);
+  const gain = ctx.createGain();
+  gain.gain.value = Math.pow(10, (p.gaindb || 0) / 1000 / 20);
+  const pan = ctx.createStereoPanner();
+  pan.pan.value = Math.max(-1, Math.min(1, (p.panpos || 0) / 1000));
+  node.connect(gain).connect(pan).connect(ctx.destination);
+  node.onended = () => { if (padPreview.node === node) padPreview.node = null; };
+  padPreview.node = node;
+  padPreview.pad = pad;
+  node.start();
+}
+
+// Envelope times at 100 % from the device manual: attack about 9 s, decay and release about 38 s
+const ENV_MAX_SECONDS = { envattack: 9, envdecay: 38, envrel: 38 };
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function svgEl(tag, attrs) {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  return node;
+}
+
+function envSeconds(params, key) { return ((params[key] ?? 0) / 1000) * ENV_MAX_SECONDS[key]; }
+
+function fmtSec(s) { return s < 1 ? `${Math.round(s * 1000)} ms` : `${s.toFixed(s < 10 ? 2 : 1)} s`; }
+
+function drawEnvelope(svg, params) {
+  const w = 300, h = 90, top = 6, bottom = h - 6;
+  const a = envSeconds(params, "envattack"), d = envSeconds(params, "envdecay"), r = envSeconds(params, "envrel");
+  const sus = (params.envsus ?? 1000) / 1000;
+  // Square root scale keeps short and long times readable side by side
+  const part = (s) => Math.sqrt(s / 38);
+  const hold = 0.35;
+  const total = part(a) + part(d) + hold + part(r) || 1;
+  const x = (u) => (u / total) * w;
+  const y = (level) => bottom - level * (bottom - top);
+  const xa = x(part(a)), xd = xa + x(part(d)), xs = xd + x(hold), xr = xs + x(part(r));
+  svg.replaceChildren(
+    svgEl("line", { x1: 0, y1: bottom, x2: w, y2: bottom, class: "gaxis" }),
+    svgEl("polyline", { points: `0,${y(0)} ${xa},${y(1)} ${xd},${y(sus)} ${xs},${y(sus)} ${xr},${y(0)}`, class: "gline" }));
+  return `Attack ${fmtSec(a)} · Decay ${fmtSec(d)} · Sustain ${Math.round(sus * 100)} % · Release ${fmtSec(r)}`;
+}
+
+function lfoValue(shape, phase, step) {
+  const t = phase % 1;
+  switch (shape) {
+    case 0: return 1 - 2 * t; // Rev Saw
+    case 1: return 2 * t - 1; // Saw
+    case 2: return t < 0.5 ? 4 * t - 1 : 3 - 4 * t; // Triangle
+    case 3: return t < 0.5 ? 2 * t : 2 - 2 * t; // Pos Tri
+    case 4: return Math.sin(2 * Math.PI * t); // Sine
+    case 5: return 0.5 + 0.5 * Math.sin(2 * Math.PI * t); // Pos Sine
+    case 6: return t < 0.5 ? 1 : -1; // Square
+    case 7: return t < 0.5 ? 1 : 0; // Pos Square
+    default: { const v = Math.sin(step * 12.9898) * 43758.5453; return 2 * (v - Math.floor(v)) - 1; } // Random steps
+  }
+}
+
+function drawLfo(svg, params) {
+  const w = 300, h = 90, mid = h / 2, amp = (h / 2 - 6) * ((params.lfoamount ?? 1000) / 1000);
+  const shape = params.lfowave ?? 0;
+  const points = [];
+  const cycles = 2, n = 240;
+  for (let i = 0; i <= n; i++) {
+    const phase = (i / n) * cycles;
+    const step = Math.floor(phase * 8);
+    points.push(`${(i / n) * w},${mid - lfoValue(shape, phase, step) * amp}`);
+  }
+  svg.replaceChildren(
+    svgEl("line", { x1: 0, y1: mid, x2: w, y2: mid, class: "gaxis" }),
+    svgEl("polyline", { points: points.join(" "), class: "gline" }));
+}
+
+function refreshPadGraphics(pad) {
+  const env = document.getElementById("env-graph");
+  const lfo = document.getElementById("lfo-graph");
+  if (env) document.getElementById("env-caption").textContent = drawEnvelope(env, pad.params);
+  if (lfo) drawLfo(lfo, pad.params);
+}
+
+function envLfoGraphics() {
+  const graph = (id) => svgEl("svg", { id, viewBox: "0 0 300 90", preserveAspectRatio: "none", class: "pgraph" });
+  return el("div", { class: "pgraphs" },
+    el("figure", {}, graph("env-graph"), el("figcaption", { id: "env-caption", class: "muted" })),
+    el("figure", {}, graph("lfo-graph"), el("figcaption", { class: "muted" }, "LFO shape and depth")));
+}
+
 function renderPadEditor() {
   const panel = document.getElementById("pad-editor");
   const slot = state.selectedPad;
@@ -879,6 +1003,12 @@ function renderPadEditor() {
   } else {
     const visible = (state.padParams || []).filter((p) => p.group === tab && (!p.when || (pad.params[p.when[0]] ?? 0) === p.when[1]));
     content = [el("div", { class: "pad-form" }, visible.map((p) => paramControl(pad, p)))];
+    if (tab === "Env/LFO") content.unshift(envLfoGraphics());
+    if (tab !== "Setup") {
+      content.push(el("p", { class: "muted hint-small" }, tab === "Env/LFO"
+        ? "The envelope curve is an approximation: times follow the device manual (attack up to about 9 s, decay and release up to about 38 s), the exact curve shape is unknown. Envelope and LFO are heard on the device only."
+        : "▶ plays the pad with level, pitch, pan, reverse, start and length. Filter, resonance, overdrive, delay and reverb are heard on the device only."));
+    }
   }
   const unverified = (state.padParams || []).some((p) => p.group === tab && !p.verified);
 
@@ -886,13 +1016,14 @@ function renderPadEditor() {
     el("div", { class: "pad-head" },
       el("strong", {}, `Pad ${padNumber(slot)}: ${baseName(pad.source)}`),
       el("span", {},
-        el("button", { class: "small", onclick: () => play(pad.source) }, "▶"), " ",
+        el("button", { class: "small", title: "Preview with level, pitch, pan, reverse, start and length", onclick: () => previewPad(pad) }, "▶"), " ",
         el("button", { class: "small", onclick: () => { delete state.pads[slot]; renderPads(); } }, "Clear"))),
     el("div", { class: "tabs" }, PAD_TABS.map((name) =>
       el("button", { class: name === tab ? "active" : "", onclick: () => { state.padTab = name; renderPadEditor(); } }, name))),
     ...content,
     unverified ? el("p", { class: "muted hint-small" }, "Values marked ? are written in the order of the device manual; their file encoding is not yet confirmed on the device.") : null,
   );
+  if (tab === "Env/LFO") refreshPadGraphics(pad);
 }
 
 // ---------- builder: multisample ----------

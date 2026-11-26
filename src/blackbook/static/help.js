@@ -53,6 +53,7 @@ ${todo}`,
   <li><b>WAV:</b> start and length of the part of the sample the pad plays.</li>
 </ul>
 <p>In the <b>WAV</b> tab the waveform shows the part the pad plays: drag the white lines. <b>Edit audio</b> opens the editor: select with the mouse, then trim, delete, silence, fade, reverse, change the gain or normalize. Undo and redo with Ctrl+Z and Ctrl+Shift+Z, Space plays. With <b>Snap to zero</b> every edge lands on a zero crossing, so the sample starts and ends without a click. <b>Use edited sample</b> puts the result on the pad as a new file; the original stays untouched, saving the patch copies the new file into the patch folder.</p>
+<p>Clicking a pad plays it with its level, pitch, pan, reverse, start and length. Filter, resonance, overdrive, envelope, LFO, delay and reverb are not reproduced on the computer, you hear them on the device. The Env/LFO tab draws the envelope (times from the device manual, curve shape approximated) and the LFO shape.</p>
 <p>Drag a slider or type a value. A double click on a slider sets the value of a new pad. Values marked <b>?</b> are written in the order of the device manual; that the device reads them the same way is not confirmed yet.</p>
 ${todo}` },
     { id: "projects", title: "Projects", html: `<p>The projects on the card.</p>${todo}` },
