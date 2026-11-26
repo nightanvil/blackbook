@@ -2,6 +2,8 @@
 
 **blackbook** is an unofficial organizer for the microSD card of the **1010music blackbox 2**. It runs on your computer and opens in your web browser. Nothing is uploaded anywhere.
 
+![blackbook: one-shot builder with pad grid, pad editor and waveform](docs/images/builder-oneshot.png)
+
 > [!IMPORTANT]
 > **This is a very, very, very early version.** Expect rough edges and missing pieces. It is shared now so you can try it and tell me what you need. Every idea and every bug report helps: [Ideas and feedback](https://github.com/nightanvil/blackbook/issues).
 
