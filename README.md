@@ -7,7 +7,14 @@
 
 blackbook is free and stays free. If it helps you, you can buy me a coffee on [Ko-fi](https://ko-fi.com/nightanvil).
 
-<sub><b>Roadmap</b> · <b>In progress:</b> one-shot patches complete (filter, envelope, LFO, sends, launch, poly) · <b>Next:</b> slicer, loop, shredder, multisample loop points, waveform view · <b>Later:</b> external audio editor (Reaper), project tools (pack, clean, rename), sample organization, card and firmware tools · <b>Done:</b> library, tags, one-shot and multisample basics, backup, installer, updates</sub>
+**Roadmap**
+
+| Status | What |
+|---|---|
+| In progress | One-shot patches complete: filter, envelope, LFO, sends, launch, poly |
+| Next | Slicer, loop, shredder, multisample loop points, waveform view |
+| Later | External audio editor (Reaper), project tools (pack, clean, rename), sample organization, card and firmware tools |
+| Done | Library, tags, one-shot and multisample basics, backup, installer, updates |
 
 ## What it does
 
@@ -19,7 +26,7 @@ blackbook is free and stays free. If it helps you, you can buy me a coffee on [K
 - **Projects:** missing samples and unused files per project.
 - **Backup:** snapshots of the card with history, comparison and restore. Automatic when the card is connected, and before and after blackbook writes.
 
-What comes next is in the roadmap line at the top. Tell me what you need most.
+What comes next is in the roadmap at the top. Tell me what you need most.
 
 ## Installation and start
 
