@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import threading
 import time
 import tomllib
@@ -148,7 +149,11 @@ class SnapshotService:
         return self.repo
 
     def card_present(self) -> bool:
-        return (self.card.root / "bb2-stng.mml").is_file() or (self.card.root / "Projects").is_dir()
+        # While the card is being unmounted or remounted the mount point can refuse access
+        try:
+            return (self.card.root / "bb2-stng.mml").is_file() or (self.card.root / "Projects").is_dir()
+        except OSError:
+            return False
 
     def auto_snapshot(self, reason: str, setting: str) -> None:
         repo = self.repo
@@ -192,14 +197,29 @@ class SnapshotService:
     def watch(self) -> None:
         present = False
         while not self._stop.is_set():
-            now = self.card_present()
-            if now and not present:
-                self.auto_snapshot("Card connected", "snapshot_on_connect")
-            present = now
+            try:
+                now = self.card_present()
+                if now and not present:
+                    self.auto_snapshot("Card connected", "snapshot_on_connect")
+                present = now
+            except Exception as exc:  # noqa: BLE001 - the watcher must survive any error
+                self.last_event = f"{time.strftime('%H:%M')} card watcher error: {exc}"
             self._stop.wait(5)
 
     def stop(self) -> None:
         self._stop.set()
+
+
+def code_commit() -> str:
+    """Short commit id of the blackbook checkout, empty outside a git checkout."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(settings.REPO_DIR), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5, check=True,
+        )
+        return result.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
 
 
 def create_app(
@@ -209,6 +229,7 @@ def create_app(
     snapshot_target: Path | None = None,
     inbox_dir: Path | None = None,
 ) -> FastAPI:
+    started_commit = code_commit()
     card = Card(card_root)
     sources = Sources(card, libraries, inbox_dir or settings.REPO_DIR / ".blackbook" / "inbox")
     backup = Backup(backup_dir, card.root)
@@ -331,6 +352,8 @@ def create_app(
             "card": str(card.root),
             "roots": [{"id": k, "path": str(v)} for k, v in sources.roots.items()],
             "backup": str(backup.dir),
+            "commit": started_commit,
+            "current_commit": code_commit(),
         }
 
     @app.get("/api/patches")

@@ -193,3 +193,21 @@ def test_manual_snapshot_keeps_minor_changes(card: Path, repo: SnapshotRepo) -> 
     settings_file.write_text('<preset name="B"/>', encoding="utf-8")
     touch_later(settings_file)
     assert repo.snapshot(card, "Manual") is not None
+
+
+def test_card_present_survives_refused_mount_point(tmp_path: Path, monkeypatch) -> None:
+    from blackbook import server
+
+    def refuse(self) -> bool:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(Path, "is_file", refuse)
+    snapshots = server.SnapshotService(server.Card(tmp_path), None)
+    assert snapshots.card_present() is False
+
+
+def test_info_reports_code_commit(card: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    with TestClient(create_app(card, [], tmp_path / "copies")) as client:
+        info = client.get("/api/info").json()
+    assert info["commit"] == info["current_commit"]

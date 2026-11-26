@@ -905,6 +905,20 @@ async function pollCard() {
   }
   state.cardPresent = present;
   await refreshBackupIfVisible();
+  await showCodeCommit();
+}
+
+// Show the running code version and warn when the checkout moved on since the start
+async function showCodeCommit() {
+  let info;
+  try {
+    info = await api("GET", "/api/info");
+  } catch (_) { return; }
+  const box = document.getElementById("code-commit");
+  const stale = info.current_commit && info.commit !== info.current_commit;
+  box.textContent = stale ? `${info.commit} (restart needed, code is at ${info.current_commit})` : info.commit;
+  box.className = stale ? "err" : "muted";
+  document.title = info.commit ? `blackbook ${info.commit}` : "blackbook";
 }
 
 // Reload the backup view when snapshots or events changed while it is shown
