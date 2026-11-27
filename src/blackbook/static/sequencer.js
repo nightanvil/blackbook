@@ -557,7 +557,7 @@ function seqSettings(seq, editable) {
 
 function stepGrid(track, seq) {
   const steps = seq ? gridSteps(seq) : 16;
-  const grid = el("div", { class: "seq-grid", style: `grid-template-columns: 180px repeat(${steps}, 26px)` });
+  const grid = el("div", { class: "seq-grid", style: `grid-template-columns: 270px repeat(${steps}, 26px)` });
   const padBySlot = new Map(trackPads(track).filter((p) => p.source || p.filename).map((p) => [p.slot, p]));
   // Step numbers
   grid.append(el("div", { class: "seq-corner", style: "grid-row:1;grid-column:1" }));
@@ -693,7 +693,7 @@ function laneChan(seq) {
 // Velocity of the notes of one pad as bars under the grid; drag to draw
 function velocityLane(seq, steps) {
   const chan = laneChan(seq);
-  const lane = el("div", { class: "seq-lane", style: `grid-template-columns: 180px repeat(${steps}, 26px)` },
+  const lane = el("div", { class: "seq-lane", style: `grid-template-columns: 270px repeat(${steps}, 26px)` },
     el("div", { class: "seq-lane-label", title: "Click a pad name or a note to show its velocity here" }, el("span", {}, "Velocity"), el("b", {}, `Pad ${padNumber(chan)}`)));
   const bars = [];
   for (let s = 0; s < steps; s++) {

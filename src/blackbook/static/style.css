@@ -215,7 +215,7 @@ td input { width: 60px; padding: 3px 6px; }
 
 /* Build */
 .browser {
-  width: 440px;
+  width: 390px;
   border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
@@ -513,7 +513,7 @@ details.events input[type=search] { width: 100%; margin: 4px 0 6px; padding: 3px
 .seq-eu:hover { background: color-mix(in srgb, var(--accent) 25%, transparent); border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
 .seq-pad.euclid .seq-eu { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 /* LED per pad: lights up in the track color when the pad plays, grey when muted for listening */
-.seq-led { width: 10px; height: 10px; flex: none; padding: 0; margin: 0 2px 0 4px; border-radius: 50%; cursor: pointer; border: none;
+.seq-led { display: inline-block; box-sizing: border-box; width: 10px; height: 10px; flex: none; padding: 0; margin: 0 2px 0 4px; border-radius: 50%; cursor: pointer; border: none;
   background: color-mix(in srgb, var(--track, var(--accent)) 35%, #000); transition: background 0.25s ease-out, box-shadow 0.25s ease-out; }
 .seq-led.on { background: var(--track, var(--accent)); box-shadow: 0 0 6px var(--track, var(--accent)); transition: none; }
 .seq-led.muted { background: #4a4d52; box-shadow: none; }
@@ -573,7 +573,7 @@ input[type="number"]:focus { cursor: text; }
 .proj-tabs button.active { color: var(--text); border-bottom-color: var(--track, var(--accent)); }
 .proj-tabs .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); margin-left: 6px; vertical-align: middle; }
 .proj-pads { display: flex; gap: 12px; align-items: stretch; min-height: 480px; }
-.proj-pads aside.browser { width: 420px; flex-shrink: 0; border: 1px solid var(--line); border-radius: 6px; max-height: 640px; }
+.proj-pads aside.browser { width: 350px; flex-shrink: 0; border: 1px solid var(--line); border-radius: 6px; max-height: 640px; }
 .proj-pads-main { flex: 1; min-width: 0; }
 
 /* Very wide windows: the whole UI keeps a readable width and sits in the middle */
