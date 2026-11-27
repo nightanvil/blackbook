@@ -513,10 +513,16 @@ details.events input[type=search] { width: 100%; margin: 4px 0 6px; padding: 3px
 .seq-eu:hover { background: color-mix(in srgb, var(--accent) 25%, transparent); border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
 .seq-pad.euclid .seq-eu:not(.seq-hu) { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 /* LED per pad: lights up in the track color when the pad plays, grey when muted for listening */
-.seq-led { display: inline-block; box-sizing: border-box; width: 10px; height: 10px; flex: none; padding: 0; margin: 0 2px 0 4px; border-radius: 50%; cursor: pointer; border: none;
+/* LED: an 18 pixel button around a 10 pixel dot, so a click does not miss it */
+.seq-led { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 18px; height: 18px; flex: none; padding: 0; margin: 0 0 0 1px;
+  border: none; border-radius: 50%; background: transparent; cursor: pointer; }
+.seq-led::after { content: ""; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box;
   background: color-mix(in srgb, var(--track, var(--accent)) 35%, #000); transition: background 0.25s ease-out, box-shadow 0.25s ease-out; }
-.seq-led.on { background: var(--track, var(--accent)); box-shadow: 0 0 6px var(--track, var(--accent)); transition: none; }
-.seq-led.muted { background: #4a4d52; box-shadow: none; }
+.seq-led:hover { background: color-mix(in srgb, var(--text) 10%, transparent); }
+.seq-led.on::after { background: var(--track, var(--accent)); box-shadow: 0 0 6px var(--track, var(--accent)); transition: none; }
+/* Muted: hollow grey ring with an M, as the M badge on the device */
+.seq-led.muted::after { content: "M"; width: 14px; height: 14px; background: transparent; border: 1.5px solid #8b9097; box-shadow: none;
+  color: #8b9097; font: 700 8px/11px system-ui, sans-serif; text-align: center; }
 .seq-led.none { cursor: default; visibility: hidden; }
 .seq-pad.muted b, .seq-pad.muted .seq-pad-name { opacity: 0.4; text-decoration: line-through; }
 .eu-presets { display: flex; flex-wrap: wrap; gap: 4px; flex-basis: 100%; }

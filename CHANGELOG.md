@@ -33,6 +33,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ### Fixed
 
+- Sequencer: the LED has a larger click area, so mute and unmute work reliably also while stopped. A muted pad shows a grey ring with M, like the M badge on the device.
 - Sequencer: opening the Euclid generator no longer highlights the Humanize button of the same pad.
 - Sequencer: pad names have more room, and rows without a sample keep the same indent as the others.
 - After an update or a restart the browser always loads the current page and scripts instead of an older cached copy.
