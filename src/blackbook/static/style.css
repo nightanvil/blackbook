@@ -442,3 +442,35 @@ details.events input[type=search] { width: 100%; margin: 4px 0 6px; padding: 3px
 #proj-list tr.clickable:hover { background: var(--panel-2); }
 #proj-list tr.selected { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--accent); }
 #proj-detail { margin-top: 16px; }
+
+/* Project detail: tracks and sequencer */
+.proj-title { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.proj-title h2 { margin: 0; }
+.proj-title .grow { flex: 1; }
+#proj-detail table.tracks select { padding: 2px 4px; }
+#proj-seq { margin-top: 14px; }
+.seq-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 10px; }
+.seq-tabs button.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.seq-tabs button.empty:not(.active) { opacity: 0.55; }
+.seq-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-bottom: 10px; }
+.seq-settings label { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.seq-settings input.num, .seq-inspector input.num { width: 64px; }
+.seq-settings input.seq-name { width: 110px; }
+.seq-play { min-width: 76px; }
+.seq-grid-wrap { overflow-x: auto; padding-bottom: 4px; }
+.seq-grid { display: grid; grid-auto-rows: 22px; gap: 2px; position: relative; width: max-content; }
+.seq-num { font-size: 11px; color: var(--muted); padding-left: 2px; align-self: end; }
+.seq-pad { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 3px 6px; cursor: pointer; border-radius: 3px; background: var(--panel-2); }
+.seq-pad:hover { background: var(--panel-3); }
+.seq-pad.empty { opacity: 0.5; cursor: default; }
+.seq-cell { background: var(--panel-2); border-radius: 3px; cursor: pointer; }
+.seq-cell.odd { background: var(--panel-3); }
+.seq-cell:hover { outline: 1px solid var(--accent); }
+.seq-ev { background: var(--accent); border-radius: 3px; cursor: pointer; z-index: 1; position: relative; font-size: 11px; color: var(--accent-ink); text-align: center; line-height: 22px; }
+.seq-ev.prob { background-image: repeating-linear-gradient(135deg, transparent 0 4px, rgba(0, 0, 0, 0.25) 4px 6px); }
+.seq-ev.selected { outline: 2px solid var(--text); outline-offset: 1px; opacity: 1 !important; }
+.seq-ev .off { font-weight: bold; }
+.seq-playhead { background: color-mix(in srgb, var(--text) 18%, transparent); border-radius: 3px; pointer-events: none; z-index: 2; }
+.seq-inspector { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 10px 0; min-height: 30px; }
+.seq-inspector label { display: inline-flex; align-items: center; gap: 6px; }
+#proj-samples { margin-top: 18px; }

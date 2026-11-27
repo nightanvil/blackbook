@@ -8,7 +8,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 ### Added
 
 - Audio editor for samples on the card: **Edit** next to every sample in the library and in the new sample list of a project. **Save as new file** writes `<name>_edit.wav` next to the original (factory samples go to `Samples/Edited`). **Overwrite original** replaces the file and first lists every patch and project that uses it; start, length, loop and slice positions there move with the edit, as do cue and loop points inside the WAV. The `.wav.pk` cache file is deleted. Factory samples are never overwritten.
-- Projects: click a project to list its samples, play them and open them in the audio editor.
+- Projects: click a project to see its tracks, sequences and samples. Play samples and open them in the audio editor.
+- Step sequencer for one-shot tracks in projects: one row per pad, one column per step, eight sequence slots. Velocity, probability, offset and length per note; name, step length, step count (or Open), quant size and snap per sequence. Play loops the sequence with the pad sounds. Save to card writes only the changed sequences into project.xml.
+- MIDI in and MIDI out channel per track in projects.
+
+### Documentation
+
+- Card format: encoding of sequences, events and MIDI channels as measured on the device.
 
 ## [0.2.0] - 2026-11-26
 

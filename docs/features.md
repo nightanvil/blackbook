@@ -174,7 +174,25 @@ Restoring a single WAV brings back only the file. Before the restore blackbook l
 
 `.git/blackbook-instance.json` in the backup folder holds host, process id and a heartbeat of the blackbook using the backup, renewed every minute and removed on exit. Another instance refuses snapshots and restores while the heartbeat is younger than 5 minutes. The file lives inside `.git`, so it is never part of a snapshot but is synchronized with the folder.
 
-## 4. Organization
+## 4. Projects
+
+The Projects tab lists every project with its WAVs, references, missing samples and unused files. Clicking a project shows:
+
+- **Tracks** with type, name, MIDI in and MIDI out channel (None or 1 to 16). Changing a channel writes `midiinchan` or `midioutchan` of that track.
+- **Sequences** of the selected track, the eight slots as tabs. For one-shot tracks a step editor shows one row per pad and one column per step. Settings per sequence: name, Step Len, Step Count (or Open), Quant Size and Snap. Per note: velocity, probability, offset (-47 to +47, 10 ticks each) and length in steps. Sequences of other track types are shown with their number of notes, editing follows later.
+- **Samples** of the project with playback and the audio editor.
+
+### Playback
+
+Play runs the sequence of a one-shot track in a loop through Web Audio. It follows Step Len, Step Count, velocity, probability, offset and the pad's level, pitch, pan, reverse, start and length. Choke groups cut the other pads of the group. Swing delays every second step by (swing / 50 - 1) steps, an approximation of the device. The tempo field sets the tempo for playback only; the project tempo on the device does not change. Filter, envelope, LFO, effects and automation are not played.
+
+### Saving
+
+"Save to card" writes only the changed tracks: their MIDI channels, the `<params>` of the changed `noteseq` cells and their `<sequence>` element. A sequence in an empty slot is added as a new `noteseq` cell after the existing ones. Unknown attributes of events, automation and everything else in the project stay byte-identical, as do line endings and the BOM. The autosave copy of the project (`<name> - autosave`) is not changed. A snapshot is taken before and after if the backup is set up.
+
+Sequences are stored in the project. The device ignores sequences in a `patch.xml` when a patch is loaded onto an existing track, so blackbook edits them in projects only.
+
+## 5. Organization
 
 - library with filters, audition and waveform
 - tags for single patches or in bulk

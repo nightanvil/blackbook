@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import audioedit, builder, padparams, patchedit, sampleupdate, settings, updater
+from . import audioedit, builder, padparams, patchedit, projectseq, sampleupdate, settings, updater
 from .backup import Backup
 from .card import Card, browse, parse_xml
 from .carddetect import find_cards
@@ -100,6 +100,18 @@ class PadIn(BaseModel):
 
 class EditOpenIn(BaseModel):
     source: str
+
+
+class TrackChangeIn(BaseModel):
+    index: int
+    midiinchan: int | None = None
+    midioutchan: int | None = None
+    sequences: list[dict] = Field(default_factory=list)
+
+
+class ProjectChangeIn(BaseModel):
+    name: str
+    tracks: list[TrackChangeIn]
 
 
 class EditWriteIn(BaseModel):
@@ -850,6 +862,61 @@ def create_app(
     @app.get("/api/projects")
     def projects() -> list[dict]:
         return [asdict(p) for p in card.projects()]
+
+    def project_xml(name: str) -> Path:
+        try:
+            project_dir = card.safe_path(f"Projects/{name}")
+        except PermissionError as exc:
+            raise HTTPException(403, str(exc)) from exc
+        xml_path = project_dir / "project.xml"
+        if not name.strip() or "/" in name or not xml_path.is_file():
+            raise HTTPException(404, f"project not found: {name}")
+        return xml_path
+
+    @app.get("/api/project/detail")
+    def project_detail(name: str) -> dict:
+        """Tempo, tracks, MIDI channels, sequences and the pads of one-shot tracks."""
+        xml_path = project_xml(name)
+        text = xml_path.read_bytes().decode("utf-8-sig")
+        if not text.strip():
+            raise HTTPException(422, DAMAGED_XML.format(name="project.xml"))
+        data = projectseq.read_project(text)
+        for track in data["tracks"]:
+            for pad in track["pads"]:
+                path = resolve_sample_reference(card.root, pad["filename"], xml_path.parent)
+                pad["source"] = f"card:{card.relative(path)}" if path and path.is_file() else None
+        data["name"] = name
+        data["autosave"] = (xml_path.parent.parent / f"{name} - autosave" / "project.xml").is_file()
+        data["step_lengths"] = projectseq.STEP_LENGTHS
+        data["quant_sizes"] = projectseq.QUANT_SIZES
+        return data
+
+    @app.put("/api/project/sequences")
+    def project_sequences(body: ProjectChangeIn) -> dict:
+        """Write MIDI channels and sequences of tracks into a project.xml."""
+        if not snapshots.card_present():
+            raise HTTPException(409, "card not connected")
+        xml_path = project_xml(body.name)
+        raw = xml_path.read_bytes()
+        bom = raw.startswith(b"\xef\xbb\xbf")
+        text = raw.decode("utf-8-sig")
+        changes = [
+            projectseq.TrackChange(t.index, t.midiinchan, t.midioutchan, t.sequences) for t in body.tracks
+        ]
+        try:
+            new_text = projectseq.apply_changes(text, changes)
+        except (projectseq.SequenceError, KeyError, TypeError) as exc:
+            raise HTTPException(400, f"cannot write the sequences: {exc}") from exc
+        if new_text == text:
+            return {"changed": False}
+        what = f"saving sequences of project {body.name}"
+        snapshots.before_write(what)
+        backup.save(xml_path)
+        tmp = xml_path.with_name(xml_path.name + ".blackbook-tmp")
+        tmp.write_bytes((b"\xef\xbb\xbf" if bom else b"") + new_text.encode("utf-8"))
+        tmp.replace(xml_path)
+        snapshots.after_write(what)
+        return {"changed": True}
 
     @app.get("/api/project/samples")
     def project_samples(name: str) -> list[dict]:

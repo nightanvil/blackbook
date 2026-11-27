@@ -102,6 +102,7 @@ function stopAll() {
   stop();
   wavePlayer.stop();
   padPreview.stop();
+  if (seqPlayer.playing) { seqPlayer.stop(); renderSequencer(); }
   markPlaying();
 }
 
@@ -1389,7 +1390,7 @@ async function loadProjects() {
     el("table", {},
       el("thead", {}, el("tr", {}, ["Project", "WAVs in folder", "References", "Missing", "Unused in folder"].map((h) => el("th", {}, h)))),
       el("tbody", {}, projects.map((p) =>
-        el("tr", { class: "clickable" + (p.name === state.selectedProject ? " selected" : ""), title: "Show the samples of this project", onclick: () => showProject(p.name) },
+        el("tr", { class: "clickable" + (p.name === state.selectedProject ? " selected" : ""), title: "Show tracks, sequences and samples of this project", onclick: () => showProject(p.name) },
           el("td", {}, p.name, p.is_autosave ? el("span", { class: "badge", style: "margin-left:6px" }, "autosave") : null),
           el("td", {}, p.wav_files),
           el("td", {}, p.references),
@@ -1401,13 +1402,8 @@ async function loadProjects() {
   if (state.selectedProject) showProject(state.selectedProject);
 }
 
-async function showProject(name) {
-  state.selectedProject = name;
-  document.querySelectorAll("#proj-list tbody tr").forEach((row) =>
-    row.classList.toggle("selected", row.firstChild.firstChild.textContent === name));
-  const detail = document.getElementById("proj-detail");
+async function renderProjectSamples(name, detail) {
   if (!detail) return;
-  detail.replaceChildren(el("p", { class: "muted" }, "Loading..."));
   let samples;
   try {
     samples = await api("GET", "/api/project/samples?name=" + encodeURIComponent(name));
