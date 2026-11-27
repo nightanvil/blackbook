@@ -27,7 +27,7 @@ from . import audioedit, builder, padparams, patchedit, projectseq, sampleupdate
 from .backup import Backup
 from .card import Card, browse, parse_xml
 from .carddetect import find_cards
-from .cardpath import INVALID_NAME_CHARS, join_reference, resolve_sample_reference
+from .cardpath import INVALID_NAME_CHARS, join_reference, resolve_sample_reference, validate_name
 from .eject import EjectError, eject
 from .mapping import Zone, assign_key_ranges, automap, note_name
 from .patchindex import FACTORY_TAGS
@@ -115,6 +115,12 @@ class TrackChangeIn(BaseModel):
 class ProjectChangeIn(BaseModel):
     name: str
     tracks: list[TrackChangeIn]
+
+
+class RenameIn(BaseModel):
+    source: str
+    name: str
+    apply: bool = False
 
 
 class EditWriteIn(BaseModel):
@@ -736,6 +742,82 @@ def create_app(
         snapshots.after_write(what)
         editor.close(session_id)
         return {"source": session.source, "path": rel, "name": path.name, "adjusted": adjusted}
+
+    @app.post("/api/sample/rename")
+    def sample_rename(body: RenameIn) -> dict:
+        """Rename a WAV on the card and every reference to it. Without apply only lists what would change."""
+        if body.source.partition(":")[0] != "card":
+            raise HTTPException(400, "only samples on the card can be renamed here")
+        if not snapshots.card_present():
+            raise HTTPException(409, "card not connected")
+        path = sources.resolve(body.source)
+        if not path.is_file() or path.suffix.lower() != ".wav":
+            raise HTTPException(404, "WAV file not found")
+        rel = card.relative(path)
+        block = overwrite_block(rel)
+        if block:
+            raise HTTPException(403, "Factory samples are never renamed.")
+        new_name = body.name.strip()
+        if not new_name.lower().endswith(".wav"):
+            new_name += ".wav"
+        errors, warnings = validate_name(new_name, 64)
+        if new_name.casefold() == "preview.wav":
+            errors.append("preview.wav is reserved for the patch preview")
+        if new_name == path.name:
+            errors.append("the name is unchanged")
+        clash = [p for p in path.parent.iterdir() if p.name.casefold() == new_name.casefold() and p != path]
+        if clash:
+            errors.append(f"{clash[0].name} already exists in this folder")
+        if errors:
+            raise HTTPException(400, "; ".join(errors))
+        target = path.with_name(new_name)
+        updates: list[tuple[Path, bytes, int, str]] = []
+        for ref in find_references(card.root, rel):
+            xml_path = card.root / ref.xml
+            if any(u[0] == xml_path for u in updates):
+                continue
+            raw = xml_path.read_bytes()
+            bom = raw.startswith(b"\xef\xbb\xbf")
+            text = raw.decode("utf-8-sig")
+            new_text, count = sampleupdate.rename_in_text(text, ref.xml, rel, new_name)
+            if count:
+                updates.append((xml_path, (b"\xef\xbb\xbf" if bom else b"") + new_text.encode("utf-8"), count, ref.kind))
+        cache = path.with_name(path.name + ".pk")
+        summary = {
+            "path": rel,
+            "new_path": card.relative(target.parent) + "/" + new_name,
+            "warnings": warnings,
+            "references": [{"xml": card.relative(u[0]), "kind": u[3], "count": u[2]} for u in updates],
+            "cache": cache.is_file(),
+        }
+        if not body.apply:
+            return summary
+        what = f"renaming {rel} to {new_name}"
+        snapshots.before_write(what)
+        try:
+            for xml_path, _data, _count, _kind in updates:
+                backup.save(xml_path)
+            backup.save(path)
+            # Through a temporary name, so a change of upper and lower case works on FAT32 and exFAT
+            temp = path.with_name(path.name + ".blackbook-rename")
+            path.rename(temp)
+            temp.rename(target)
+            backup.record_created(target)
+            for xml_path, data, _count, _kind in updates:
+                tmp = xml_path.with_name(xml_path.name + ".blackbook-tmp")
+                tmp.write_bytes(data)
+                tmp.replace(xml_path)
+            if cache.is_file():
+                cache.unlink()
+        except OSError as exc:
+            raise HTTPException(400, f"renaming failed: {exc}") from exc
+        snapshots.after_write(what)
+        new_source = "card:" + card.relative(target)
+        for session in editor.sessions.values():
+            if session.source == body.source:
+                session.source = new_source
+                session.name = new_name
+        return {**summary, "source": new_source, "name": new_name}
 
     @app.delete("/api/audio-edit/{session_id}")
     def audio_edit_close(session_id: str) -> dict:

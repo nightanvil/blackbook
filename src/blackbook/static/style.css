@@ -626,3 +626,7 @@ input[type="number"]:focus { cursor: text; }
 .hk-led { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #00c0f0; box-shadow: 0 0 6px #00c0f0; vertical-align: middle; }
 .hk-icon { display: inline-flex; color: var(--accent); vertical-align: middle; }
 .helpbody kbd { font: 12px/1.4 ui-monospace, monospace; padding: 1px 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--panel-2); }
+.sample-actions { white-space: nowrap; }
+.sample-actions button + button { margin-left: 4px; }
+.rename-input { width: 100%; box-sizing: border-box; font-size: 14px; }
+.ae-rename { margin-left: 10px; vertical-align: middle; }

@@ -113,3 +113,33 @@ def describe(change: CellChange) -> str:
     if not parts:
         parts.append("no change needed")
     return ", ".join(parts + change.notes)
+
+
+def renamed_reference(filename: str, new_name: str) -> str:
+    """The same reference with only the file name exchanged, folder part and separators as they were."""
+    cut = max(filename.rfind("\\"), filename.rfind("/"))
+    return filename[: cut + 1] + new_name
+
+
+def rename_in_text(text: str, xml_rel: str, wav_rel: str, new_name: str) -> tuple[str, int]:
+    """Point every samasst cell for wav_rel to new_name; returns the new text and the number of cells."""
+    wanted = wav_rel.strip("/").casefold()
+    pieces: list[str] = []
+    count = 0
+    last = 0
+    for cell in SAMASST_CELL.finditer(text):
+        params = PARAMS.search(cell.group())
+        if params is None:
+            continue
+        filename = parse_attrs(params.group()).get("filename", "")
+        if not filename or filename.endswith("\\") or reference_target(filename, xml_rel) != wanted:
+            continue
+        new_params = set_attrs(params.group(), {"filename": renamed_reference(filename, new_name)})
+        cell_text = cell.group()[: params.start()] + new_params + cell.group()[params.end():]
+        pieces.append(text[last:cell.start()])
+        pieces.append(cell_text)
+        last = cell.end()
+        count += 1
+    pieces.append(text[last:])
+    return "".join(pieces), count
+

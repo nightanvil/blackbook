@@ -112,6 +112,10 @@ Overwriting keeps every chunk of the file except the audio byte-identical and in
 
 If the part a pad played or a loop spanned is removed completely, the pad plays the whole sample and the loop spans the played part. Other attributes and cells stay byte-identical, line endings and the BOM of the XML files stay as they are. The cache file `<name>.wav.pk` is deleted; the blackbox rebuilds it. A snapshot is taken before and after the write if the backup is set up, and the previous versions of all changed files are copied to the local backup folder.
 
+### Renaming a sample
+
+"Rename" next to a sample in the Patches tab and in the samples of a project, and next to the title of the audio editor, renames a WAV on the card. blackbook first lists every `patch.xml` and `project.xml` that references the file, then renames the file and changes only the `filename` attribute of those `samasst` cells; the folder part and the form of each reference (bare name, `.\name`, card root) stay as they were. ".wav" is added when missing. The name is checked against FAT32 and exFAT, against other files in the folder (also in other case) and against `preview.wav`. A change of only upper and lower case works. The cache file `<name>.wav.pk` is deleted. Factory samples cannot be renamed. Open pads in Build and in the project, and an open audio editor, follow the new name. A snapshot is taken before and after.
+
 ### Planned
 
 - An external editor (Reaper, Audacity and others) via a configurable launch command, using the same reference update.

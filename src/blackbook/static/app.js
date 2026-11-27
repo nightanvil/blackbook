@@ -168,7 +168,8 @@ function showMessage(title, text, buttons = [{ label: "OK", value: true, primary
     fill(document.getElementById("message-content"), el("h2", {}, title), el("p", {}, text));
     fill(document.getElementById("message-actions"), buttons.map((b) =>
       el("button", { class: b.primary ? "primary" : "", onclick: () => done(b.value) }, b.label)));
-    dialog.onclose = () => resolve(null);
+    // The close event of a previous dialog arrives late; only a close while this one is shut counts
+    dialog.onclose = () => { if (!dialog.open) resolve(null); };
     dialog.showModal();
     dialog.querySelector(".dialog-actions button.primary")?.focus();
   });
@@ -465,9 +466,13 @@ async function showPatch(ref) {
     el("tr", {},
       el("td", {}, el("button", { class: "small playbtn", disabled: !s.source, "data-src": s.source || "", onclick: () => play(s.source) })),
       el("td", {}, s.filename, s.source ? null : el("span", { class: "err" }, " (missing)")),
-      el("td", {}, s.source && s.source.startsWith("card:")
-        ? el("button", { class: "small", title: isUser ? "Edit the sample, save as new file or overwrite the original" : "Edit the sample and save it as a new file, factory samples stay unchanged",
-            onclick: () => openAudioEditor(s.source, { card: true, onWritten: () => showPatch(ref) }) }, "Edit")
+      el("td", { class: "sample-actions" }, s.source && s.source.startsWith("card:")
+        ? [
+          el("button", { class: "small", title: isUser ? "Edit the sample, save as new file or overwrite the original" : "Edit the sample and save it as a new file, factory samples stay unchanged",
+            onclick: () => openAudioEditor(s.source, { card: true, onWritten: () => showPatch(ref) }) }, "Edit wave"),
+          isUser ? el("button", { class: "small", title: "Rename the file on the card and in every patch and project that uses it",
+            onclick: async () => { if (await renameSample(s.source)) showPatch(ref); } }, "Rename") : null,
+        ]
         : null),
       el("td", { class: "muted" }, isMulti
         ? `${s.root_name}  keys ${noteName(s.key_low)}-${noteName(s.key_high)}  vel ${s.vel_low}-${s.vel_high}`
@@ -929,6 +934,72 @@ function wavTab(pad, slot) {
   ];
 }
 
+// ---------- renaming a sample on the card ----------
+
+function askName(title, text, value) {
+  const dialog = document.getElementById("message-dialog");
+  return new Promise((resolve) => {
+    const input = el("input", { type: "text", value, class: "rename-input", spellcheck: "false" });
+    const done = (result) => { dialog.onclose = null; dialog.close(); resolve(result); };
+    fill(document.getElementById("message-content"), el("h2", {}, title), el("p", {}, text), input);
+    fill(document.getElementById("message-actions"),
+      el("button", { onclick: () => done(null) }, "Cancel"),
+      el("button", { class: "primary", onclick: () => done(input.value.trim()) }, "Next"));
+    input.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); done(input.value.trim()); } });
+    dialog.onclose = () => { if (!dialog.open) resolve(null); };
+    dialog.showModal();
+    const dot = value.toLowerCase().lastIndexOf(".wav");
+    input.focus();
+    input.setSelectionRange(0, dot > 0 ? dot : value.length);
+  });
+}
+
+// Every place in the open page that still points to the old file follows the new name
+function replaceSource(oldSource, newSource, newName) {
+  const fix = (pad) => {
+    if (!pad || pad.source !== oldSource) return;
+    pad.source = newSource;
+    if (pad.filename) pad.filename = pad.filename.replace(/[^\\/]*$/, newName);
+  };
+  Object.values(state.pads || {}).forEach(fix);
+  if (typeof proj !== "undefined" && proj.data) {
+    for (const t of proj.data.tracks) {
+      t.pads.forEach(fix);
+      Object.values(t.padState || {}).forEach(fix);
+    }
+  }
+  if (typeof proj !== "undefined" && proj.padsOpen) Object.values(proj.padsOpen.pads || {}).forEach(fix);
+  if (pcmCache.has(oldSource)) { pcmCache.set(newSource, pcmCache.get(oldSource)); pcmCache.delete(oldSource); }
+}
+
+// Asks for the new name, shows every patch and project that changes, then renames. Returns the result or null.
+async function renameSample(source) {
+  const current = source.split("/").pop();
+  const name = await askName("Rename sample", "New file name on the card. Every patch and project that uses the file is updated.", current);
+  if (!name) return null;
+  let plan;
+  try {
+    plan = await api("POST", "/api/sample/rename", { source, name });
+  } catch (err) { toast(err.message, true); return null; }
+  const lines = [`${plan.path}`, `becomes ${plan.new_path}`, ""];
+  if (plan.references.length) {
+    lines.push(`Updated in ${plan.references.length} file${plan.references.length > 1 ? "s" : ""}:`);
+    plan.references.forEach((r) => lines.push(`  ${r.kind === "project" ? "Project" : "Patch"} ${r.xml}`));
+  } else {
+    lines.push("No patch or project uses this file.");
+  }
+  if (plan.cache) lines.push("", "The cache file (.wav.pk) is deleted, the blackbox rebuilds it.");
+  plan.warnings.forEach((w) => lines.push("", "Note: " + w));
+  lines.push("", "A snapshot is taken before and after, if the backup is set up.");
+  if (!(await confirmDialog("Rename sample?", lines.join("\n"), "Rename"))) return null;
+  try {
+    const result = await api("POST", "/api/sample/rename", { source, name, apply: true });
+    replaceSource(source, result.source, result.name);
+    toast(`Renamed to ${result.name}${result.references.length ? `, ${result.references.length} file(s) updated` : ""}`);
+    return result;
+  } catch (err) { toast(err.message, true); return null; }
+}
+
 // target.slot: the result goes onto that pad of the builder (inbox copy, original untouched).
 // target.card: the result is written to the card, as a new file or over the original; target.onWritten runs after
 async function openAudioEditor(source, target) {
@@ -1008,7 +1079,19 @@ async function openAudioEditor(source, target) {
       btn("Normalize", "Raise the loudest peak to the given level", () => run("normalize", Number(normInput.value))), normInput, el("span", { class: "muted" }, "dB")),
     el("div", { class: "grp" }, undoBtn, redoBtn));
 
-  document.getElementById("ae-title").textContent = `Edit audio: ${session.name}`;
+  const title = document.getElementById("ae-title");
+  const renamable = session.source.startsWith("card:") && !session.source.startsWith("card:Patches/");
+  fill(title, `Edit audio: ${session.name}`,
+    renamable ? el("button", { class: "small ae-rename", title: "Rename the file on the card and in every patch and project that uses it", onclick: async () => {
+      const result = await renameSample(session.source);
+      if (!result) return;
+      session.source = result.source;
+      session.name = result.name;
+      title.firstChild.textContent = `Edit audio: ${result.name}`;
+      document.getElementById("ae-path").textContent = sourcePath(result.source);
+      if (target.slot != null) renderPads();
+      if (target.onWritten) target.onWritten(result);
+    } }, "Rename") : null);
   document.getElementById("ae-path").textContent = sourcePath(session.source);
   document.getElementById("ae-format").textContent = `${session.bits} bit, ${session.sample_rate / 1000} kHz, ${session.channels === 1 ? "mono" : "stereo"}`;
 
@@ -1581,8 +1664,14 @@ async function renderProjectSamples(name, detail) {
         el("td", {}, el("button", { class: "small playbtn", disabled: !s.source, "data-src": s.source || "", onclick: () => play(s.source) })),
         el("td", {}, s.path || s.filename, s.source ? null : el("span", { class: "err" }, " (missing)")),
         el("td", { class: "muted" }, s.uses > 1 ? `${s.uses} uses` : ""),
-        el("td", {}, s.source
-          ? el("button", { class: "small", title: "Edit the sample, save as new file or overwrite the original", onclick: () => openAudioEditor(s.source, { card: true, onWritten: () => showProject(name) }) }, "Edit")
+        el("td", { class: "sample-actions" }, s.source
+          ? [
+            el("button", { class: "small", title: "Edit the sample, save as new file or overwrite the original", onclick: () => openAudioEditor(s.source, { card: true, onWritten: () => showProject(name) }) }, "Edit wave"),
+            s.path && !s.path.startsWith("Patches/")
+              ? el("button", { class: "small", title: "Rename the file on the card and in every patch and project that uses it",
+                onclick: async () => { if (await renameSample(s.source)) renderProjectSamples(name, detail); } }, "Rename")
+              : null,
+          ]
           : null))))));
   markPlaying();
 }

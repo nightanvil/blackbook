@@ -155,3 +155,39 @@ def test_factory_sample_saves_as_new_file(card: Path, tmp_path: Path, monkeypatc
         assert [s["uses"] for s in samples if s["path"] == "Samples/Pack/BD.wav"] == [1]
     assert (card / "Samples" / "Edited" / "Kick_edit.wav").is_file()
     assert (card / "Patches" / "OneShots" / "Kit A" / "Kick.wav").read_bytes() == original
+
+
+def test_rename_sample_updates_references(card: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    user = card / "UserPatches" / "OneShots" / "Mine"
+    make_wav(user / "Hit.wav")
+    make_wav(user / "Other.wav")
+    (user / "Hit.wav.pk").write_bytes(b"cache")
+    (user / "patch.xml").write_text(
+        '﻿<document><session version="1"><track type="samtrack">'
+        '<cell type="samasst"><params filename="Hit.wav" samlen="4410"/></cell></track></session></document>\n',
+        encoding="utf-8",
+    )
+    project_xml = card / "Projects" / "Song" / "project.xml"
+    project_xml.write_text(
+        project_xml.read_text(encoding="utf-8").replace(
+            "</track>", '<cell type="samasst"><params filename="UserPatches\\OneShots\\Mine\\Hit.wav"/></cell></track>'
+        ),
+        encoding="utf-8",
+    )
+    app = create_app(card, [], tmp_path / "copies", inbox_dir=tmp_path / "inbox")
+    with TestClient(app) as client:
+        body = {"source": "card:UserPatches/OneShots/Mine/Hit.wav", "name": "Snap Hard"}
+        preview = client.post("/api/sample/rename", json=body).json()
+        assert preview["new_path"] == "UserPatches/OneShots/Mine/Snap Hard.wav"
+        assert {r["xml"] for r in preview["references"]} == {"UserPatches/OneShots/Mine/patch.xml", "Projects/Song/project.xml"}
+        assert (user / "Hit.wav").is_file()
+        result = client.post("/api/sample/rename", json={**body, "apply": True}).json()
+        assert result["source"] == "card:UserPatches/OneShots/Mine/Snap Hard.wav"
+        assert client.post("/api/sample/rename", json={"source": "card:Patches/OneShots/Kit A/Kick.wav", "name": "x"}).status_code == 403
+        clash = client.post("/api/sample/rename", json={"source": result["source"], "name": "other"})
+        assert clash.status_code == 400
+    assert (user / "Snap Hard.wav").is_file() and not (user / "Hit.wav").exists() and not (user / "Hit.wav.pk").exists()
+    assert 'filename="Snap Hard.wav"' in (user / "patch.xml").read_text(encoding="utf-8-sig")
+    assert 'filename="UserPatches\\OneShots\\Mine\\Snap Hard.wav"' in project_xml.read_text(encoding="utf-8")
+    assert (user / "patch.xml").read_bytes().startswith(b"\xef\xbb\xbf")
