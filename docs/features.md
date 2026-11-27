@@ -187,6 +187,10 @@ Each pad row starts with an LED in the track color that lights up when the pad s
 - **Pads** of a one-shot track, with the pad grid, pad editor and sample browser of the builder. Samples on the card are referenced where they are (relative to the card root); samples from the inbox or a library are copied into the project folder and referenced as `.\name.wav`, like recordings. Only the `saminst` and `samasst` cells of changed pads change; the patches in Patches stay as they are.
 - **Samples** of the project with playback and the audio editor.
 
+### Undo
+
+Every change to sequences and MIDI channels of a project can be undone and redone (↶ and ↷ next to Discard, Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y), up to 100 steps. A paint stroke counts as one step. Undoing back to the loaded state clears "unsaved changes". Saving or discarding starts a new history. Changes in the Pads tab are not part of it; Discard resets them.
+
 ### Number fields
 
 Every number field can also be changed by pressing and dragging up or down. A vertical slider next to the field shows the value. The whole range takes 16 pixels per value, at least 120 and at most 400 pixels, so fields with few values do not jump; Shift moves five times finer. A click without dragging places the cursor for typing.

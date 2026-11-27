@@ -76,8 +76,61 @@ function currentSeq(create = false) {
 function markDirty(seq) {
   if (seq) seq.changed = true;
   proj.dirty = true;
+  historyPush();
   renderProjectHead();
 }
+
+// ---------- undo and redo of sequence and MIDI changes ----------
+
+const HISTORY_MAX = 100;
+
+function projState() {
+  return JSON.stringify(proj.data.tracks.map((t) => ({
+    sequences: t.sequences, midiinchan: t.midiinchan, midioutchan: t.midioutchan, midiChanged: !!t.midiChanged,
+  })));
+}
+
+function historyReset() {
+  proj.history = [projState()];
+  proj.histPos = 0;
+  proj.batch = false;
+}
+
+// Called after every change; a paint stroke counts as one step
+function historyPush() {
+  if (proj.batch || !proj.history) return;
+  const state = projState();
+  if (state === proj.history[proj.histPos]) return;
+  proj.history.splice(proj.histPos + 1);
+  proj.history.push(state);
+  if (proj.history.length > HISTORY_MAX) proj.history.shift();
+  proj.histPos = proj.history.length - 1;
+}
+
+function historyGo(delta) {
+  if (!proj.history) return;
+  const pos = proj.histPos + delta;
+  if (pos < 0 || pos >= proj.history.length) return;
+  proj.histPos = pos;
+  const states = JSON.parse(proj.history[pos]);
+  proj.data.tracks.forEach((t, i) => Object.assign(t, states[i]));
+  Object.assign(proj, { selected: null, euclid: null, human: null });
+  proj.dirty = proj.history[pos] !== proj.initialState;
+  renderProjectHead();
+  renderTracks();
+  if (proj.tab === "seq") renderSequencer();
+  toast(delta < 0 ? "Undo" : "Redo");
+}
+
+document.addEventListener("keydown", (ev) => {
+  if (!(ev.ctrlKey || ev.metaKey) || ev.altKey || !proj.data) return;
+  const key = ev.key.toLowerCase();
+  if (key !== "z" && key !== "y") return;
+  if (!document.getElementById("view-projects").classList.contains("active") || proj.tab === "pads") return;
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(ev.target.tagName) || document.querySelector("dialog[open]")) return;
+  ev.preventDefault();
+  historyGo(key === "y" || ev.shiftKey ? 1 : -1);
+});
 
 // ---------- pads of a one-shot track, edited with the pad grid and pad editor of the builder ----------
 
@@ -242,6 +295,8 @@ async function showProject(name) {
   proj.track = keepTrack != null && keepTrack < data.tracks.length ? keepTrack : Math.max(0, firstOneShot);
   const firstSeq = currentTrack() && currentTrack().sequences[0];
   if (keepTrack == null) proj.slot = firstSeq ? firstSeq.slot : 0;
+  historyReset();
+  proj.initialState = proj.history[0];
   renderProjectDetail();
 }
 
@@ -257,6 +312,8 @@ function renderProjectHead() {
       proj.data.autosave ? el("span", { class: "badge", title: "The device keeps an autosave copy of this project. blackbook changes only the project you selected here." }, "has autosave") : null,
       el("span", { class: "grow" }),
       dirty ? el("span", { class: "warn" }, "unsaved changes") : null,
+      el("button", { class: "iconbtn-text", disabled: !proj.history || proj.histPos <= 0, title: "Undo (Ctrl+Z)", onclick: () => historyGo(-1) }, "↶"),
+      el("button", { class: "iconbtn-text", disabled: !proj.history || proj.histPos >= proj.history.length - 1, title: "Redo (Ctrl+Shift+Z)", onclick: () => historyGo(1) }, "↷"),
       el("button", { disabled: !dirty, onclick: () => showProjectReload() }, "Discard"),
       el("button", { class: "primary", disabled: !dirty, onclick: saveProject }, "Save to card")),
     summary ? el("div", { class: "proj-stats" },
@@ -573,6 +630,7 @@ function paint(down, grid, steps) {
   const seq = currentSeq(true);
   const done = new Set();
   let changed = false;
+  proj.batch = true;
   const at = (e) => {
     const cell = cellAt(document.querySelector("#proj-seq .seq-grid") || grid, e.clientX, e.clientY, steps);
     if (!cell) return;
@@ -595,6 +653,7 @@ function paint(down, grid, steps) {
   const up = () => {
     window.removeEventListener("pointermove", at);
     window.removeEventListener("pointerup", up);
+    proj.batch = false;
     if (changed) markDirty(seq);
   };
   window.addEventListener("pointermove", at);
