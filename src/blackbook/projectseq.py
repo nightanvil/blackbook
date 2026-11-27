@@ -311,3 +311,129 @@ def apply_changes(text: str, changes: list[TrackChange]) -> str:
             body = body[: p.start()] + set_attrs(p.group(), values) + body[p.end():]
         text = text[: track.start] + body + text[track.end:]
     return text
+
+
+# ---------- loading a patch into a track, as Change Patch on the device ----------
+
+SEQUENCE_CELLS = ("noteseq", "loopgroup")
+# Track attributes that belong to the project slot, not to the sound: position, routing, MIDI, recording, UI state
+KEEP_TRACK_ATTRS = (
+    "celldisppos", "selseqpos", "seqplayenable", "trkmute", "trksolo", "outputbus", "padrowoffset",
+    "midiinport", "midiinchan", "midioutport", "midioutchan", "cc1inport", "cc1inchan", "cc2inport", "cc2ininchan",
+    "padrec", "recactive", "recinput", "recgain", "recautoplay", "recpresetlen", "recquant", "recmonmode",
+    "recusethres", "recthresh", "trkinput", "uiSequencerType",
+    "duckattack", "duckhold", "duckrelease", "duckdepth", "ducktrig", "duckclkdiv", "ducktrkin", "duckthresh",
+    "duckmidinote", "duckmidich", "duckextin", "duckbypass", "duckpadtrk", "duckpad",
+)
+CELL_BLOCK_RE = re.compile(r'(?P<indent>[ \t]*)<cell type="(?P<type>\w+)">.*?</cell>', re.DOTALL)
+
+
+def _cell_blocks(body: str) -> list[tuple[str, str, str]]:
+    """Top level cells of a track body as (type, indent, text without the leading indent)."""
+    return [(m.group("type"), m.group("indent"), m.group()[len(m.group("indent")):]) for m in CELL_BLOCK_RE.finditer(body)]
+
+
+def _reindent(block: str, old: str, new: str, newline: str) -> str:
+    lines = block.replace("\r\n", "\n").split("\n")
+    out = [lines[0]]
+    for line in lines[1:]:
+        out.append(new + line[len(old):] if line.startswith(old) else line)
+    return newline.join(out)
+
+
+@dataclass
+class PatchLoad:
+    text: str
+    old_type: str
+    new_type: str
+    sequences_kept: bool
+    samples: int
+
+
+def load_patch(project_text: str, index: int | None, position: int, patch_text: str, reference) -> PatchLoad:
+    """Put the instrument of a patch into the track with the given index, or a new track at position.
+
+    reference(filename) turns a sample reference of the patch into one for the project. The project keeps
+    the slot settings of the track (KEEP_TRACK_ATTRS) and, for the same track type, its sequences.
+    """
+    newline = "\r\n" if "\r\n" in project_text else "\n"
+    patch_track = TRACK_RE.search(patch_text)
+    if patch_track is None:
+        raise SequenceError("the patch has no track")
+    new_type = patch_track.group("type")
+    patch_body = patch_track.group("body")
+    patch_params = PARAMS_RE.search(patch_body)
+    if patch_params is None:
+        raise SequenceError("the patch has no track settings")
+    tracks_ = tracks(project_text)
+    old = next((t for t in tracks_ if t.index == index), None) if index is not None else None
+    if index is not None and (old is None or old.type == "mastrack"):
+        raise SequenceError(f"no instrument track {index}")
+    if old is None and any(_int(t.attrs, "celldisppos", -1) == position for t in tracks_ if t.type != "mastrack"):
+        raise SequenceError(f"track position {position + 1} is not empty")
+
+    # Indentation of the project: track line and cells
+    master = next((t for t in tracks_ if t.type == "mastrack"), None)
+    ref_track = old or master or (tracks_[0] if tracks_ else None)
+    if ref_track is None:
+        raise SequenceError("the project has no tracks")
+    line_start = project_text.rfind("\n", 0, ref_track.start - 1) + 1
+    track_indent = re.match(r"[ \t]*", project_text[line_start:]).group()
+    body_cells = _cell_blocks(project_text[ref_track.start:ref_track.end])
+    cell_indent = body_cells[0][1] if body_cells else track_indent + "    "
+
+    # Track settings: the patch's sound, the slot's routing
+    params = patch_params.group()
+    keep: dict[str, object] = {}
+    if old is not None:
+        keep = {k: v for k, v in old.attrs.items() if k in KEEP_TRACK_ATTRS}
+    else:
+        keep = {"celldisppos": position, "midiinchan": position + 1, "midioutchan": 0}
+    params = set_attrs(params, keep)
+
+    patch_cells = _cell_blocks(patch_body)
+    patch_indent = patch_cells[0][1] if patch_cells else cell_indent
+    samples = 0
+    instrument: list[str] = []
+    for ctype, _indent, block in patch_cells:
+        if ctype in SEQUENCE_CELLS:
+            continue
+
+        def fix(m: re.Match[str]) -> str:
+            nonlocal samples
+            attrs = parse_attrs(m.group())
+            filename = attrs.get("filename", "")
+            if not filename or filename.endswith("\\"):
+                return m.group()
+            samples += 1
+            return set_attrs(m.group(), {"filename": reference(filename)})
+
+        block = PARAMS_RE.sub(fix, block) if ctype == "samasst" else block
+        instrument.append(cell_indent + _reindent(block, patch_indent, cell_indent, newline))
+
+    same_type = old is not None and old.type == new_type
+    if same_type:
+        sequences = [indent + block for ctype, indent, block in _cell_blocks(project_text[old.start:old.end]) if ctype in SEQUENCE_CELLS]
+        sequences = [s.replace("\r\n", "\n").replace("\n", newline) for s in sequences]
+    else:
+        sequences = [cell_indent + _reindent(block, patch_indent, cell_indent, newline) for ctype, _i, block in patch_cells if ctype in SEQUENCE_CELLS]
+
+    lines = [f"{cell_indent}{params}", *sequences, *instrument]
+    body = newline + newline.join(lines) + newline + track_indent
+    if old is not None:
+        # The opening tag carries the type; replace from the tag to the end of the body
+        tag_start = project_text.rfind("<track", 0, old.start)
+        new_text = project_text[:tag_start] + f'<track type="{new_type}">' + body + project_text[old.end:]
+    else:
+        insert_at = project_text.rfind("<track", 0, master.start) if master else project_text.rfind("</session>")
+        if insert_at < 0:
+            raise SequenceError("the project has no session to add a track to")
+        insert_line = project_text.rfind("\n", 0, insert_at) + 1
+        if project_text[insert_line:insert_at].strip():
+            # No line of its own (a file on one line): insert right before the tag
+            block = f'<track type="{new_type}">{body}</track>'
+            new_text = project_text[:insert_at] + block + project_text[insert_at:]
+        else:
+            block = f'{track_indent}<track type="{new_type}">{body}</track>{newline}'
+            new_text = project_text[:insert_line] + block + project_text[insert_line:]
+    return PatchLoad(new_text, old.type if old else "", new_type, same_type, samples)

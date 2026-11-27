@@ -131,3 +131,33 @@ def test_project_track_pads(card: Path, tmp_path: Path, monkeypatch) -> None:
     assert 'filename=".\\Clap.wav"' in text and (project / "Clap.wav").is_file()
     assert 'filename="Samples\\Pack\\SD.wav"' in text
     assert "\n" not in text.replace("\r\n", "")
+
+
+def test_load_patch_into_track_and_empty_slot(card: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    project = card / "Projects" / "Beat"
+    project.mkdir()
+    (project / "project.xml").write_text(PROJECT, encoding="utf-8", newline="")
+    app = create_app(card, [], tmp_path / "copies", inbox_dir=tmp_path / "inbox")
+    with TestClient(app) as client:
+        body = {"name": "Beat", "index": 0, "ref": "Patches\\OneShots\\Kit A"}
+        plan = client.post("/api/project/change-patch", json=body).json()
+        assert plan == {"patch": "Patches/OneShots/Kit A", "old_type": "samtrack", "new_type": "samtrack", "sequences_kept": True, "samples": 1}
+        assert client.post("/api/project/change-patch", json={**body, "apply": True}).status_code == 200
+        added = client.post("/api/project/change-patch", json={"name": "Beat", "position": 1, "ref": "Patches\\OneShots\\Kit A", "apply": True})
+        assert added.status_code == 200
+        taken = client.post("/api/project/change-patch", json={"name": "Beat", "position": 1, "ref": "Patches\\OneShots\\Kit A"})
+        assert taken.status_code == 400
+        data = client.get("/api/project/detail", params={"name": "Beat"}).json()
+    raw = (project / "project.xml").read_bytes()
+    assert raw.startswith(b"\xef\xbb\xbf") and b"\n" not in raw.replace(b"\r\n", b"")
+    text = raw.decode("utf-8-sig")
+    tracks = data["tracks"]
+    first = next(t for t in tracks if t["position"] == 0)
+    assert first["name"] == "Kit A" and first["midiinchan"] == 1 and len(first["sequences"]) == 2
+    assert first["pads"][0]["filename"] == "Patches\\OneShots\\Kit A\\Kick.wav"
+    second = next(t for t in tracks if t["position"] == 1)
+    assert second["midiinchan"] == 2 and second["name"] == "Kit A"
+    assert 'other="x"' not in text  # the slot's own extra attribute is not routing, the patch replaces it
+    assert text.count('<track type="mastrack">') == 1
+    assert projectseq.read_project(text)["tempo"] == 123

@@ -112,6 +112,14 @@ class TrackChangeIn(BaseModel):
     pads: list[PadIn] | None = None
 
 
+class ChangePatchIn(BaseModel):
+    name: str  # project
+    index: int | None = None  # track in the file; None adds a track at position
+    position: int = 0
+    ref: str  # patch, as in the patch list
+    apply: bool = False
+
+
 class ProjectChangeIn(BaseModel):
     name: str
     tracks: list[TrackChangeIn]
@@ -1110,6 +1118,54 @@ def create_app(
         if errors:
             raise HTTPException(400, "; ".join(errors))
         return updates
+
+    @app.post("/api/project/change-patch")
+    def project_change_patch(body: ChangePatchIn) -> dict:
+        """Load a patch into a project track, or into an empty slot, as Change Patch on the device."""
+        if not snapshots.card_present():
+            raise HTTPException(409, "card not connected")
+        xml_path = project_xml(body.name)
+        try:
+            patch_dir = card.patch_dir(body.ref)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        patch_text = (patch_dir / "patch.xml").read_bytes().decode("utf-8-sig")
+        if not patch_text.strip():
+            raise HTTPException(422, DAMAGED_XML.format(name="patch.xml"))
+        if not 0 <= body.position <= 3:
+            raise HTTPException(400, "track position must be 1 to 4")
+
+        def reference(filename: str) -> str:
+            # The project points to the samples in the patch folder, from the card root
+            path = resolve_sample_reference(card.root, filename, patch_dir)
+            if path is not None:
+                return join_reference(*path.relative_to(card.root).parts)
+            return join_reference(*patch_dir.relative_to(card.root).parts, filename.replace("/", "\\").split("\\")[-1])
+
+        raw = xml_path.read_bytes()
+        bom = raw.startswith(b"\xef\xbb\xbf")
+        text = raw.decode("utf-8-sig")
+        try:
+            result = projectseq.load_patch(text, body.index, body.position, patch_text, reference)
+        except projectseq.SequenceError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        summary = {
+            "patch": body.ref.replace("\\", "/"),
+            "old_type": result.old_type,
+            "new_type": result.new_type,
+            "sequences_kept": result.sequences_kept,
+            "samples": result.samples,
+        }
+        if not body.apply:
+            return summary
+        what = f"loading patch {patch_dir.name} into project {body.name}"
+        snapshots.before_write(what)
+        backup.save(xml_path)
+        tmp = xml_path.with_name(xml_path.name + ".blackbook-tmp")
+        tmp.write_bytes((b"\xef\xbb\xbf" if bom else b"") + result.text.encode("utf-8"))
+        tmp.replace(xml_path)
+        snapshots.after_write(what)
+        return summary
 
     @app.put("/api/project/sequences")
     def project_sequences(body: ProjectChangeIn) -> dict:

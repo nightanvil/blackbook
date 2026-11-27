@@ -409,6 +409,88 @@ function trackIcon(type) {
   return node;
 }
 
+// Patch folder on the card for each track type
+const TYPE_DIRS = { samtrack: "OneShots", multisamtrack: "SampInst", looptrack: "Loops", slicertrack: "Slicer", granslicertrack: "Shredder" };
+
+// Choose a patch for a track (index) or an empty slot (index null), then load it into the project
+async function choosePatch(index, position) {
+  if (isDirty()) {
+    await showMessage("Save first", "This project has unsaved changes. Save them to the card or discard them before you load a patch.");
+    return;
+  }
+  const track = index == null ? null : proj.data.tracks[index];
+  const dialog = document.getElementById("message-dialog");
+  const search = el("input", { type: "search", placeholder: "Search patch or tag", class: "cp-search" });
+  const typeSel = el("select", {},
+    el("option", { value: "" }, "All types"),
+    Object.entries(TYPE_LABELS).map(([dir, label]) => el("option", { value: dir }, label)));
+  typeSel.value = track ? TYPE_DIRS[track.type] || "" : "";
+  const list = el("div", { class: "cp-list" });
+  let chosen = null;
+  const nextBtn = el("button", { class: "primary", disabled: true }, "Next");
+  const render = () => {
+    const q = search.value.trim().toLowerCase();
+    const items = (state.patches || []).filter((p) =>
+      (!typeSel.value || p.type === typeSel.value) &&
+      (!q || p.name.toLowerCase().includes(q) || p.tags.some((t) => t.toLowerCase().includes(q))))
+      .sort((a, b) => (b.is_user - a.is_user) || a.name.localeCompare(b.name));
+    fill(list, items.slice(0, 300).map((p) => {
+      const preview = p.has_preview ? "card:" + p.ref.replaceAll("\\", "/") + "/preview.wav" : null;
+      return el("div", { class: "row" + (chosen === p ? " selected" : ""), onclick: () => { chosen = p; nextBtn.disabled = false; render(); } },
+        el("button", { class: "small playbtn", disabled: !preview, "data-src": preview || "", onclick: (e) => { e.stopPropagation(); if (preview) play(preview); } }),
+        p.is_user ? el("span", { class: "badge user" }, "user") : el("span", { class: "badge factory" }, "factory"),
+        el("span", { class: "name" }, p.name),
+        el("span", { class: "meta" }, typeLabel(p.type)));
+    }));
+    if (!items.length) list.append(el("p", { class: "muted", style: "padding:10px" }, "No patch matches."));
+  };
+  search.addEventListener("input", render);
+  typeSel.addEventListener("change", render);
+  const picked = await new Promise((resolve) => {
+    const done = (value) => { dialog.onclose = null; dialog.close(); dialog.classList.remove("wide"); resolve(value); };
+    dialog.classList.add("wide");
+    fill(document.getElementById("message-content"),
+      el("h2", {}, track ? `Change patch of track ${position + 1}${track.name ? ": " + track.name : ""}` : `Add a patch to track ${position + 1}`),
+      el("div", { class: "cp-filter" }, search, typeSel),
+      list);
+    nextBtn.onclick = () => done(chosen);
+    fill(document.getElementById("message-actions"), el("button", { onclick: () => done(null) }, "Cancel"), nextBtn);
+    dialog.onclose = () => { if (!dialog.open) { dialog.classList.remove("wide"); resolve(null); } };
+    dialog.showModal();
+    render();
+    search.focus();
+  });
+  stop();
+  if (!picked) return;
+  const body = { name: proj.name, index, position, ref: picked.ref };
+  let plan;
+  try { plan = await api("POST", "/api/project/change-patch", body); } catch (err) { toast(err.message, true); return; }
+  const lines = [
+    track ? `Track ${position + 1} gets the patch ${picked.name} (${TRACK_LABELS[plan.new_type] || plan.new_type}).` : `Track ${position + 1} is added with the patch ${picked.name}.`,
+    `${plan.samples} sample${plan.samples === 1 ? "" : "s"}, used from the patch folder on the card.`,
+    "",
+    track
+      ? (plan.sequences_kept
+        ? "The sequences of the track stay, as on the device."
+        : `The track type changes from ${TRACK_LABELS[plan.old_type] || plan.old_type} to ${TRACK_LABELS[plan.new_type] || plan.new_type}: the sequences of the track are replaced by those of the patch.`)
+      : "MIDI In is set to the track number, as for new tracks on the device.",
+    "Position, MIDI channels, output and recording settings of the track stay.",
+    "",
+    "A snapshot is taken before and after, if the backup is set up. Load the project again on the blackbox afterwards.",
+  ];
+  if (!(await confirmDialog(track ? "Change patch?" : "Add patch?", lines.join("\n"), track ? "Change patch" : "Add patch"))) return;
+  try {
+    await api("POST", "/api/project/change-patch", { ...body, apply: true });
+    toast(`${picked.name} loaded into track ${position + 1}`);
+    proj.dirty = false;
+    proj.data = null;
+    await showProject(proj.name);
+    const now = proj.data.tracks.findIndex((t) => t.position === position);
+    if (now >= 0) selectTrack(now);
+    loadProjects();
+  } catch (err) { toast(err.message, true); }
+}
+
 function renderTracks() {
   const wrap = document.getElementById("proj-tracks");
   if (!wrap) return;
@@ -416,7 +498,10 @@ function renderTracks() {
   const byPos = new Map(tracks.map((t, i) => [t.position, i]));
   const cards = [0, 1, 2, 3].map((pos) => {
     const i = byPos.get(pos);
-    if (i == null) return el("div", { class: "bb-track empty", title: "Empty track" });
+    if (i == null) {
+      return el("div", { class: "bb-track empty", title: "Empty track: add a patch" },
+        el("button", { class: "bb-add", onclick: () => choosePatch(null, pos) }, "+ Add patch"));
+    }
     const t = tracks[i];
     const inSel = midiOptions(t.midiinchan);
     const outSel = midiOptions(t.midioutchan);
@@ -436,6 +521,7 @@ function renderTracks() {
         el("div", { class: "bb-config-title" }, "Config"),
         el("label", { title: "MIDI channel the track listens on (MIDI In Chan)" }, "MIDI In", inSel),
         el("label", { title: "MIDI channel the track sends on (MIDI OutCh)" }, "MIDI Out", outSel)),
+      el("button", { class: "bb-change", title: "Load another patch into this track, as Change Patch on the device", onclick: (e) => { e.stopPropagation(); choosePatch(i, pos); } }, "Change patch"),
       el("div", { class: "bb-foot" }, `Samples: ${t.samples}`, el("span", {}, `Seq: ${used}/8`)));
   });
   fill(wrap,
