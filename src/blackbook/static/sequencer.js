@@ -13,7 +13,7 @@ const NUDGE = [
   { label: "1/2 step", ticks: TICKS / 2 },
   { label: "1/4 step", ticks: TICKS / 4 },
   { label: "1/8 step", ticks: TICKS / 8 },
-  { label: "Free (10 ticks)", ticks: OFFSET_UNIT },
+  { label: "Free (1 offset)", ticks: OFFSET_UNIT },
 ];
 
 const proj = {
@@ -482,7 +482,7 @@ function stepGrid(track, seq) {
       const node = el("div", {
         class: "seq-ev" + (ev === proj.selected ? " selected" : "") + (ev.prob < 100 ? " prob" : ""),
         style: `grid-row:${r + 2};grid-column:${ev.step + 2} / span ${span};opacity:${0.35 + 0.65 * vel / 127};transform:translateX(${(offTicks / TICKS) * CELL_PITCH}px)` + (width ? `;width:${width}px` : ""),
-        title: `Pad ${padNumber(ev.chan)}, step ${ev.step + 1}, velocity ${vel}, prob ${ev.prob < 100 ? ev.prob + "%" : "always"}, offset ${offTicks} ticks, length ${ev.lencount || ev.lentks + " ticks"}. Drag to move.`,
+        title: `Pad ${padNumber(ev.chan)}, step ${ev.step + 1}, velocity ${vel}, prob ${ev.prob < 100 ? ev.prob + "%" : "always"}, offset ${Math.round(offTicks / OFFSET_UNIT)}, length ${ev.lencount || ev.lentks + " ticks"}. Drag to move.`,
       });
       node.addEventListener("pointerdown", (e) => dragEvent(e, ev, node, steps, seq));
       grid.append(node);
@@ -501,7 +501,7 @@ function stepGrid(track, seq) {
   return el("div", {},
     el("div", { class: "seq-toolbar" },
       el("label", {}, "Move notes by ", nudgeSel),
-      el("span", { class: "muted hint-small" }, `Off the step grid a note can sit ${low} to +${high} ticks from its step (a step has ${TICKS}).` + (seq && seq.snap ? " Turn Snap off for up to half a step, as with notes recorded on the device." : ""))),
+      el("span", { class: "muted hint-small" }, `Offset ${low / OFFSET_UNIT} to +${high / OFFSET_UNIT} as on the device (10 ticks each, a step has ${TICKS}).` + (seq && seq.snap ? " Snap off allows -48, half a step, as with notes recorded on the device." : ""))),
     el("div", { class: "seq-grid-wrap" }, grid),
     el("p", { class: "muted hint-small" }, "Click an empty cell to add a note, click a note to select it, click the selected note again to remove it. Drag a note sideways to move it on the chosen grid, up or down to move it to another pad. E next to a pad opens the Euclidean generator. Click a pad name to hear the pad. Playback follows step length, velocity, probability, offset and the pad's level, pitch, pan, start and length; swing and choke groups are approximated, effects are heard on the device only."));
 }
@@ -702,8 +702,8 @@ function eventInspector(track, seq) {
     el("b", {}, `Pad ${padNumber(ev.chan)}, step ${ev.step + 1}`),
     num("Velocity", ev.velocity ?? 100, 1, 127, "How hard the pad plays, 1 to 127", (v) => { ev.velocity = v; }, 100),
     num("Prob %", ev.prob, 1, 100, "Probability that the note plays each time, 100 is Always", (v) => { ev.prob = v; }, 100),
-    num("Offset", ev.strtks - ev.step * TICKS, offsetLimits(seq)[0], offsetLimits(seq)[1], "Ticks before or after the step, a step has 960. The Offset knob of the device moves in steps of 10 up to +-470.", (v) => {
-      placeEvent(ev, ev.step * TICKS + v, gridSteps(seq), seq);
+    num("Offset", Math.round((ev.strtks - ev.step * TICKS) / OFFSET_UNIT), offsetLimits(seq)[0] / OFFSET_UNIT, offsetLimits(seq)[1] / OFFSET_UNIT, "Offset as the device shows it: -47 to +47, each unit is 10 ticks and a step has 960 ticks. With Snap off down to -48 (half a step).", (v) => {
+      placeEvent(ev, ev.step * TICKS + v * OFFSET_UNIT, gridSteps(seq), seq);
     }, 0),
     ev.lencount === 0
       ? el("span", { class: "muted", title: "Recorded with Snap off" }, `Length ${ev.lentks} ticks`)

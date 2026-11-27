@@ -15,6 +15,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 - Pads tab in a project: edit the pads of a one-shot track right in the project with the pad editor and sample browser from Build. The pads are drawn compact there.
 - Sequencer: drag notes sideways on a grid down to 10 ticks and up or down to another pad. With Snap off notes can sit up to half a step off the grid.
 - Sequencer: "Move notes by" is remembered per project.
+- Sequencer: the offset of a note is shown as on the device, -47 to +47, instead of in ticks.
 - Euclidean generator per pad in the sequencer. Each pad has its own settings; opening the generator changes nothing until a value is changed or Apply is clicked. Presets for common patterns: 4/4, Offbeat, Backbeat, 8ths, 16ths, Tresillo, Cinquillo, Bossa, 7 in 16, Clear.
 - Number fields can be changed by pressing and dragging up or down, with a vertical slider next to the field. Fields with few values move slower, so they do not jump.
 - Double click on a field sets its default, a second double click brings back the previous value: sequence settings, note values, Euclid and pad parameters.
