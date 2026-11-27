@@ -35,11 +35,20 @@ class Session:
     bits: int
     is_float: bool
     history: list[np.ndarray] = field(default_factory=list)
+    # Per history entry the operations from the opened file to that version, for mapping frame positions
+    chains: list[list[tuple[str, int, int]]] = field(default_factory=list)
     position: int = 0
 
     @property
     def data(self) -> np.ndarray:
         return self.history[self.position]
+
+    @property
+    def ops(self) -> list[tuple[str, int, int]]:
+        return self.chains[self.position]
+
+    def map_position(self, frame: int) -> int:
+        return map_position(self.ops, frame)
 
     def state(self) -> dict:
         return {
@@ -69,7 +78,7 @@ class Editor:
             raise EditError(str(exc)) from exc
         if info.format_tag not in (FORMAT_PCM, FORMAT_FLOAT) or (not info.is_float and info.bits not in (16, 24, 32)):
             raise EditError(f"{path.name}: {info.describe()} cannot be edited, supported are 16, 24 and 32 bit")
-        session = Session(uuid.uuid4().hex, source, path.name, rate, info.bits, info.is_float, [data.copy()])
+        session = Session(uuid.uuid4().hex, source, path.name, rate, info.bits, info.is_float, [data.copy()], [[]])
         self.sessions[session.id] = session
         while len(self.sessions) > MAX_SESSIONS:
             self.sessions.popitem(last=False)
@@ -87,10 +96,14 @@ class Editor:
 
     def apply(self, session: Session, op: str, start: int, end: int, value: float = 0.0) -> None:
         result = apply_op(session.data, op, start, end, value)
+        chain = session.chains[session.position] + [(op, start, end)]
         del session.history[session.position + 1:]
+        del session.chains[session.position + 1:]
         session.history.append(result)
+        session.chains.append(chain)
         if len(session.history) > MAX_HISTORY:
             session.history.pop(0)
+            session.chains.pop(0)
         session.position = len(session.history) - 1
 
     def undo(self, session: Session) -> None:
@@ -137,6 +150,19 @@ def apply_op(data: np.ndarray, op: str, start: int, end: int, value: float = 0.0
     return result
 
 
+def map_position(ops: list[tuple[str, int, int]], frame: int) -> int:
+    """Where a frame of the opened file ends up after the operations; removed frames go to the cut."""
+    for op, start, end in ops:
+        if op == "crop":
+            frame = min(max(frame - start, 0), end - start)
+        elif op == "delete":
+            if frame >= end:
+                frame -= end - start
+            elif frame > start:
+                frame = start
+    return frame
+
+
 def nearest_zero_crossing(data: np.ndarray, position: int, radius: int = 2000) -> int:
     """Frame closest to position where the channel sum changes sign or is zero."""
     frames = len(data)
@@ -161,27 +187,7 @@ def pcm_bytes(data: np.ndarray) -> bytes:
 def write_wav(path: Path, data: np.ndarray, sample_rate: int, bits: int, is_float: bool) -> None:
     """Write audio in the given format, PCM scaled by 2^(bits-1) and clipped."""
     channels = data.shape[1]
-    if is_float:
-        if bits != 32:
-            raise EditError(f"unsupported float width {bits}")
-        payload = np.ascontiguousarray(data, dtype="<f4").tobytes()
-        format_tag = FORMAT_FLOAT
-    else:
-        full = float(2 ** (bits - 1))
-        ints = np.clip(np.round(data.astype(np.float64) * full), -full, full - 1).astype(np.int64).reshape(-1)
-        if bits == 16:
-            payload = ints.astype("<i2").tobytes()
-        elif bits == 24:
-            raw = np.empty((len(ints), 3), dtype=np.uint8)
-            raw[:, 0] = ints & 0xFF
-            raw[:, 1] = (ints >> 8) & 0xFF
-            raw[:, 2] = (ints >> 16) & 0xFF
-            payload = raw.tobytes()
-        elif bits == 32:
-            payload = ints.astype("<i4").tobytes()
-        else:
-            raise EditError(f"unsupported PCM width {bits}")
-        format_tag = FORMAT_PCM
+    format_tag, payload = wav_payload(data, bits, is_float)
     block_align = channels * bits // 8
     fmt = struct.pack("<HHIIHH", format_tag, channels, sample_rate, sample_rate * block_align, block_align, bits)
     body = b"WAVE" + b"fmt " + struct.pack("<I", len(fmt)) + fmt + b"data" + struct.pack("<I", len(payload)) + payload
@@ -189,6 +195,76 @@ def write_wav(path: Path, data: np.ndarray, sample_rate: int, bits: int, is_floa
         body += b"\x00"
     tmp = path.with_name(path.name + ".blackbook-tmp")
     tmp.write_bytes(b"RIFF" + struct.pack("<I", len(body)) + body)
+    tmp.replace(path)
+
+
+def wav_payload(data: np.ndarray, bits: int, is_float: bool) -> tuple[int, bytes]:
+    """Format tag and interleaved little endian sample bytes, PCM scaled by 2^(bits-1) and clipped."""
+    if is_float:
+        if bits != 32:
+            raise EditError(f"unsupported float width {bits}")
+        return FORMAT_FLOAT, np.ascontiguousarray(data, dtype="<f4").tobytes()
+    full = float(2 ** (bits - 1))
+    ints = np.clip(np.round(data.astype(np.float64) * full), -full, full - 1).astype(np.int64).reshape(-1)
+    if bits == 16:
+        return FORMAT_PCM, ints.astype("<i2").tobytes()
+    if bits == 24:
+        raw = np.empty((len(ints), 3), dtype=np.uint8)
+        raw[:, 0] = ints & 0xFF
+        raw[:, 1] = (ints >> 8) & 0xFF
+        raw[:, 2] = (ints >> 16) & 0xFF
+        return FORMAT_PCM, raw.tobytes()
+    if bits == 32:
+        return FORMAT_PCM, ints.astype("<i4").tobytes()
+    raise EditError(f"unsupported PCM width {bits}")
+
+
+def rewrite_wav(path: Path, session: Session) -> None:
+    """Replace the audio of an existing WAV in place.
+
+    All chunks except the audio stay byte-identical and in their order. Positions in cue and smpl
+    chunks follow the edit, so markers and loops stay on the same sound.
+    """
+    original = path.read_bytes()
+    if original[:4] != b"RIFF" or original[8:12] != b"WAVE":
+        raise EditError(f"{path.name} is not a RIFF/WAVE file")
+    _tag, payload = wav_payload(session.data, session.bits, session.is_float)
+    frames = len(session.data)
+    out = bytearray()
+    pos = 12
+    while pos + 8 <= len(original):
+        chunk_id, size = struct.unpack_from("<4sI", original, pos)
+        body = original[pos + 8:pos + 8 + size]
+        if chunk_id == b"data":
+            body = payload
+        elif chunk_id == b"cue " and len(body) >= 4:
+            body = bytearray(body)
+            count = struct.unpack_from("<I", body, 0)[0]
+            for i in range(count):
+                offset = 4 + i * 24
+                if offset + 24 > len(body):
+                    break
+                for field_offset in (4, 20):
+                    old = struct.unpack_from("<I", body, offset + field_offset)[0]
+                    struct.pack_into("<I", body, offset + field_offset, min(session.map_position(old), frames))
+            body = bytes(body)
+        elif chunk_id == b"smpl" and len(body) >= 36:
+            body = bytearray(body)
+            count = struct.unpack_from("<I", body, 28)[0]
+            for i in range(count):
+                offset = 36 + i * 24
+                if offset + 24 > len(body):
+                    break
+                for field_offset in (8, 12):
+                    old = struct.unpack_from("<I", body, offset + field_offset)[0]
+                    struct.pack_into("<I", body, offset + field_offset, min(session.map_position(old), frames))
+            body = bytes(body)
+        out += chunk_id + struct.pack("<I", len(body)) + body
+        if len(body) & 1:
+            out += b"\x00"
+        pos += 8 + size + (size & 1)
+    tmp = path.with_name(path.name + ".blackbook-tmp")
+    tmp.write_bytes(b"RIFF" + struct.pack("<I", 4 + len(out)) + b"WAVE" + bytes(out))
     tmp.replace(path)
 
 

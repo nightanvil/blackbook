@@ -436,3 +436,9 @@ table.facts td { padding: 2px 12px 2px 0; vertical-align: top; }
 details.events summary { cursor: pointer; }
 details.events input[type=search] { width: 100%; margin: 4px 0 6px; padding: 3px 8px; font-size: 12px; }
 .events-scroll { max-height: 180px; overflow: auto; }
+
+/* Projects: rows open the sample list below the table */
+#proj-list tr.clickable { cursor: pointer; }
+#proj-list tr.clickable:hover { background: var(--panel-2); }
+#proj-list tr.selected { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--accent); }
+#proj-detail { margin-top: 16px; }

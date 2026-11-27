@@ -73,3 +73,85 @@ def test_edit_api_flow(card: Path, tmp_path: Path, monkeypatch) -> None:
         # The original on the card is untouched
         assert read_info(card / "Samples" / "Pack" / "BD.wav").frames == frames
         assert client.get(f"/api/audio-edit/{sid}/pcm").status_code == 404
+
+
+def test_map_position() -> None:
+    ops = [("delete", 100, 200), ("crop", 50, 500)]
+    assert audioedit.map_position(ops, 0) == 0
+    assert audioedit.map_position(ops, 150) == 50
+    assert audioedit.map_position(ops, 300) == 150
+    assert audioedit.map_position(ops, 5000) == 450
+
+
+def test_adjust_text_changes_only_positions() -> None:
+    from blackbook import sampleupdate
+
+    text = (
+        '<document>\r\n<cell type="samasst">\r\n    <params filename="Kick.wav" samstart="0" samlen="1000" '
+        'loopstart="0" loopend="1000" extra="x"/>\r\n    <slices>\r\n        <slice pos="600"/>\r\n    </slices>\r\n'
+        '</cell>\r\n<cell type="samasst"><params filename="Other.wav" samlen="1000"/></cell>\r\n</document>\r\n'
+    )
+    ops = [("delete", 100, 300)]
+    new, changes = sampleupdate.adjust_text(
+        text, "UserPatches/OneShots/K/patch.xml", "UserPatches/OneShots/K/Kick.wav", 800,
+        lambda f: audioedit.map_position(ops, f),
+    )
+    assert 'samlen="800"' in new and 'loopend="800"' in new and 'pos="400"' in new
+    assert 'extra="x"' in new and '<params filename="Other.wav" samlen="1000"/>' in new
+    assert new.count("\r\n") == text.count("\r\n")
+    assert len(changes) == 1 and changes[0].slices == 1
+
+
+def test_overwrite_adjusts_references(card: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    user = card / "UserPatches" / "OneShots" / "Mine"
+    make_wav(user / "Hit.wav", frames=2000, cues=[1500])
+    (user / "Hit.wav.pk").write_bytes(b"cache")
+    xml = (
+        '﻿<document><session version="1"><track type="samtrack">'
+        '<cell type="samasst"><params filename="Hit.wav" samstart="0" samlen="2000" foo="1"/></cell>'
+        "</track></session></document>\n"
+    )
+    (user / "patch.xml").write_text(xml, encoding="utf-8")
+    project_xml = card / "Projects" / "Song" / "project.xml"
+    project_xml.write_text(
+        project_xml.read_text(encoding="utf-8").replace(
+            "</track>",
+            '<cell type="samasst"><params filename="UserPatches\\OneShots\\Mine\\Hit.wav" samstart="1200" samlen="800"/></cell></track>',
+        ),
+        encoding="utf-8",
+    )
+    app = create_app(card, [], tmp_path / "copies", inbox_dir=tmp_path / "inbox")
+    with TestClient(app) as client:
+        state = client.post("/api/audio-edit/open", json={"source": "card:UserPatches/OneShots/Mine/Hit.wav"}).json()
+        client.post(f"/api/audio-edit/{state['id']}/op", json={"op": "delete", "start": 0, "end": 500})
+        impact = client.get(f"/api/audio-edit/{state['id']}/impact").json()
+        assert impact["can_overwrite"] and impact["frames_after"] == 1500 and impact["cache"]
+        assert {r["xml"] for r in impact["references"]} == {"UserPatches/OneShots/Mine/patch.xml", "Projects/Song/project.xml"}
+        result = client.post(f"/api/audio-edit/{state['id']}/write", json={"mode": "overwrite"}).json()
+        assert len(result["adjusted"]) == 2
+    info = read_info(user / "Hit.wav")
+    assert info.frames == 1500 and info.cues == [1000]
+    assert not (user / "Hit.wav.pk").exists()
+    patch = (user / "patch.xml").read_bytes()
+    assert patch.startswith(b"\xef\xbb\xbf") and b'samlen="1500"' in patch and b'foo="1"' in patch
+    project = project_xml.read_text(encoding="utf-8")
+    assert 'samstart="700" samlen="800"' in project
+
+
+def test_factory_sample_saves_as_new_file(card: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    app = create_app(card, [], tmp_path / "copies", inbox_dir=tmp_path / "inbox")
+    original = (card / "Patches" / "OneShots" / "Kit A" / "Kick.wav").read_bytes()
+    with TestClient(app) as client:
+        state = client.post("/api/audio-edit/open", json={"source": "card:Patches/OneShots/Kit A/Kick.wav"}).json()
+        client.post(f"/api/audio-edit/{state['id']}/op", json={"op": "gain", "start": 0, "end": 100, "value": -6})
+        impact = client.get(f"/api/audio-edit/{state['id']}/impact").json()
+        assert not impact["can_overwrite"] and impact["new_file"] == "Samples/Edited/Kick_edit.wav"
+        assert client.post(f"/api/audio-edit/{state['id']}/write", json={"mode": "overwrite"}).status_code == 403
+        result = client.post(f"/api/audio-edit/{state['id']}/write", json={"mode": "new"}).json()
+        assert result["source"] == "card:Samples/Edited/Kick_edit.wav"
+        samples = client.get("/api/project/samples", params={"name": "Song"}).json()
+        assert [s["uses"] for s in samples if s["path"] == "Samples/Pack/BD.wav"] == [1]
+    assert (card / "Samples" / "Edited" / "Kick_edit.wav").is_file()
+    assert (card / "Patches" / "OneShots" / "Kit A" / "Kick.wav").read_bytes() == original

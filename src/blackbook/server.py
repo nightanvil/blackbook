@@ -22,9 +22,9 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import audioedit, builder, padparams, patchedit, settings, updater
+from . import audioedit, builder, padparams, patchedit, sampleupdate, settings, updater
 from .backup import Backup
-from .card import Card, browse
+from .card import Card, browse, parse_xml
 from .carddetect import find_cards
 from .cardpath import INVALID_NAME_CHARS, resolve_sample_reference
 from .eject import EjectError, eject
@@ -100,6 +100,10 @@ class PadIn(BaseModel):
 
 class EditOpenIn(BaseModel):
     source: str
+
+
+class EditWriteIn(BaseModel):
+    mode: str  # new or overwrite
 
 
 class EditOpIn(BaseModel):
@@ -330,8 +334,10 @@ def create_app(
     @app.middleware("http")
     async def flush_after_write(request: Request, call_next):
         response = await call_next(request)
-        # Audio edit sessions live in memory until saved to the local inbox, no card write involved
-        if request.method in WRITE_METHODS and not request.url.path.startswith("/api/audio-edit/"):
+        # Audio edit sessions live in memory until saved to the local inbox or written to the card
+        path = request.url.path
+        in_memory = path.startswith("/api/audio-edit/") and not path.endswith("/write")
+        if request.method in WRITE_METHODS and not in_memory:
             await run_in_threadpool(flush_to_disk)
         return response
 
@@ -590,6 +596,122 @@ def create_app(
         rel = target.relative_to(sources.roots["inbox"]).as_posix()
         return {"source": f"inbox:{rel}", "name": target.name, "frames": len(session.data)}
 
+    def card_target(session: audioedit.Session) -> tuple[Path, str]:
+        """Path on the card and card relative path of the WAV a session was opened from."""
+        root_id = session.source.partition(":")[0]
+        if root_id != "card":
+            raise HTTPException(400, "only samples on the card can be written back to the card")
+        if not snapshots.card_present():
+            raise HTTPException(409, "card not connected")
+        path = sources.resolve(session.source)
+        return path, card.relative(path)
+
+    def overwrite_block(rel: str) -> str:
+        if rel.split("/")[0].casefold() == "patches":
+            return "Factory samples are never changed. Save the edit as a new file instead."
+        return ""
+
+    def reference_changes(rel: str, session: audioedit.Session) -> list[dict]:
+        result: list[dict] = []
+        frames = len(session.data)
+        for ref in find_references(card.root, rel):
+            raw = (card.root / ref.xml).read_bytes()
+            text = raw.decode("utf-8-sig", errors="replace")
+            _new, changes = sampleupdate.adjust_text(text, ref.xml, rel, frames, session.map_position)
+            if any(r["xml"] == ref.xml for r in result):
+                continue
+            result.append({
+                "xml": ref.xml,
+                "kind": ref.kind,
+                "changes": [sampleupdate.describe(c) for c in changes],
+            })
+        return result
+
+    def edited_name_target(path: Path, rel: str) -> Path:
+        folder = path.parent
+        if overwrite_block(rel):
+            folder = card.root / "Samples" / "Edited"
+        stem = path.stem if path.stem.endswith("_edit") else path.stem + "_edit"
+        return audioedit.free_name(folder, stem)
+
+    @app.get("/api/audio-edit/{session_id}/impact")
+    def audio_edit_impact(session_id: str) -> dict:
+        """What saving to the card would do: target of a new file, or the files an overwrite adjusts."""
+        session = edit_session(session_id)
+        path, rel = card_target(session)
+        block = overwrite_block(rel)
+        try:
+            frames_before = read_info(path).frames
+        except (WavError, OSError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return {
+            "path": rel,
+            "new_file": card.relative(edited_name_target(path, rel)),
+            "can_overwrite": not block,
+            "reason": block,
+            "frames_before": frames_before,
+            "frames_after": len(session.data),
+            "references": [] if block else reference_changes(rel, session),
+            "cache": path.with_name(path.name + ".pk").is_file(),
+        }
+
+    @app.post("/api/audio-edit/{session_id}/write")
+    def audio_edit_write(session_id: str, body: EditWriteIn) -> dict:
+        """Write the edit to the card, as a new file next to the original or over the original."""
+        session = edit_session(session_id)
+        path, rel = card_target(session)
+        if body.mode == "new":
+            target = edited_name_target(path, rel)
+            what = f"saving edited sample {card.relative(target.parent)}/{target.name}"
+            snapshots.before_write(what)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                audioedit.write_wav(target, session.data, session.sample_rate, session.bits, session.is_float)
+            except (audioedit.EditError, OSError) as exc:
+                raise HTTPException(400, str(exc)) from exc
+            backup.record_created(target)
+            snapshots.after_write(what)
+            editor.close(session_id)
+            new_rel = card.relative(target)
+            return {"source": f"card:{new_rel}", "path": new_rel, "name": target.name, "adjusted": []}
+        if body.mode != "overwrite":
+            raise HTTPException(400, f"unknown mode: {body.mode}")
+        block = overwrite_block(rel)
+        if block:
+            raise HTTPException(403, block)
+        what = f"overwriting {rel}"
+        snapshots.before_write(what)
+        frames = len(session.data)
+        adjusted: list[str] = []
+        try:
+            updates: list[tuple[Path, bytes]] = []
+            for ref in find_references(card.root, rel):
+                xml_path = card.root / ref.xml
+                if any(p == xml_path for p, _ in updates):
+                    continue
+                raw = xml_path.read_bytes()
+                bom = raw.startswith(b"\xef\xbb\xbf")
+                text = raw.decode("utf-8-sig")
+                new_text, _changes = sampleupdate.adjust_text(text, ref.xml, rel, frames, session.map_position)
+                if new_text != text:
+                    updates.append((xml_path, (b"\xef\xbb\xbf" if bom else b"") + new_text.encode("utf-8")))
+            backup.save(path)
+            audioedit.rewrite_wav(path, session)
+            for xml_path, data in updates:
+                backup.save(xml_path)
+                tmp = xml_path.with_name(xml_path.name + ".blackbook-tmp")
+                tmp.write_bytes(data)
+                tmp.replace(xml_path)
+                adjusted.append(card.relative(xml_path))
+            cache = path.with_name(path.name + ".pk")
+            if cache.is_file():
+                cache.unlink()
+        except (audioedit.EditError, OSError, UnicodeDecodeError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        snapshots.after_write(what)
+        editor.close(session_id)
+        return {"source": session.source, "path": rel, "name": path.name, "adjusted": adjusted}
+
     @app.delete("/api/audio-edit/{session_id}")
     def audio_edit_close(session_id: str) -> dict:
         editor.close(session_id)
@@ -728,6 +850,34 @@ def create_app(
     @app.get("/api/projects")
     def projects() -> list[dict]:
         return [asdict(p) for p in card.projects()]
+
+    @app.get("/api/project/samples")
+    def project_samples(name: str) -> list[dict]:
+        """Every WAV a project references, once, with its card path and the number of uses."""
+        try:
+            project_dir = card.safe_path(f"Projects/{name}")
+        except PermissionError as exc:
+            raise HTTPException(403, str(exc)) from exc
+        xml_path = project_dir / "project.xml"
+        if not xml_path.is_file():
+            raise HTTPException(404, f"project not found: {name}")
+        root = parse_xml(xml_path)
+        found: dict[str, dict] = {}
+        for p in root.iter("params"):
+            ref = p.get("filename", "")
+            if not ref or ref.endswith("\\"):
+                continue
+            resolved = resolve_sample_reference(card.root, ref, project_dir)
+            exists = resolved is not None and resolved.is_file()
+            key = card.relative(resolved).casefold() if exists else ref.casefold()
+            entry = found.setdefault(key, {
+                "filename": ref,
+                "path": card.relative(resolved) if exists else "",
+                "source": f"card:{card.relative(resolved)}" if exists else None,
+                "uses": 0,
+            })
+            entry["uses"] += 1
+        return sorted(found.values(), key=lambda e: (e["path"] or e["filename"]).casefold())
 
     @app.get("/api/browse")
     def browse_folder(root: str = "card", path: str = "") -> dict:

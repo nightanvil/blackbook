@@ -79,7 +79,7 @@ The WAV tab of a one-shot pad shows the sample with the playback window. The whi
 
 ### Editing a sample
 
-"Edit audio" opens the editor for the sample of the selected pad.
+"Edit audio" opens the editor for the sample of the selected pad. "Edit" next to a sample in the library detail of a patch and in the sample list of a project opens it for a sample on the card.
 
 | Operation | Effect |
 |---|---|
@@ -98,11 +98,22 @@ The WAV tab of a one-shot pad shows the sample with the playback window. The whi
 
 ### Saving
 
-"Use edited sample" writes the result as `<name>_edit.wav` into the local inbox (`.blackbook/inbox/edits/`) and puts it on the pad. Saving the patch copies it into the patch folder. The original file on the card is not changed. The edited file keeps bit depth, sample rate and channels of the original; samples outside the edited range are written back bit-identical.
+From the pad editor, "Use edited sample" writes the result as `<name>_edit.wav` into the local inbox (`.blackbook/inbox/edits/`) and puts it on the pad. Saving the patch copies it into the patch folder. The original file on the card is not changed. The edited file keeps bit depth, sample rate and channels of the original; samples outside the edited range are written back bit-identical.
+
+From the library and from projects the editor writes to the card:
+
+- **Save as new file** writes `<name>_edit.wav` (or `_edit_2` and so on) next to the original. Factory samples (below `Patches/`) go to `Samples/Edited/` instead. No patch or project changes.
+- **Overwrite original** replaces the WAV in place. Before writing, blackbook lists every `patch.xml` and `project.xml` (autosave folders included) that references the file and what changes in each. Factory samples cannot be overwritten.
+
+Overwriting keeps every chunk of the file except the audio byte-identical and in its order. Positions follow the edit: a frame behind a deleted part moves forward by the deleted length, a frame inside a deleted or trimmed part moves to the cut. This applies to
+
+- `samstart`, `samlen`, `loopstart`, `loopend` and `<slice pos>` of every `samasst` cell that points to the file,
+- cue points (`cue `) and loop points (`smpl`) inside the WAV.
+
+If the part a pad played or a loop spanned is removed completely, the pad plays the whole sample and the loop spans the played part. Other attributes and cells stay byte-identical, line endings and the BOM of the XML files stay as they are. The cache file `<name>.wav.pk` is deleted; the blackbox rebuilds it. A snapshot is taken before and after the write if the backup is set up, and the previous versions of all changed files are copied to the local backup folder.
 
 ### Planned
 
-- Editing samples from the library and from projects, with the choice to overwrite the original: blackbook then lists every patch and project using the file and adjusts `samlen`, `loopstart`, `loopend` and slice positions.
 - An external editor (Reaper, Audacity and others) via a configurable launch command, using the same reference update.
 
 ## 3. Backup with diff and delta

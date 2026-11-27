@@ -41,7 +41,7 @@ ${todo}`,
   <li><b>Tags</b> on the left: click one or more to show only patches with all of them.</li>
 </ul>
 <p>Click a patch to see its samples. <b>Play preview</b> plays the patch's <code>preview.wav</code>, the play button next to a sample plays that sample. <code>Esc</code> or the Stop button at the top stops playback.</p>
-<p>For your own patches you can change the tags and save them. One-shot and multisample patches can be opened in the builder: <b>Edit in builder</b> changes the patch itself, <b>Use as template</b> starts a new patch from it. Factory patches can only be used as templates.</p>`,
+<p>For your own patches you can change the tags and save them. One-shot and multisample patches can be opened in the builder: <b>Edit in builder</b> changes the patch itself, <b>Use as template</b> starts a new patch from it. Factory patches can only be used as templates.</p><p><b>Edit</b> next to a sample opens the audio editor for the file on the card. <b>Save as new file</b> writes the result next to the original (factory samples go to Samples/Edited). <b>Overwrite original</b> replaces the file and first lists every patch and project that uses it; blackbook moves start, length, loop and slice positions with the edit. Factory samples are never overwritten.</p>`,
     },
     { id: "build", title: "Build", html: `<p>One-shot kits on 16 pads and multisample instruments, new or based on an existing patch.</p>
 <h3>One-shot pads</h3>
@@ -57,7 +57,7 @@ ${todo}`,
 <p>The loop switch and the volume slider in the header apply to all playback. In the sample browser every row has a play button; switch off <b>Preview</b> if clicking a row should not play it.</p>
 <p>Drag a slider or type a value. A double click on a slider sets the value of a new pad.</p>
 ${todo}` },
-    { id: "projects", title: "Projects", html: `<p>The projects on the card.</p>${todo}` },
+    { id: "projects", title: "Projects", html: `<p>The projects on the card with the number of WAVs, references, missing samples and files nobody uses.</p><p>Click a project to list its samples. Play them, or open one in the audio editor with <b>Edit</b>; saving works as in the library: as a new file, or over the original with all patches and projects adjusted.</p>${todo}` },
     { id: "backup", title: "Backup", html: `<p>Snapshots of the card in a backup folder, with history, diff and restore.</p><p>Restoring a single WAV brings back only that file. blackbook lists the patches and projects that use it and warns when its length no longer fits; restore the whole patch or project folder to keep everything consistent.</p><p>Only one running blackbook may use a backup folder. If the folder is shared between computers through sync, close blackbook on one computer before you start it on the other.</p><p><b>The backup folder must be outside the blackbook folder.</b> An update or a new installation can delete the blackbook folder, and a backup inside it would be lost. blackbook does not accept such a folder.</p>${todo}` },
     {
       id: "git", title: "What is git",

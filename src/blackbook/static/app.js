@@ -5,6 +5,7 @@ const state = {
   tags: [],
   libTags: new Set(),
   selectedRef: null,
+  selectedProject: null,
   roots: [],
   browse: { root: "card", path: "Samples", entries: [] },
   buildType: "oneshot",
@@ -370,6 +371,10 @@ async function showPatch(ref) {
     el("tr", {},
       el("td", {}, el("button", { class: "small playbtn", disabled: !s.source, "data-src": s.source || "", onclick: () => play(s.source) })),
       el("td", {}, s.filename, s.source ? null : el("span", { class: "err" }, " (missing)")),
+      el("td", {}, s.source && s.source.startsWith("card:")
+        ? el("button", { class: "small", title: isUser ? "Edit the sample, save as new file or overwrite the original" : "Edit the sample and save it as a new file, factory samples stay unchanged",
+            onclick: () => openAudioEditor(s.source, { card: true, onWritten: () => showPatch(ref) }) }, "Edit")
+        : null),
       el("td", { class: "muted" }, isMulti
         ? `${s.root_name}  keys ${noteName(s.key_low)}-${noteName(s.key_high)}  vel ${s.vel_low}-${s.vel_high}`
         : s.slot != null ? "pad " + padNumber(s.slot) : "")
@@ -817,7 +822,7 @@ function wavTab(pad, slot) {
       } }, "▶ Play region"),
       snapToggle(),
       el("button", { class: "small", onclick: () => setWindow(0, pad.frames) }, "Whole file"),
-      el("button", { class: "small", onclick: () => openAudioEditor(slot) }, "Edit audio ..."),
+      el("button", { class: "small", onclick: () => openAudioEditor(pad.source, { slot }) }, "Edit audio ..."),
       info),
     canvas,
     el("div", { class: "pad-form" },
@@ -827,14 +832,16 @@ function wavTab(pad, slot) {
   ];
 }
 
-async function openAudioEditor(slot) {
-  const pad = state.pads[slot];
-  if (!pad || !pad.source) return;
+// target.slot: the result goes onto that pad of the builder (inbox copy, original untouched).
+// target.card: the result is written to the card, as a new file or over the original; target.onWritten runs after
+async function openAudioEditor(source, target) {
+  if (!source) return;
+  const onCard = !!target.card;
   const dialog = document.getElementById("audio-editor");
   const canvas = document.getElementById("ae-wave");
   let session;
   try {
-    session = await api("POST", "/api/audio-edit/open", { source: pad.source });
+    session = await api("POST", "/api/audio-edit/open", { source });
   } catch (err) {
     toast(err.message, true);
     return;
@@ -916,28 +923,76 @@ async function openAudioEditor(slot) {
     else if (ev.key === "+") v.zoom(0.5);
     else if (ev.key === "-") v.zoom(2);
   };
-  const finish = async (apply) => {
+  const close = () => {
     wavePlayer.stop();
     dialog.removeEventListener("keydown", keys);
     dialog.onclose = null;
-    if (apply && session.changed) {
+    dialog.close();
+  };
+  const discard = () => {
+    api("DELETE", `/api/audio-edit/${session.id}`).catch(() => {});
+    close();
+    if (!onCard) renderPads();
+  };
+  const useOnPad = async () => {
+    if (session.changed) {
       try {
         const saved = await api("POST", `/api/audio-edit/${session.id}/save`);
-        const current = state.pads[slot];
+        const current = state.pads[target.slot];
         if (current) {
           Object.assign(current, { source: saved.source, filename: null, start: null, length: null, frames: saved.frames });
         }
         toast(`Edited sample stored as ${saved.name}. It is copied into the patch when you save the patch.`);
       } catch (err) { toast(err.message, true); }
+      close();
+      renderPads();
     } else {
-      api("DELETE", `/api/audio-edit/${session.id}`).catch(() => {});
+      discard();
     }
-    dialog.close();
-    renderPads();
   };
-  document.getElementById("ae-cancel").onclick = () => finish(false);
-  document.getElementById("ae-apply").onclick = () => finish(true);
-  dialog.onclose = () => finish(false);
+  const writeToCard = async (mode) => {
+    if (!session.changed) { toast("Nothing changed yet", true); return; }
+    let impact;
+    try {
+      impact = await api("GET", `/api/audio-edit/${session.id}/impact`);
+    } catch (err) { toast(err.message, true); return; }
+    if (mode === "overwrite") {
+      if (!impact.can_overwrite) { await showMessage("Cannot overwrite", impact.reason); return; }
+      const lines = [
+        `${impact.path} is replaced by the edited version (${impact.frames_before} frames before, ${impact.frames_after} after).`,
+        "Markers and loop points inside the file move with the edit.",
+        "",
+      ];
+      if (impact.references.length) {
+        lines.push(`blackbook adjusts start, length, loop and slice positions in ${impact.references.length} file${impact.references.length > 1 ? "s" : ""}:`);
+        impact.references.forEach((r) => lines.push(`  ${r.kind === "project" ? "Project" : "Patch"} ${r.xml}: ${r.changes.join("; ")}`));
+      } else {
+        lines.push("No patch or project uses this file.");
+      }
+      if (impact.cache) lines.push("", "The cache file next to it (.wav.pk) is deleted, the blackbox rebuilds it.");
+      lines.push("", "A snapshot of the card is taken before and after, if the backup is set up.");
+      if (!(await confirmDialog("Overwrite the original?", lines.join("\n"), "Overwrite"))) return;
+    }
+    try {
+      const result = await api("POST", `/api/audio-edit/${session.id}/write`, { mode });
+      close();
+      toast(mode === "new"
+        ? `Saved as ${result.path}`
+        : `${result.name} overwritten${result.adjusted.length ? `, ${result.adjusted.length} file(s) adjusted` : ""}`);
+      if (target.onWritten) target.onWritten(result);
+    } catch (err) { toast(err.message, true); }
+  };
+  const applyBtn = document.getElementById("ae-apply");
+  const newBtn = document.getElementById("ae-new");
+  const overwriteBtn = document.getElementById("ae-overwrite");
+  applyBtn.hidden = onCard;
+  newBtn.hidden = !onCard;
+  overwriteBtn.hidden = !onCard;
+  document.getElementById("ae-cancel").onclick = discard;
+  applyBtn.onclick = useOnPad;
+  newBtn.onclick = () => writeToCard("new");
+  overwriteBtn.onclick = () => writeToCard("overwrite");
+  dialog.onclose = discard;
   dialog.addEventListener("keydown", keys);
   dialog.showModal();
   await reload();
@@ -1334,14 +1389,43 @@ async function loadProjects() {
     el("table", {},
       el("thead", {}, el("tr", {}, ["Project", "WAVs in folder", "References", "Missing", "Unused in folder"].map((h) => el("th", {}, h)))),
       el("tbody", {}, projects.map((p) =>
-        el("tr", {},
+        el("tr", { class: "clickable" + (p.name === state.selectedProject ? " selected" : ""), title: "Show the samples of this project", onclick: () => showProject(p.name) },
           el("td", {}, p.name, p.is_autosave ? el("span", { class: "badge", style: "margin-left:6px" }, "autosave") : null),
           el("td", {}, p.wav_files),
           el("td", {}, p.references),
           el("td", { class: p.missing.length ? "err" : "muted", title: p.missing.join("\n") }, p.missing.length || "0"),
           el("td", { class: p.unused.length ? "warn" : "muted", title: p.unused.join("\n") }, p.unused.length ? p.unused.join(", ") : "0"))
-      )))
+      ))),
+    el("div", { id: "proj-detail" })
   );
+  if (state.selectedProject) showProject(state.selectedProject);
+}
+
+async function showProject(name) {
+  state.selectedProject = name;
+  document.querySelectorAll("#proj-list tbody tr").forEach((row) =>
+    row.classList.toggle("selected", row.firstChild.firstChild.textContent === name));
+  const detail = document.getElementById("proj-detail");
+  if (!detail) return;
+  detail.replaceChildren(el("p", { class: "muted" }, "Loading..."));
+  let samples;
+  try {
+    samples = await api("GET", "/api/project/samples?name=" + encodeURIComponent(name));
+  } catch (err) {
+    detail.replaceChildren(el("p", { class: "err" }, err.message));
+    return;
+  }
+  fill(detail,
+    el("div", { class: "label" }, `Samples of ${name} (${samples.length})`),
+    el("table", {}, el("tbody", {}, samples.map((s) =>
+      el("tr", {},
+        el("td", {}, el("button", { class: "small playbtn", disabled: !s.source, "data-src": s.source || "", onclick: () => play(s.source) })),
+        el("td", {}, s.path || s.filename, s.source ? null : el("span", { class: "err" }, " (missing)")),
+        el("td", { class: "muted" }, s.uses > 1 ? `${s.uses} uses` : ""),
+        el("td", {}, s.source
+          ? el("button", { class: "small", title: "Edit the sample, save as new file or overwrite the original", onclick: () => openAudioEditor(s.source, { card: true, onWritten: () => showProject(name) }) }, "Edit")
+          : null))))));
+  markPlaying();
 }
 
 // ---------- backup ----------

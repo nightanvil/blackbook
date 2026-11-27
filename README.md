@@ -16,11 +16,11 @@ blackbook is free and stays free. If it helps you, you can buy me a coffee on [K
 
 | Status | What |
 |---|---|
-| In progress | Audio editor for library and project samples |
-| Next | One-shot step sequencer, MIDI channel per track, MIDI CC numbers shown on the controls |
+| In progress | One-shot step sequencer |
+| Next | MIDI channel per track, MIDI CC numbers shown on the controls, audio editor markers and loop points |
 | Then | Slicer, loop, shredder, multisample loop points |
 | Later | External editor (Reaper), project tools (pack, clean, rename), sample organization, card and firmware tools |
-| Done | Library, tags, one-shot pad editor with all device settings, waveform and audio editor, multisample basics, backup, installer, updates, eject |
+| Done | Library, tags, one-shot pad editor with all device settings, waveform and audio editor (pads, library, projects, overwrite with reference update), multisample basics, backup, installer, updates, eject |
 
 ## What it does
 
@@ -28,9 +28,9 @@ blackbook is free and stays free. If it helps you, you can buy me a coffee on [K
 - **Tags:** tag your own patches, as on the device.
 - **Build:** one-shot kits on 16 pads with all pad settings of the device (sound, setup, envelope, LFO, start and length), and multisample instruments, by drag and drop. Key and velocity ranges are read from the file names.
 - **Edit:** change your own patches in place. Sequences, modulation and everything blackbook does not know stay untouched.
-- **Audio editor:** waveform view, trim, fades, gain, normalize and reverse with undo, edges snap to zero crossings so nothing clicks.
+- **Audio editor:** waveform view, trim, fades, gain, normalize and reverse with undo, edges snap to zero crossings so nothing clicks. Open it from a pad, the library or a project. Save as a new file, or overwrite the original: every patch and project that uses it is adjusted.
 - **Templates:** any one-shot or multisample patch, also factory patches, as a starting point for a new one.
-- **Projects:** missing samples and unused files per project.
+- **Projects:** missing samples and unused files per project, the samples of a project to play and edit.
 - **Backup:** snapshots of the card with history, comparison and restore. Automatic when the card is connected, and before and after blackbook writes. Restoring a single WAV shows where it is used.
 
 What comes next is in the roadmap at the top. Tell me what you need most.

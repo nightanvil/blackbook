@@ -5,6 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ## [Unreleased]
 
+### Added
+
+- Audio editor for samples on the card: **Edit** next to every sample in the library and in the new sample list of a project. **Save as new file** writes `<name>_edit.wav` next to the original (factory samples go to `Samples/Edited`). **Overwrite original** replaces the file and first lists every patch and project that uses it; start, length, loop and slice positions there move with the edit, as do cue and loop points inside the WAV. The `.wav.pk` cache file is deleted. Factory samples are never overwritten.
+- Projects: click a project to list its samples, play them and open them in the audio editor.
+
 ## [0.2.0] - 2026-11-26
 
 ### Added
