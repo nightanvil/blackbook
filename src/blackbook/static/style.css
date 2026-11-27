@@ -604,3 +604,9 @@ input[type="number"]:focus { cursor: text; }
 .seq-metro svg { width: 15px; height: 15px; }
 .seq-metro.active { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
 .seq-grid { user-select: none; }
+.seq-pad.human .seq-hu { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.seq-human input[type="range"] { width: 140px; vertical-align: middle; }
+.seq-human .hu-value { display: inline-block; min-width: 1.6em; text-align: right; color: var(--text); }
+.seq-metro-group { display: inline-flex; align-items: center; gap: 4px; }
+.seq-metro-vol { width: 70px; }
+.seq-metro-vol.off { opacity: 0.4; }

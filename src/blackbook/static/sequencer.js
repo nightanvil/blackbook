@@ -234,7 +234,7 @@ async function showProject(name) {
   }
   const sameProject = proj.name === name;
   const keepTrack = sameProject ? proj.track : null;
-  Object.assign(proj, { name, data, dirty: false, selected: null, euclid: null, tempo: data.tempo, swing: data.swing });
+  Object.assign(proj, { name, data, dirty: false, selected: null, euclid: null, human: null, tempo: data.tempo, swing: data.swing });
   if (!sameProject || !proj.tab) proj.tab = "seq";
   const prefs = projectPrefs(name);
   proj.nudge = Number.isInteger(prefs.nudge) && NUDGE[prefs.nudge] ? prefs.nudge : 0;
@@ -350,6 +350,7 @@ function selectTrack(i) {
 
 function selectSlot(slot) {
   if (proj.euclid) closeEuclid(true);
+  if (proj.human) closeHumanize(true);
   proj.slot = slot;
   proj.selected = null;
   if (seqPlayer.playing) seqPlayer.restart();
@@ -372,6 +373,8 @@ function placeEvent(ev, absTicks, steps, seq) {
   ev.strtks = step * TICKS + off;
   ev.offset = Math.round(off / OFFSET_UNIT);
 }
+
+const HUMANIZE_ICON = '<svg viewBox="0 0 14 14" width="14" height="14"><path d="M1.5 9.5c1.5-4 3-4 4.5 0s3 4 4.5 0 2-3 2-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
 
 // Muting and solo only affect listening here, per track; nothing of it is written to the card
 const EUCLID_ICON = '<svg viewBox="0 0 14 14" width="14" height="14"><circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-opacity=".45" stroke-width="1.2"/><circle cx="7" cy="2.4" r="1.7" fill="currentColor"/><circle cx="11" cy="9.3" r="1.7" fill="currentColor"/><circle cx="3" cy="9.3" r="1.7" fill="currentColor"/></svg>';
@@ -428,7 +431,8 @@ function renderSequencer() {
     settings,
     body,
     editable ? euclidPanel() : null,
-    editable && !proj.euclid ? eventInspector(track, seq) : null,
+    editable ? humanizePanel() : null,
+    editable && !proj.euclid && !proj.human ? eventInspector(track, seq) : null,
     seq && seq.automation ? el("p", { class: "muted hint-small" }, "This sequence has automation. blackbook keeps it as it is; it is not shown or played here.") : null);
 }
 
@@ -472,7 +476,7 @@ function seqSettings(seq, editable) {
 
 function stepGrid(track, seq) {
   const steps = seq ? gridSteps(seq) : 16;
-  const grid = el("div", { class: "seq-grid", style: `grid-template-columns: 150px repeat(${steps}, 26px)` });
+  const grid = el("div", { class: "seq-grid", style: `grid-template-columns: 180px repeat(${steps}, 26px)` });
   const padBySlot = new Map(trackPads(track).filter((p) => p.source || p.filename).map((p) => [p.slot, p]));
   // Step numbers
   grid.append(el("div", { class: "seq-corner", style: "grid-row:1;grid-column:1" }));
@@ -494,11 +498,14 @@ function stepGrid(track, seq) {
       : el("span", { class: "seq-led none", title: pad ? "The sample of this pad is missing" : "No sample on this pad" });
     const euIcon = el("button", { class: "seq-eu", title: "Euclidean rhythm for this pad", onclick: (e) => { e.stopPropagation(); openEuclid(slot); } });
     euIcon.innerHTML = EUCLID_ICON;
-    grid.append(el("div", { class: "seq-pad" + (pad ? "" : " empty") + (audible ? "" : " muted") + (proj.euclid && proj.euclid.chan === slot ? " euclid" : ""), style: `grid-row:${row};grid-column:1`, title: pad ? pad.filename : "No sample on this pad",
+    const huIcon = el("button", { class: "seq-eu seq-hu", title: "Humanize this pad: vary velocity and timing", onclick: (e) => { e.stopPropagation(); openHumanize(slot); } });
+    huIcon.innerHTML = HUMANIZE_ICON;
+    grid.append(el("div", { class: "seq-pad" + (pad ? "" : " empty") + (audible ? "" : " muted") + (proj.euclid && proj.euclid.chan === slot ? " euclid" : "") + (proj.human && proj.human.chan === slot ? " human" : ""), style: `grid-row:${row};grid-column:1`, title: pad ? pad.filename : "No sample on this pad",
       onclick: () => { proj.lane = slot; if (pad) seqPlayer.hit(pad, 100); renderSequencer(); },
       oncontextmenu: (e) => { e.preventDefault(); rowMenu(e, slot); } },
       led,
       euIcon,
+      huIcon,
       el("b", {}, String(padNumber(slot))), " ", el("span", { class: "seq-pad-name" }, label)));
     for (let s = 0; s < steps; s++) {
       grid.append(el("div", {
@@ -603,7 +610,7 @@ function laneChan(seq) {
 // Velocity of the notes of one pad as bars under the grid; drag to draw
 function velocityLane(seq, steps) {
   const chan = laneChan(seq);
-  const lane = el("div", { class: "seq-lane", style: `grid-template-columns: 150px repeat(${steps}, 26px)` },
+  const lane = el("div", { class: "seq-lane", style: `grid-template-columns: 180px repeat(${steps}, 26px)` },
     el("div", { class: "seq-lane-label", title: "Click a pad name or a note to show its velocity here" }, el("span", {}, "Velocity"), el("b", {}, `Pad ${padNumber(chan)}`)));
   const bars = [];
   for (let s = 0; s < steps; s++) {
@@ -670,11 +677,12 @@ function editEvents(fn) {
   renderSequencer();
 }
 
-function humanize(events, seq, steps) {
+// amount 1 to 10: velocity varies by up to 2.4 per step of amount, the offset by up to one unit per step
+function humanize(events, seq, steps, amount = seqPrefs().humanize ?? 5) {
   const [low, high] = offsetLimits(seq);
   for (const e of events) {
-    e.velocity = Math.max(1, Math.min(127, (e.velocity ?? 100) + Math.round((Math.random() - 0.5) * 24)));
-    const off = e.strtks - e.step * TICKS + Math.round((Math.random() - 0.5) * 10) * OFFSET_UNIT;
+    e.velocity = Math.max(1, Math.min(127, (e.velocity ?? 100) + Math.round((Math.random() - 0.5) * 4.8 * amount)));
+    const off = e.strtks - e.step * TICKS + Math.round((Math.random() - 0.5) * 2 * amount) * OFFSET_UNIT;
     placeEvent(e, e.step * TICKS + Math.max(low, Math.min(high, off)), steps, seq);
   }
 }
@@ -706,7 +714,7 @@ function rowMenu(ev, chan) {
     }) },
     { label: "Clear row", run: () => editEvents((s) => { s.events = s.events.filter((e) => e.chan !== chan); }) },
     "-",
-    { label: "Humanize row", run: () => editEvents((s, steps) => humanize(s.events.filter((e) => e.chan === chan), s, steps)) },
+    { label: "Humanize row ...", run: () => openHumanize(chan) },
     { label: "Quantize row", run: () => editEvents((s) => quantize(s.events.filter((e) => e.chan === chan))) },
   ]);
 }
@@ -724,7 +732,7 @@ function seqMenu(ev) {
     }) },
     { label: "Clear sequence", run: () => editEvents((s) => { s.events = []; }) },
     "-",
-    { label: "Humanize: vary velocity and timing a little", run: () => editEvents((s, steps) => humanize(s.events, s, steps)) },
+    { label: `Humanize all pads (intensity ${seqPrefs().humanize ?? 5})`, run: () => editEvents((s, steps) => humanize(s.events, s, steps)) },
     { label: "Quantize: offsets to 0", run: () => editEvents((s) => quantize(s.events)) },
   ]);
 }
@@ -734,15 +742,20 @@ function seqPrefs() {
   try { return JSON.parse(localStorage.getItem("blackbook-seq") || "{}"); } catch (_) { return {}; }
 }
 
+function setSeqPref(values) {
+  try { localStorage.setItem("blackbook-seq", JSON.stringify({ ...seqPrefs(), ...values })); } catch (_) { /* per page only */ }
+}
+
 function metroButton() {
-  const on = !!seqPrefs().metronome;
+  const prefs = seqPrefs();
+  const on = !!prefs.metronome;
   const btn = el("button", { class: "small seq-metro" + (on ? " active" : ""), title: on ? "Metronome on (listening here only)" : "Metronome off" });
   btn.innerHTML = META_ICONS.metronome;
-  btn.addEventListener("click", () => {
-    try { localStorage.setItem("blackbook-seq", JSON.stringify({ ...seqPrefs(), metronome: !on })); } catch (_) { /* per page only */ }
-    renderSequencer();
-  });
-  return btn;
+  btn.addEventListener("click", () => { setSeqPref({ metronome: !on }); renderSequencer(); });
+  const vol = el("input", { type: "range", min: 0, max: 100, step: 1, value: prefs.metroVolume ?? 70, class: "seq-metro-vol" + (on ? "" : " off"), title: "Metronome volume" });
+  Object.assign(vol.dataset, { default: "70", resetKey: "seq:metrovol" });
+  vol.addEventListener("input", () => setSeqPref({ metroVolume: Number(vol.value) }));
+  return el("span", { class: "seq-metro-group" }, btn, vol);
 }
 
 // Space plays and stops the sequencer when the Sequences tab is open
@@ -820,6 +833,7 @@ function euclidPattern(hits, length, rotate) {
 const euclidMemory = new Map();
 
 function openEuclid(chan) {
+  if (proj.human) closeHumanize(true);
   // Another pad's open panel stays as it is; its notes only changed if a value was touched
   if (proj.euclid) {
     if (proj.euclid.chan === chan) { closeEuclid(true); return; }
@@ -921,6 +935,56 @@ function euclidPanel() {
     eu.touched ? null : el("button", { class: "small", onclick: applyEuclid, title: "Write this pattern into the pad's row" }, "Apply"),
     el("button", { class: "small", onclick: () => closeEuclid(false), title: "Restore the notes this pad had before" }, "Cancel"),
     el("button", { class: "small primary", onclick: () => closeEuclid(true) }, "Done"));
+}
+
+// Humanize one pad with an intensity from 1 to 10; every change starts again from the notes it had before
+function openHumanize(chan) {
+  if (proj.euclid) closeEuclid(true);
+  if (proj.human && proj.human.chan === chan) { proj.human = null; renderSequencer(); return; }
+  const seq = currentSeq(true);
+  proj.human = { chan, before: seq.events.filter((e) => e.chan === chan).map((e) => ({ ...e, extra: { ...e.extra } })), touched: false };
+  renderSequencer();
+}
+
+function applyHumanize() {
+  const h = proj.human;
+  const seq = currentSeq(true);
+  const fresh = h.before.map((e) => ({ ...e, extra: { ...e.extra } }));
+  seq.events = seq.events.filter((e) => e.chan !== h.chan).concat(fresh);
+  humanize(fresh, seq, gridSteps(seq));
+  h.touched = true;
+  proj.selected = null;
+  markDirty(seq);
+  renderSequencer();
+}
+
+function closeHumanize(keep) {
+  const h = proj.human;
+  if (h && !keep && h.touched) {
+    const seq = currentSeq(true);
+    seq.events = seq.events.filter((e) => e.chan !== h.chan).concat(h.before);
+    renderSequencer();
+  }
+  proj.human = null;
+  renderSequencer();
+}
+
+function humanizePanel() {
+  const h = proj.human;
+  if (!h) return null;
+  const amount = seqPrefs().humanize ?? 5;
+  const slider = el("input", { type: "range", min: 1, max: 10, step: 1, value: amount, title: "Intensity" });
+  const shown = el("b", { class: "hu-value" }, String(amount));
+  Object.assign(slider.dataset, { default: "5", resetKey: "seq:humanize" });
+  slider.addEventListener("input", () => { shown.textContent = slider.value; });
+  slider.addEventListener("change", () => { setSeqPref({ humanize: Number(slider.value) }); applyHumanize(); });
+  return el("div", { class: "seq-euclid seq-human" },
+    el("b", {}, `Humanize pad ${padNumber(h.chan)}`),
+    el("label", { title: `Velocity varies by up to +-${Math.round(2.4 * amount)}, timing by up to +-${amount} offset units` }, "Intensity ", slider, shown),
+    el("span", { class: "muted hint-small" }, h.before.length ? `${h.before.length} notes` : "This pad has no notes"),
+    el("button", { class: "small", disabled: !h.before.length, onclick: applyHumanize, title: "New random variation from the original notes" }, h.touched ? "Again" : "Apply"),
+    el("button", { class: "small", onclick: () => closeHumanize(false), title: "Bring back the notes as they were" }, "Cancel"),
+    el("button", { class: "small primary", onclick: () => closeHumanize(true) }, "Done"));
 }
 
 function clickEvent(ev) {
@@ -1033,9 +1097,13 @@ const seqPlayer = {
     const ctx = audioOut.context();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.frequency.value = accent ? 1600 : 1100;
-    gain.gain.setValueAtTime(0.25, when);
-    gain.gain.exponentialRampToValueAtTime(0.001, when + 0.04);
+    const volume = (seqPrefs().metroVolume ?? 70) / 100;
+    if (volume <= 0) return;
+    // A short square click cuts through a kick better than a sine
+    osc.type = "square";
+    osc.frequency.value = accent ? 2000 : 1500;
+    gain.gain.setValueAtTime(Math.min(1, volume * (accent ? 0.9 : 0.65)), when);
+    gain.gain.exponentialRampToValueAtTime(0.001, when + 0.035);
     osc.connect(gain).connect(audioOut.master);
     osc.start(when);
     osc.stop(when + 0.05);
