@@ -106,3 +106,28 @@ def test_project_api(card: Path, tmp_path: Path, monkeypatch) -> None:
         assert client.get("/api/project/detail", params={"name": "../Beat"}).status_code in (403, 404)
     raw = (project / "project.xml").read_bytes()
     assert raw.startswith(b"\xef\xbb\xbf") and raw.count(b"<seqevent") == 2
+
+
+def test_project_track_pads(card: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    project = card / "Projects" / "Beat"
+    project.mkdir()
+    (project / "project.xml").write_text(PROJECT, encoding="utf-8", newline="")
+    make_wav(tmp_path / "inbox" / "Clap.wav", frames=1500)
+    app = create_app(card, [], tmp_path / "copies", inbox_dir=tmp_path / "inbox")
+    with TestClient(app) as client:
+        pad = client.get("/api/project/detail", params={"name": "Beat"}).json()["tracks"][0]["pads"][0]
+        assert pad["frames"] == 2000 and pad["loop_mode"] == 0
+        pads = [
+            {"slot": 8, "source": pad["source"], "params": {**pad["params"], "gaindb": -3000}, "start": 100, "length": 500},
+            {"slot": 9, "source": "inbox:Clap.wav", "params": {}},
+            {"slot": 0, "source": "card:Samples/Pack/SD.wav", "params": {}},
+        ]
+        result = client.put("/api/project/sequences", json={"name": "Beat", "tracks": [{"index": 0, "pads": pads}]})
+        assert result.status_code == 200, result.text
+    text = (project / "project.xml").read_bytes().decode("utf-8-sig")
+    assert '<params gaindb="-3000" celldisppos="8"' in text
+    assert 'filename="Samples\\Pack\\BD.wav" samstart="100" samlen="500"' in text
+    assert 'filename=".\\Clap.wav"' in text and (project / "Clap.wav").is_file()
+    assert 'filename="Samples\\Pack\\SD.wav"' in text
+    assert "\n" not in text.replace("\r\n", "")

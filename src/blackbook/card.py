@@ -60,6 +60,9 @@ class ProjectSummary:
     references: int
     missing: list[str]
     unused: list[str]
+    tempo: int = 0
+    modified: float = 0.0  # mtime of project.xml
+    tracks: list[dict] = field(default_factory=list)  # position, type and name per track
 
 
 class Card:
@@ -168,9 +171,27 @@ class Card:
             unused = sorted(
                 p.name for p in local_wavs if p.parent == project_dir and p.name.casefold() not in used_local
             )
+            tracks = []
+            tempo = 0
+            for track in root.iter("track"):
+                params = track.find("params")
+                attrs = params.attrib if params is not None else {}
+                if track.get("type") == "mastrack":
+                    tempo = int(attrs.get("globtempo", 0) or 0) if attrs.get("globtempo", "").isdigit() else 0
+                    continue
+                position = attrs.get("celldisppos", "")
+                tracks.append({
+                    "position": int(position) if position.isdigit() else len(tracks),
+                    "type": track.get("type", ""),
+                    "name": attrs.get("cellname", ""),
+                })
+            tracks.sort(key=lambda t: t["position"])
             result.append(
                 ProjectSummary(
                     name=project_dir.name,
+                    tempo=tempo,
+                    modified=xml_path.stat().st_mtime,
+                    tracks=tracks,
                     is_autosave=project_dir.name.endswith(" - autosave"),
                     wav_files=len(local_wavs),
                     references=len(refs),

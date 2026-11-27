@@ -11,6 +11,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 - Projects: click a project to see its tracks, sequences and samples. Play samples and open them in the audio editor.
 - Step sequencer for one-shot tracks in projects: one row per pad, one column per step, eight sequence slots. Velocity, probability, offset and length per note; name, step length, step count (or Open), quant size and snap per sequence. Play loops the sequence with the pad sounds. Save to card writes only the changed sequences into project.xml.
 - MIDI in and MIDI out channel per track in projects.
+- Project list with search, sorting (name, last change, tempo) and filters (track type, autosave copies, missing samples). Each project shows its tracks as color bars with type icons.
+- Pads tab in a project: edit the pads of a one-shot track right in the project with the pad editor and sample browser from Build.
+- Sequencer: drag notes sideways on a grid down to 10 ticks and up or down to another pad. With Snap off notes can sit up to half a step off the grid.
+- Euclidean generator per pad in the sequencer.
+- Number fields can be changed by pressing and dragging up or down, with a vertical slider next to the field.
 
 ### Changed
 

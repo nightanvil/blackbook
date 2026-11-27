@@ -5,7 +5,20 @@ const OFFSET_UNIT = 10;
 // Length of one step in quarter notes, by notesteplen index
 const STEP_QUARTERS = [32, 16, 8, 4, 2, 4 / 3, 1, 2 / 3, 0.5, 1 / 3, 0.25, 1 / 6, 0.125, 1 / 12, 0.0625, 1 / 24];
 
+const CELL_PITCH = 28; // grid column width plus gap in pixels
+const ROW_PITCH = 24;
+// Grid for moving notes, in ticks
+const NUDGE = [
+  { label: "Step", ticks: TICKS },
+  { label: "1/2 step", ticks: TICKS / 2 },
+  { label: "1/4 step", ticks: TICKS / 4 },
+  { label: "1/8 step", ticks: TICKS / 8 },
+  { label: "Free (10 ticks)", ticks: OFFSET_UNIT },
+];
+
 const proj = {
+  nudge: 0, // index into NUDGE
+  euclid: null, // open Euclid panel: { chan, hits, length, rotate, velocity, before }
   name: null,
   data: null,
   track: null, // index into data.tracks
@@ -47,25 +60,151 @@ function markDirty(seq) {
   renderProjectHead();
 }
 
+// ---------- pads of a one-shot track, edited with the pad grid and pad editor of the builder ----------
+
+function padKey(pads) {
+  return JSON.stringify(Object.entries(pads || {})
+    .map(([slot, p]) => {
+      // The pad editor fills in defaults for parameters a pad does not have; they are no change
+      const params = { ...defaultPadParams(), ...(p.params || {}) };
+      const sorted = Object.fromEntries(Object.keys(params).sort().map((k) => [k, params[k]]));
+      return [Number(slot), p.source, p.loop_mode || 0, sorted, p.start ?? null, p.length ?? null];
+    })
+    .sort((a, b) => a[0] - b[0]));
+}
+
+function padsChanged(track) { return !!track.padState && padKey(track.padState) !== track.padOrig; }
+
+function isDirty() { return proj.dirty || (proj.data ? proj.data.tracks.some(padsChanged) : false); }
+
+// Pads as the sequencer plays them: the edited ones while the Pads tab has changes
+function trackPads(track) {
+  if (!track.padState) return track.pads;
+  return Object.entries(track.padState).map(([slot, p]) => ({
+    slot: Number(slot),
+    source: p.source,
+    filename: p.filename || (p.source ? p.source.split("/").pop() : ""),
+    start: p.start ?? 0,
+    length: p.length ?? 0,
+    params: p.params || {},
+  }));
+}
+
+function openPads(container) {
+  const track = currentTrack();
+  const browser = document.querySelector("#view-build aside.browser");
+  const oneshot = document.getElementById("b-oneshot");
+  if (!proj.padsOpen) {
+    proj.padsOpen = {
+      pads: state.pads, selectedPad: state.selectedPad, oneshotHidden: oneshot.hidden,
+      browserHome: [browser.parentNode, browser.nextSibling], oneshotHome: [oneshot.parentNode, oneshot.nextSibling],
+    };
+  }
+  if (!track.padState) {
+    track.padState = Object.fromEntries(track.pads.map((p) => [p.slot, structuredClone(p)]));
+    track.padOrig = padKey(track.padState);
+  }
+  state.pads = track.padState;
+  if (state.selectedPad == null || !state.pads[state.selectedPad]) state.selectedPad = PAD_SLOTS.find((s) => state.pads[s]) ?? 8;
+  oneshot.hidden = false;
+  fill(container,
+    el("div", { class: "proj-pads" }, browser, el("div", { class: "proj-pads-main" }, oneshot)),
+    el("p", { class: "muted hint-small" }, "These are the pads of the track in this project. Drag WAVs from the browser onto a pad, change the sound in the pad editor. Save to card writes them into the project: samples on the card are used where they are, samples from the inbox or a library are copied into the project folder. The patch on the card is not changed."));
+  renderPads();
+}
+
+function closePads() {
+  const home = proj.padsOpen;
+  if (!home) return;
+  const browser = document.querySelector("aside.browser");
+  const oneshot = document.getElementById("b-oneshot");
+  home.browserHome[0].insertBefore(browser, home.browserHome[1]);
+  home.oneshotHome[0].insertBefore(oneshot, home.oneshotHome[1]);
+  oneshot.hidden = home.oneshotHidden;
+  state.pads = home.pads;
+  state.selectedPad = home.selectedPad;
+  proj.padsOpen = null;
+  renderPads();
+}
+
+// The builder redraws its pads after every change; the project head then shows unsaved changes
+const builderRenderPads = renderPads;
+renderPads = function renderPadsAndProject(...args) {
+  builderRenderPads(...args);
+  if (proj.padsOpen) renderProjectHead();
+};
+
+document.querySelectorAll("nav button").forEach((button) => button.addEventListener("click", () => {
+  if (button.dataset.view !== "projects" && proj.padsOpen) closePads();
+}));
+
+// ---------- project detail ----------
+
+const PROJECT_TABS = [
+  { id: "seq", label: "Sequences" },
+  { id: "pads", label: "Pads", oneShotOnly: true },
+  { id: "samples", label: "Samples" },
+];
+
+function renderProjectTabs() {
+  const wrap = document.getElementById("proj-tabs");
+  const track = currentTrack();
+  if (!wrap) return;
+  const oneShot = track && track.type === "samtrack";
+  if (proj.tab === "pads" && !oneShot) proj.tab = "seq";
+  wrap.style.setProperty("--track", track ? TRACK_COLORS[track.position] : "var(--accent)");
+  fill(wrap, PROJECT_TABS.filter((t) => !t.oneShotOnly || oneShot).map((t) =>
+    el("button", { class: proj.tab === t.id ? "active" : "", onclick: () => selectProjectTab(t.id) },
+      t.label, t.id === "pads" && track && padsChanged(track) ? el("span", { class: "dot", title: "unsaved changes" }) : null)));
+}
+
+function selectProjectTab(id) {
+  proj.tab = id;
+  renderProjectBody();
+}
+
+function renderProjectBody() {
+  const body = document.getElementById("proj-body");
+  if (!body) return;
+  if (proj.tab !== "pads" && proj.padsOpen) closePads();
+  renderProjectTabs();
+  if (proj.tab === "pads") {
+    openPads(body);
+  } else if (proj.tab === "samples") {
+    const box = el("div", {});
+    fill(body, box);
+    renderProjectSamples(proj.name, box);
+  } else {
+    fill(body, el("div", { id: "proj-seq" }));
+    renderSequencer();
+  }
+}
+
+function renderProjectDetail() {
+  const detail = document.getElementById("proj-detail");
+  fill(detail,
+    el("div", { id: "proj-head" }),
+    el("div", { id: "proj-tracks" }),
+    el("div", { id: "proj-tabs", class: "proj-tabs" }),
+    el("div", { id: "proj-body" }));
+  renderProjectHead();
+  renderTracks();
+  renderProjectBody();
+}
+
 async function showProject(name) {
-  if (proj.dirty && proj.name !== name) {
-    const ok = await confirmDialog("Discard changes?", `The changes to the sequences of ${proj.name} are not saved yet.`, "Discard");
+  if (isDirty() && proj.name !== name) {
+    const ok = await confirmDialog("Discard changes?", `The changes to ${proj.name} are not saved yet.`, "Discard");
     if (!ok) return;
   }
-  const keepEdits = proj.dirty && proj.name === name && proj.data;
+  const keepEdits = isDirty() && proj.name === name && proj.data;
   if (!keepEdits) seqPlayer.stop();
+  if (proj.padsOpen) closePads();
   state.selectedProject = name;
-  document.querySelectorAll("#proj-list .row").forEach((row) => row.classList.toggle("selected", row.dataset.name === name));
+  document.querySelectorAll("#proj-list .pcard").forEach((row) => row.classList.toggle("selected", row.dataset.name === name));
   const detail = document.getElementById("proj-detail");
   if (!detail) return;
-  if (keepEdits) {
-    fill(detail, el("div", { id: "proj-head" }), el("div", { id: "proj-tracks" }), el("div", { id: "proj-seq" }), el("div", { id: "proj-samples" }));
-    renderProjectHead();
-    renderTracks();
-    renderSequencer();
-    renderProjectSamples(name, document.getElementById("proj-samples"));
-    return;
-  }
+  if (keepEdits) { renderProjectDetail(); return; }
   detail.replaceChildren(el("p", { class: "muted" }, "Loading..."));
   let data;
   try {
@@ -75,25 +214,19 @@ async function showProject(name) {
     return;
   }
   const keepTrack = proj.name === name ? proj.track : null;
-  Object.assign(proj, { name, data, dirty: false, selected: null, tempo: data.tempo, swing: data.swing });
+  Object.assign(proj, { name, data, dirty: false, selected: null, euclid: null, tempo: data.tempo, swing: data.swing });
+  if (proj.name !== name || !proj.tab) proj.tab = "seq";
   const firstOneShot = data.tracks.findIndex((t) => t.type === "samtrack");
   proj.track = keepTrack != null && keepTrack < data.tracks.length ? keepTrack : Math.max(0, firstOneShot);
   const firstSeq = currentTrack() && currentTrack().sequences[0];
   if (keepTrack == null) proj.slot = firstSeq ? firstSeq.slot : 0;
-  fill(detail,
-    el("div", { id: "proj-head" }),
-    el("div", { id: "proj-tracks" }),
-    el("div", { id: "proj-seq" }),
-    el("div", { id: "proj-samples" }));
-  renderProjectHead();
-  renderTracks();
-  renderSequencer();
-  renderProjectSamples(name, document.getElementById("proj-samples"));
+  renderProjectDetail();
 }
 
 function renderProjectHead() {
   const head = document.getElementById("proj-head");
   if (!head || !proj.data) return;
+  const dirty = isDirty();
   const summary = (state.projects || []).find((p) => p.name === proj.name);
   const stat = (label, value, cls, title) => el("span", { class: "proj-stat " + (cls || ""), title: title || "" }, el("b", {}, String(value)), " ", label);
   fill(head,
@@ -101,18 +234,21 @@ function renderProjectHead() {
       el("h2", {}, proj.name),
       proj.data.autosave ? el("span", { class: "badge", title: "The device keeps an autosave copy of this project. blackbook changes only the project you selected here." }, "has autosave") : null,
       el("span", { class: "grow" }),
-      proj.dirty ? el("span", { class: "warn" }, "unsaved changes") : null,
-      el("button", { disabled: !proj.dirty, onclick: () => showProjectReload() }, "Discard"),
-      el("button", { class: "primary", disabled: !proj.dirty, onclick: saveProject }, "Save to card")),
+      dirty ? el("span", { class: "warn" }, "unsaved changes") : null,
+      el("button", { disabled: !dirty, onclick: () => showProjectReload() }, "Discard"),
+      el("button", { class: "primary", disabled: !dirty, onclick: saveProject }, "Save to card")),
     summary ? el("div", { class: "proj-stats" },
       stat("WAVs in folder", summary.wav_files),
       stat("references", summary.references),
       stat("missing", summary.missing.length, summary.missing.length ? "err" : "muted", summary.missing.join("\n")),
       stat("unused in folder", summary.unused.length, summary.unused.length ? "warn" : "muted", summary.unused.join("\n"))) : null);
+  renderProjectTabs();
 }
 
 async function showProjectReload() {
   proj.dirty = false;
+  if (proj.padsOpen) closePads();
+  if (proj.data) proj.data.tracks.forEach((t) => { t.padState = null; });
   await showProject(proj.name);
 }
 
@@ -180,19 +316,39 @@ function renderTracks() {
 function selectTrack(i) {
   if (proj.track === i) return;
   seqPlayer.stop();
+  if (proj.padsOpen) closePads();
+  proj.euclid = null;
   proj.track = i;
   proj.selected = null;
   const first = currentTrack().sequences.find((s) => s.events.length) || currentTrack().sequences[0];
   proj.slot = first ? first.slot : 0;
   renderTracks();
-  renderSequencer();
+  renderProjectBody();
 }
 
 function selectSlot(slot) {
+  if (proj.euclid) closeEuclid(true);
   proj.slot = slot;
   proj.selected = null;
   if (seqPlayer.playing) seqPlayer.restart();
   renderSequencer();
+}
+
+// Offset range in ticks: the Offset knob reaches +-47 (10 ticks each); notes recorded with Snap off sit up to half a step away
+function offsetLimits(seq) {
+  return seq && !seq.snap ? [-TICKS / 2, TICKS / 2 - OFFSET_UNIT] : [-47 * OFFSET_UNIT, 47 * OFFSET_UNIT];
+}
+
+function placeEvent(ev, absTicks, steps, seq) {
+  const [low, high] = offsetLimits(seq);
+  const abs = Math.max(0, Math.min(absTicks, (steps - 1) * TICKS + high));
+  let step = Math.max(0, Math.min(steps - 1, Math.round(abs / TICKS)));
+  let off = abs - step * TICKS;
+  if (off > high) { step = Math.min(steps - 1, step + 1); off = abs - step * TICKS; }
+  off = Math.max(step === 0 ? 0 : low, Math.min(high, off));
+  ev.step = step;
+  ev.strtks = step * TICKS + off;
+  ev.offset = Math.round(off / OFFSET_UNIT);
 }
 
 // Number of steps the grid shows
@@ -226,7 +382,8 @@ function renderSequencer() {
     tabs,
     settings,
     body,
-    editable ? eventInspector(track, seq) : null,
+    editable ? euclidPanel() : null,
+    editable && !proj.euclid ? eventInspector(track, seq) : null,
     seq && seq.automation ? el("p", { class: "muted hint-small" }, "This sequence has automation. blackbook keeps it as it is; it is not shown or played here.") : null);
 }
 
@@ -266,7 +423,7 @@ function seqSettings(seq, editable) {
 function stepGrid(track, seq) {
   const steps = seq ? gridSteps(seq) : 16;
   const grid = el("div", { class: "seq-grid", style: `grid-template-columns: 150px repeat(${steps}, 26px)` });
-  const padBySlot = new Map(track.pads.map((p) => [p.slot, p]));
+  const padBySlot = new Map(trackPads(track).filter((p) => p.source || p.filename).map((p) => [p.slot, p]));
   // Step numbers
   grid.append(el("div", { class: "seq-corner", style: "grid-row:1;grid-column:1" }));
   for (let s = 0; s < steps; s++) {
@@ -275,10 +432,11 @@ function stepGrid(track, seq) {
   PAD_SLOTS.forEach((slot, r) => {
     const row = r + 2;
     const pad = padBySlot.get(slot);
-    const label = pad ? pad.filename.split("\\").pop().replace(/\.wav$/i, "") : "empty";
-    grid.append(el("div", { class: "seq-pad" + (pad ? "" : " empty"), style: `grid-row:${row};grid-column:1`, title: pad ? pad.filename : "No sample on this pad",
+    const label = pad ? (pad.filename || "").split("\\").pop().replace(/\.wav$/i, "") : "empty";
+    grid.append(el("div", { class: "seq-pad" + (pad ? "" : " empty") + (proj.euclid && proj.euclid.chan === slot ? " euclid" : ""), style: `grid-row:${row};grid-column:1`, title: pad ? pad.filename : "No sample on this pad",
       onclick: () => { if (pad) seqPlayer.hit(pad, 100); } },
-      el("b", {}, String(padNumber(slot))), " ", label));
+      el("button", { class: "seq-eu", title: "Euclidean rhythm for this pad", onclick: (e) => { e.stopPropagation(); openEuclid(slot); } }, "E"),
+      el("b", {}, String(padNumber(slot))), " ", el("span", { class: "seq-pad-name" }, label)));
     for (let s = 0; s < steps; s++) {
       grid.append(el("div", {
         class: "seq-cell" + (Math.floor(s / 4) % 2 ? " odd" : ""),
@@ -293,20 +451,29 @@ function stepGrid(track, seq) {
       if (r < 0 || ev.step >= steps) continue;
       const span = Math.max(1, Math.min(ev.lencount || 1, steps - ev.step));
       const vel = ev.velocity ?? 100;
+      const offTicks = ev.strtks - ev.step * TICKS;
+      const width = ev.lencount === 0 ? Math.max(6, (ev.lentks / TICKS) * CELL_PITCH - 2) : null;
       const node = el("div", {
         class: "seq-ev" + (ev === proj.selected ? " selected" : "") + (ev.prob < 100 ? " prob" : ""),
-        style: `grid-row:${r + 2};grid-column:${ev.step + 2} / span ${span};opacity:${0.35 + 0.65 * vel / 127}`,
-        title: `Pad ${padNumber(ev.chan)}, step ${ev.step + 1}, velocity ${vel}, prob ${ev.prob < 100 ? ev.prob + "%" : "always"}, offset ${ev.offset}, length ${ev.lencount || ev.lentks + " ticks"}`,
-        onclick: (e) => { e.stopPropagation(); clickEvent(ev); },
+        style: `grid-row:${r + 2};grid-column:${ev.step + 2} / span ${span};opacity:${0.35 + 0.65 * vel / 127};transform:translateX(${(offTicks / TICKS) * CELL_PITCH}px)` + (width ? `;width:${width}px` : ""),
+        title: `Pad ${padNumber(ev.chan)}, step ${ev.step + 1}, velocity ${vel}, prob ${ev.prob < 100 ? ev.prob + "%" : "always"}, offset ${offTicks} ticks, length ${ev.lencount || ev.lentks + " ticks"}. Drag to move.`,
       });
-      if (ev.offset) node.append(el("span", { class: "off" }, ev.offset > 0 ? "›" : "‹"));
+      node.addEventListener("pointerdown", (e) => dragEvent(e, ev, node, steps, seq));
       grid.append(node);
     }
   }
   const head = el("div", { class: "seq-playhead", id: "seq-playhead", style: `grid-row:1 / span ${PAD_SLOTS.length + 1};grid-column:2`, hidden: true });
   grid.append(head);
-  return el("div", { class: "seq-grid-wrap" }, grid,
-    el("p", { class: "muted hint-small" }, "Click an empty cell to add a note, click a note to select it, click the selected note again to remove it. Click a pad name to hear the pad. Playback follows step length, velocity, probability, offset and the pad's level, pitch, pan, start and length; swing and choke groups are approximated, effects are heard on the device only."));
+  const nudgeSel = el("select", { title: "Grid for dragging notes sideways" }, NUDGE.map((n, i) => el("option", { value: i }, n.label)));
+  nudgeSel.value = String(proj.nudge);
+  nudgeSel.addEventListener("change", () => { proj.nudge = Number(nudgeSel.value); });
+  const [low, high] = offsetLimits(seq);
+  return el("div", {},
+    el("div", { class: "seq-toolbar" },
+      el("label", {}, "Move notes by ", nudgeSel),
+      el("span", { class: "muted hint-small" }, `Off the step grid a note can sit ${low} to +${high} ticks from its step (a step has ${TICKS}).` + (seq && seq.snap ? " Turn Snap off for up to half a step, as with notes recorded on the device." : ""))),
+    el("div", { class: "seq-grid-wrap" }, grid),
+    el("p", { class: "muted hint-small" }, "Click an empty cell to add a note, click a note to select it, click the selected note again to remove it. Drag a note sideways to move it on the chosen grid, up or down to move it to another pad. E next to a pad opens the Euclidean generator. Click a pad name to hear the pad. Playback follows step length, velocity, probability, offset and the pad's level, pitch, pan, start and length; swing and choke groups are approximated, effects are heard on the device only."));
 }
 
 function addEvent(chan, step) {
@@ -319,9 +486,118 @@ function addEvent(chan, step) {
   seq.events.push(ev);
   proj.selected = ev;
   markDirty(seq);
-  const pad = currentTrack().pads.find((p) => p.slot === chan);
+  const pad = trackPads(currentTrack()).find((p) => p.slot === chan);
   if (pad && !seqPlayer.playing) seqPlayer.hit(pad, ev.velocity);
   renderSequencer();
+}
+
+function dragEvent(down, ev, node, steps, seq) {
+  if (down.button !== 0) return;
+  down.stopPropagation();
+  const startTicks = ev.strtks;
+  const startRow = PAD_SLOTS.indexOf(ev.chan);
+  let moved = false;
+  const move = (e) => {
+    const dx = e.clientX - down.clientX;
+    const dy = e.clientY - down.clientY;
+    if (!moved && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+    moved = true;
+    const grid = NUDGE[proj.nudge].ticks;
+    const delta = Math.round(((dx / CELL_PITCH) * TICKS) / grid) * grid;
+    placeEvent(ev, startTicks + delta, steps, seq);
+    const row = Math.max(0, Math.min(PAD_SLOTS.length - 1, startRow + Math.round(dy / ROW_PITCH)));
+    ev.chan = PAD_SLOTS[row];
+    const span = Math.max(1, Math.min(ev.lencount || 1, steps - ev.step));
+    node.style.gridRow = String(row + 2);
+    node.style.gridColumn = `${ev.step + 2} / span ${span}`;
+    node.style.transform = `translateX(${((ev.strtks - ev.step * TICKS) / TICKS) * CELL_PITCH}px)`;
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    if (!moved) { clickEvent(ev); return; }
+    proj.selected = ev;
+    markDirty(seq);
+    renderSequencer();
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}
+
+// Euclidean rhythm: hits spread as evenly as possible over length steps, shifted by rotate
+function euclidPattern(hits, length, rotate) {
+  const pattern = [];
+  for (let i = 0; i < length; i++) {
+    const j = (((i - rotate) % length) + length) % length;
+    pattern.push(hits > 0 && (j * hits) % length < hits);
+  }
+  return pattern;
+}
+
+function openEuclid(chan) {
+  const seq = currentSeq(true);
+  const existing = seq.events.filter((e) => e.chan === chan);
+  const steps = gridSteps(seq);
+  proj.euclid = {
+    chan,
+    hits: Math.max(1, Math.min(existing.length || 4, 16)),
+    length: Math.min(16, steps),
+    rotate: 0,
+    velocity: existing[0] ? (existing[0].velocity ?? 100) : 100,
+    before: existing.map((e) => ({ ...e })),
+  };
+  applyEuclid();
+}
+
+function applyEuclid() {
+  const eu = proj.euclid;
+  const seq = currentSeq(true);
+  const steps = gridSteps(seq);
+  seq.events = seq.events.filter((e) => e.chan !== eu.chan);
+  const pattern = euclidPattern(eu.hits, eu.length, eu.rotate);
+  for (let s = 0; s < steps; s++) {
+    if (!pattern[s % eu.length]) continue;
+    seq.events.push({ step: s, chan: eu.chan, offset: 0, strtks: s * TICKS, pitch: 0, lencount: 1, lentks: TICKS, velocity: eu.velocity, prob: 100, type: "note", extra: {} });
+  }
+  proj.selected = null;
+  markDirty(seq);
+  renderSequencer();
+}
+
+function closeEuclid(keep) {
+  const eu = proj.euclid;
+  if (!keep && eu) {
+    const seq = currentSeq(true);
+    seq.events = seq.events.filter((e) => e.chan !== eu.chan).concat(eu.before);
+  }
+  proj.euclid = null;
+  renderSequencer();
+}
+
+function euclidPanel() {
+  const eu = proj.euclid;
+  if (!eu) return null;
+  const seq = currentSeq(true);
+  const steps = gridSteps(seq);
+  const field = (label, key, min, max, title) => {
+    const input = el("input", { type: "number", min, max, value: eu[key], class: "num", title });
+    const apply = () => {
+      const v = Math.max(min, Math.min(max, Math.round(Number(input.value))));
+      if (Number.isFinite(v)) { eu[key] = v; if (eu.hits > eu.length) eu.hits = eu.length; applyEuclid(); }
+    };
+    input.addEventListener("change", apply);
+    return el("label", { title }, label + " ", input);
+  };
+  const pattern = euclidPattern(eu.hits, eu.length, eu.rotate);
+  return el("div", { class: "seq-euclid" },
+    el("b", {}, `Euclid for pad ${padNumber(eu.chan)}`),
+    field("Hits", "hits", 0, eu.length, "Number of notes in the pattern"),
+    field("Length", "length", 1, Math.min(64, steps), "Steps of the pattern; it repeats over the whole sequence"),
+    field("Rotate", "rotate", 0, eu.length - 1, "Shifts the pattern to the right"),
+    field("Velocity", "velocity", 1, 127, "Velocity of the notes"),
+    el("span", { class: "eu-preview", title: "Pattern" }, pattern.map((on) => el("i", { class: on ? "on" : "" }))),
+    el("button", { class: "small", onclick: () => closeEuclid(false), title: "Restore the notes this pad had before" }, "Cancel"),
+    el("button", { class: "small primary", onclick: () => closeEuclid(true) }, "Done"));
 }
 
 function clickEvent(ev) {
@@ -354,9 +630,8 @@ function eventInspector(track, seq) {
     el("b", {}, `Pad ${padNumber(ev.chan)}, step ${ev.step + 1}`),
     num("Velocity", ev.velocity ?? 100, 1, 127, "How hard the pad plays, 1 to 127", (v) => { ev.velocity = v; }),
     num("Prob %", ev.prob, 1, 100, "Probability that the note plays each time, 100 is Always", (v) => { ev.prob = v; }),
-    num("Offset", ev.offset, -47, 47, "Nudges the note earlier or later, -47 to +47 (10 ticks each, a step has 960)", (v) => {
-      ev.offset = ev.step === 0 ? Math.max(0, v) : v;
-      ev.strtks = Math.max(0, ev.step * TICKS + ev.offset * OFFSET_UNIT);
+    num("Offset", ev.strtks - ev.step * TICKS, offsetLimits(seq)[0], offsetLimits(seq)[1], "Ticks before or after the step, a step has 960. The Offset knob of the device moves in steps of 10 up to +-470.", (v) => {
+      placeEvent(ev, ev.step * TICKS + v, gridSteps(seq), seq);
     }),
     ev.lencount === 0
       ? el("span", { class: "muted", title: "Recorded with Snap off" }, `Length ${ev.lentks} ticks`)
@@ -367,21 +642,32 @@ function eventInspector(track, seq) {
 async function saveProject() {
   const changes = proj.data.tracks.map((t) => {
     const sequences = t.sequences.filter((s) => s.changed && !(s.isNew && !s.events.length));
-    if (!sequences.length && !t.midiChanged) return null;
+    const pads = padsChanged(t);
+    if (!sequences.length && !t.midiChanged && !pads) return null;
     const change = { index: t.index, sequences };
     if (t.midiChanged) Object.assign(change, { midiinchan: t.midiinchan, midioutchan: t.midioutchan });
+    if (pads) {
+      change.pads = Object.entries(t.padState).map(([slot, pad]) => ({
+        slot: Number(slot), source: pad.source, loop_mode: pad.loop_mode || 0,
+        params: pad.params || {}, start: pad.start ?? null, length: pad.length ?? null,
+      }));
+    }
     return change;
   }).filter(Boolean);
   if (!changes.length) { proj.dirty = false; renderProjectHead(); return; }
   const lines = [`blackbook writes the changes into Projects/${proj.name}/project.xml. Everything else in the project stays as it is.`];
+  if (changes.some((c) => c.pads)) lines.push("", "Pads: samples on the card are used where they are, samples from the inbox or a library are copied into the project folder. The patches in Patches are not changed.");
   if (proj.data.autosave) lines.push("", `The autosave copy (${proj.name} - autosave) is not changed. If the device loads the autosave, the changes are not in it.`);
   lines.push("", "If the project is open on the blackbox, load it again there after the card is back in the device. A snapshot is taken before and after, if the backup is set up.");
-  if (!(await confirmDialog("Save sequences to the card?", lines.join("\n"), "Save"))) return;
+  if (!(await confirmDialog("Save the project to the card?", lines.join("\n"), "Save"))) return;
   try {
     await api("PUT", "/api/project/sequences", { name: proj.name, tracks: changes });
     toast("Saved to the card");
     proj.dirty = false;
+    if (proj.padsOpen) closePads();
+    proj.data.tracks.forEach((t) => { t.padState = null; });
     await showProject(proj.name);
+    loadProjects();
   } catch (err) {
     toast(err.message, true);
   }
@@ -452,7 +738,7 @@ const seqPlayer = {
     if (!track || track.type !== "samtrack") return;
     stopAll();
     try {
-      await Promise.all(track.pads.filter((p) => p.source).map((p) => this.buffer(p)));
+      await Promise.all(trackPads(track).filter((p) => p.source).map((p) => this.buffer(p)));
     } catch (err) { toast(err.message, true); return; }
     this.playing = true;
     this.restart();
@@ -478,7 +764,7 @@ const seqPlayer = {
     const steps = seq ? gridSteps(seq) : 16;
     const loopDur = steps * stepDur;
     const swingDelay = (proj.swing / 50 - 1) * stepDur;
-    const pads = new Map(track.pads.filter((p) => p.source).map((p) => [p.slot, p]));
+    const pads = new Map(trackPads(track).filter((p) => p.source).map((p) => [p.slot, p]));
     while (true) {
       if (!this.queue.length) {
         const loopStart = this.next;

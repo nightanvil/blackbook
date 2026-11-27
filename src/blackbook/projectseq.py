@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass, field
 
 from . import padparams
-from .patchedit import cells, parse_attrs, set_attrs
+from .patchedit import cells, edit_oneshot, parse_attrs, set_attrs
 
 TICKS_PER_STEP = 960
 OFFSET_UNIT = 10
@@ -127,6 +127,7 @@ def pads_of(text: str, track: Track) -> list[dict]:
                 "filename": filename,
                 "start": _int(nxt.attrs, "samstart"),
                 "length": _int(nxt.attrs, "samlen"),
+                "loop_mode": _int(cell.attrs, "loopmodes"),
                 "params": padparams.read(cell.attrs),
             }
         )
@@ -274,6 +275,8 @@ class TrackChange:
     midiinchan: int | None = None
     midioutchan: int | None = None
     sequences: list[dict] = field(default_factory=list)
+    # celldisppos to (saminst values, samasst values), as patchedit.edit_oneshot takes them
+    pad_updates: dict[int, tuple[dict, dict]] = field(default_factory=dict)
 
 
 def apply_changes(text: str, changes: list[TrackChange]) -> str:
@@ -287,6 +290,15 @@ def apply_changes(text: str, changes: list[TrackChange]) -> str:
         body = text[track.start:track.end]
         for seq in change.sequences:
             body = write_sequence(body, seq, newline)
+        if change.pad_updates:
+            if track.type != "samtrack":
+                raise SequenceError(f"track {change.index} is not a one-shot track")
+            body, errors = edit_oneshot(body, change.pad_updates)
+            if errors:
+                raise SequenceError("; ".join(errors))
+            if newline == "\r\n":
+                # New pad cells are built with \n; the file uses \r\n
+                body = re.sub(r"(?<!\r)\n", "\r\n", body)
         values: dict[str, object] = {}
         if change.midiinchan is not None:
             values["midiinchan"] = _check(change.midiinchan, 0, 16, "MIDI in channel")

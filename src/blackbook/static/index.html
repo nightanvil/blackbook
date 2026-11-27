@@ -137,7 +137,28 @@
 
     <!-- Projects -->
     <section id="view-projects" class="view active">
-      <div id="proj-list" class="list"></div>
+      <aside id="proj-side">
+        <div class="proj-filter">
+          <input id="proj-search" type="search" placeholder="Search project or track">
+          <div class="proj-filter-row">
+            <select id="proj-sort" title="Order of the list">
+              <option value="name">Name</option>
+              <option value="modified">Last changed</option>
+              <option value="tempo">Tempo</option>
+            </select>
+            <select id="proj-type" title="Only projects with a track of this type">
+              <option value="">All tracks</option>
+              <option value="samtrack">One-shot</option><option value="multisamtrack">Multisample</option><option value="looptrack">Loop</option>
+              <option value="slicertrack">Slicer</option><option value="granslicertrack">Shredder</option>
+            </select>
+          </div>
+          <div class="proj-filter-row">
+            <label class="check" title="Show the autosave copies the device keeps next to projects"><input id="proj-autosave" type="checkbox">Autosave copies</label>
+            <label class="check" title="Only projects with missing samples"><input id="proj-missing" type="checkbox">Missing samples</label>
+          </div>
+        </div>
+        <div id="proj-list" class="list"></div>
+      </aside>
       <div id="proj-detail" class="detail"><p class="muted">Select a project.</p></div>
     </section>
 

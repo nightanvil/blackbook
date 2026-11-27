@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -26,7 +27,7 @@ from . import audioedit, builder, padparams, patchedit, projectseq, sampleupdate
 from .backup import Backup
 from .card import Card, browse, parse_xml
 from .carddetect import find_cards
-from .cardpath import INVALID_NAME_CHARS, resolve_sample_reference
+from .cardpath import INVALID_NAME_CHARS, join_reference, resolve_sample_reference
 from .eject import EjectError, eject
 from .mapping import Zone, assign_key_ranges, automap, note_name
 from .patchindex import FACTORY_TAGS
@@ -107,6 +108,8 @@ class TrackChangeIn(BaseModel):
     midiinchan: int | None = None
     midioutchan: int | None = None
     sequences: list[dict] = Field(default_factory=list)
+    # None leaves the pads untouched; a list is the complete new pad set of a one-shot track
+    pads: list[PadIn] | None = None
 
 
 class ProjectChangeIn(BaseModel):
@@ -885,11 +888,73 @@ def create_app(
             for pad in track["pads"]:
                 path = resolve_sample_reference(card.root, pad["filename"], xml_path.parent)
                 pad["source"] = f"card:{card.relative(path)}" if path and path.is_file() else None
+                pad["frames"] = wav_frames(pad["source"])
         data["name"] = name
         data["autosave"] = (xml_path.parent.parent / f"{name} - autosave" / "project.xml").is_file()
         data["step_lengths"] = projectseq.STEP_LENGTHS
         data["quant_sizes"] = projectseq.QUANT_SIZES
         return data
+
+    def track_pad_updates(
+        text: str, index: int, pads: list[PadIn], project_dir: Path, copies: list[tuple[Path, Path]]
+    ) -> dict[int, tuple[dict, dict]]:
+        """Pad changes of a one-shot track in a project.
+
+        Samples on the card are referenced where they are, relative to the card root. Samples from the
+        inbox or a library are copied into the project folder and referenced as .\\name, like recordings.
+        """
+        track = next((tr for tr in projectseq.tracks(text) if tr.index == index), None)
+        if track is None or track.type != "samtrack":
+            raise HTTPException(400, f"track {index} is not a one-shot track")
+        existing = {p["slot"]: p for p in projectseq.pads_of(text, track)}
+        used = {p.name.casefold() for p in project_dir.iterdir()} | {t.name.casefold() for _, t in copies}
+        errors: list[str] = []
+        updates: dict[int, tuple[dict, dict]] = {}
+        listed = set()
+        for pad in pads:
+            listed.add(pad.slot)
+            if not 0 <= pad.slot <= 15:
+                raise HTTPException(400, f"invalid pad {pad.slot}")
+            if pad.source is None:
+                continue
+            label = f"pad {builder.pad_number(pad.slot)}"
+            errors += padparams.validate(pad.params, label)
+            path = sources.resolve(pad.source)
+            info = builder.check_wav(path, label, errors, [])
+            if info is None:
+                continue
+            inst = {"loopmodes": pad.loop_mode, **pad.params}
+            old = existing.get(pad.slot)
+            old_path = resolve_sample_reference(card.root, old["filename"], project_dir) if old else None
+            start = pad.start or 0
+            length = info.frames - start if pad.length is None else pad.length
+            if start < 0 or length < 1 or start + length > info.frames:
+                errors.append(f"{label}: start {start} and length {length} exceed the {info.frames} frames of the file")
+                continue
+            if old_path is not None and old_path.resolve() == path.resolve():
+                updates[pad.slot] = (inst, {"samstart": start, "samlen": length})
+                continue
+            if path.is_relative_to(card.root):
+                reference = join_reference(*path.relative_to(card.root).parts)
+            else:
+                name = path.name
+                stem, n = path.stem, 2
+                while name.casefold() in used:
+                    name = f"{stem}_{n}{path.suffix}"
+                    n += 1
+                used.add(name.casefold())
+                copies.append((path, project_dir / name))
+                reference = ".\\" + name
+            updates[pad.slot] = (
+                inst,
+                {"filename": reference, "samstart": start, "samlen": length, "loopstart": 0, "loopend": info.frames},
+            )
+        for slot, old in existing.items():
+            if slot not in listed:
+                updates[slot] = ({}, {"filename": "", "samstart": 0, "samlen": 0, "loopstart": 0, "loopend": 0})
+        if errors:
+            raise HTTPException(400, "; ".join(errors))
+        return updates
 
     @app.put("/api/project/sequences")
     def project_sequences(body: ProjectChangeIn) -> dict:
@@ -900,17 +965,22 @@ def create_app(
         raw = xml_path.read_bytes()
         bom = raw.startswith(b"\xef\xbb\xbf")
         text = raw.decode("utf-8-sig")
-        changes = [
-            projectseq.TrackChange(t.index, t.midiinchan, t.midioutchan, t.sequences) for t in body.tracks
-        ]
+        copies: list[tuple[Path, Path]] = []
+        changes = []
+        for t in body.tracks:
+            pad_updates = track_pad_updates(text, t.index, t.pads, xml_path.parent, copies) if t.pads is not None else {}
+            changes.append(projectseq.TrackChange(t.index, t.midiinchan, t.midioutchan, t.sequences, pad_updates))
         try:
             new_text = projectseq.apply_changes(text, changes)
         except (projectseq.SequenceError, KeyError, TypeError) as exc:
-            raise HTTPException(400, f"cannot write the sequences: {exc}") from exc
-        if new_text == text:
+            raise HTTPException(400, f"cannot write the changes: {exc}") from exc
+        if new_text == text and not copies:
             return {"changed": False}
-        what = f"saving sequences of project {body.name}"
+        what = f"saving project {body.name}"
         snapshots.before_write(what)
+        for src, target in copies:
+            shutil.copy2(src, target)
+            backup.record_created(target)
         backup.save(xml_path)
         tmp = xml_path.with_name(xml_path.name + ".blackbook-tmp")
         tmp.write_bytes((b"\xef\xbb\xbf" if bom else b"") + new_text.encode("utf-8"))

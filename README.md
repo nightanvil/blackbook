@@ -30,7 +30,7 @@ blackbook is free and stays free. If it helps you, you can buy me a coffee on [K
 - **Edit:** change your own patches in place. Sequences, modulation and everything blackbook does not know stay untouched.
 - **Audio editor:** waveform view, trim, fades, gain, normalize and reverse with undo, edges snap to zero crossings so nothing clicks. Open it from a pad, the patch list or a project. Save as a new file, or overwrite the original: every patch and project that uses it is adjusted.
 - **Templates:** any one-shot or multisample patch, also factory patches, as a starting point for a new one.
-- **Projects:** step sequencer for one-shot tracks with playback, MIDI channels per track, missing samples and unused files, the samples of a project to play and edit.
+- **Projects:** tracks as on the device, step sequencer for one-shot tracks with playback, free note placement and a Euclidean generator, the pads of a track edited right in the project, MIDI channels per track, missing samples and unused files.
 - **Backup:** snapshots of the card with history, comparison and restore. Automatic when the card is connected, and before and after blackbook writes. Restoring a single WAV shows where it is used.
 
 What comes next is in the roadmap at the top. Tell me what you need most.

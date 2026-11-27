@@ -176,11 +176,18 @@ Restoring a single WAV brings back only the file. Before the restore blackbook l
 
 ## 4. Projects
 
-Projects is the first tab. The projects on the card are listed on the left, with the number of missing samples where there are any. Clicking a project shows the number of WAVs in its folder, references, missing samples and unused files, and below:
+Projects is the first tab. The projects on the card are listed on the left as cards: name, the four tracks as small color bars with type icons, tempo, number of references, missing samples and when the project was last changed. Search finds projects by project or track name; the list can be sorted by name, last change or tempo and filtered by track type, autosave copies and missing samples. Clicking a project shows the number of WAVs in its folder, references, missing samples and unused files, and below:
 
 - **Tracks** in the style of the Tracks screen of the device: four cards in the track colors of the device (cyan, orange, green, magenta by position), with name, an icon for the track type, the number of samples and sequences with notes. The cards follow the track position on the device (`celldisppos` of the track), not the order in the file. Instead of the level meters each card has a **Config** box with MIDI In and MIDI Out channel (None or 1 to 16); changing a channel writes `midiinchan` or `midioutchan` of that track. The bar below shows project name, tempo and swing.
-- **Sequences** of the selected track, the eight slots as tabs. For one-shot tracks a step editor shows one row per pad and one column per step. Settings per sequence: name, Step Len, Step Count (or Open), Quant Size and Snap. Per note: velocity, probability, offset (-47 to +47, 10 ticks each) and length in steps. Sequences of other track types are shown with their number of notes, editing follows later.
+Below the tracks three tabs show the selected track:
+
+- **Sequences** of the selected track, the eight slots as tabs. For one-shot tracks a step editor shows one row per pad and one column per step. Settings per sequence: name, Step Len, Step Count (or Open), Quant Size and Snap. Per note: velocity, probability, offset in ticks and length in steps. Notes can be dragged sideways on a grid of a step, 1/2, 1/4, 1/8 step or freely in 10 ticks, and up or down to another pad. With Snap on a note sits up to 470 ticks (the range of the Offset knob) from its step, with Snap off up to half a step, as notes recorded on the device. "E" next to a pad opens a Euclidean generator: hits, pattern length, rotation and velocity; the pattern repeats over the whole sequence and replaces the notes of that pad. Sequences of other track types are shown with their number of notes, editing follows later.
+- **Pads** of a one-shot track, with the pad grid, pad editor and sample browser of the builder. Samples on the card are referenced where they are (relative to the card root); samples from the inbox or a library are copied into the project folder and referenced as `.\name.wav`, like recordings. Only the `saminst` and `samasst` cells of changed pads change; the patches in Patches stay as they are.
 - **Samples** of the project with playback and the audio editor.
+
+### Number fields
+
+Every number field can also be changed by pressing and dragging up or down. A vertical slider next to the field shows the value; Shift moves in finer steps. A click without dragging places the cursor for typing.
 
 ### Playback
 
@@ -188,7 +195,7 @@ Play runs the sequence of a one-shot track in a loop through Web Audio. It follo
 
 ### Saving
 
-"Save to card" writes only the changed tracks: their MIDI channels, the `<params>` of the changed `noteseq` cells and their `<sequence>` element. A sequence in an empty slot is added as a new `noteseq` cell after the existing ones. Unknown attributes of events, automation and everything else in the project stay byte-identical, as do line endings and the BOM. The autosave copy of the project (`<name> - autosave`) is not changed. A snapshot is taken before and after if the backup is set up.
+"Save to card" writes only the changed tracks: their MIDI channels, changed pads, the `<params>` of the changed `noteseq` cells and their `<sequence>` element. A sequence in an empty slot is added as a new `noteseq` cell after the existing ones. Unknown attributes of events, automation and everything else in the project stay byte-identical, as do line endings and the BOM. The autosave copy of the project (`<name> - autosave`) is not changed. A snapshot is taken before and after if the backup is set up.
 
 Sequences are stored in the project. The device ignores sequences in a `patch.xml` when a patch is loaded onto an existing track, so blackbook edits them in projects only.
 

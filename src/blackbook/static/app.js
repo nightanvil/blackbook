@@ -37,6 +37,70 @@ function el(tag, attrs = {}, ...children) {
   return node;
 }
 
+// Number fields: press and drag up or down to change the value; a vertical slider shows where it is.
+// A plain click still places the cursor for typing. Shift while dragging changes in finer steps.
+(function setupNumberScrub() {
+  document.addEventListener("pointerdown", (down) => {
+    const input = down.target;
+    if (!(input instanceof HTMLInputElement) || input.type !== "number" || input.disabled || input.readOnly || down.button !== 0) return;
+    const min = input.min !== "" ? Number(input.min) : null;
+    const max = input.max !== "" ? Number(input.max) : null;
+    const step = input.step && input.step !== "any" ? Number(input.step) : 1;
+    const decimals = (String(step).split(".")[1] || "").length;
+    const start = Number(input.value) || 0;
+    const ranged = min != null && max != null && max > min;
+    let dragging = false;
+    let pop = null;
+    let fill = null;
+    let label = null;
+    const show = () => {
+      const box = input.getBoundingClientRect();
+      fill = el("div", { class: "scrub-fill" });
+      label = el("div", { class: "scrub-value" });
+      pop = el("div", { class: "scrub-pop" + (ranged ? "" : " open-range") }, el("div", { class: "scrub-track" }, fill), label);
+      document.body.append(pop);
+      const height = 160;
+      pop.style.left = `${Math.max(4, box.left - 46)}px`;
+      pop.style.top = `${Math.min(window.innerHeight - height - 30, Math.max(4, box.top + box.height / 2 - height / 2))}px`;
+    };
+    const render = (value) => {
+      label.textContent = value.toFixed(decimals);
+      if (ranged) fill.style.height = `${((value - min) / (max - min)) * 100}%`;
+    };
+    const move = (ev) => {
+      const dy = down.clientY - ev.clientY;
+      if (!dragging) {
+        if (Math.abs(dy) < 4) return;
+        dragging = true;
+        input.blur();
+        document.body.classList.add("scrubbing");
+        show();
+      }
+      const fine = ev.shiftKey ? 0.1 : 1;
+      const perPixel = ranged ? Math.max(step, (max - min) / 160) : step / 4;
+      let value = start + Math.round((dy * perPixel * fine) / step) * step;
+      if (min != null) value = Math.max(min, value);
+      if (max != null) value = Math.min(max, value);
+      value = Number(value.toFixed(decimals));
+      if (String(value) !== input.value) {
+        input.value = String(value);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      render(value);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      if (!dragging) return;
+      document.body.classList.remove("scrubbing");
+      if (pop) pop.remove();
+      if (Number(input.value) !== start) input.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  });
+})();
+
 // replaceChildren that skips null children, as el() does
 function fill(node, ...children) {
   node.replaceChildren(...children.flat().filter((c) => c != null));
@@ -1154,7 +1218,9 @@ function clipboardLabel() {
 
 document.addEventListener("keydown", (ev) => {
   if (!(ev.ctrlKey || ev.metaKey) || ev.altKey) return;
-  if (!document.getElementById("view-build").classList.contains("active") || state.buildType !== "oneshot") return;
+  const inBuild = document.getElementById("view-build").classList.contains("active") && state.buildType === "oneshot";
+  const inProject = typeof proj !== "undefined" && proj.padsOpen && document.getElementById("view-projects").classList.contains("active");
+  if (!inBuild && !inProject) return;
   if (["INPUT", "TEXTAREA", "SELECT"].includes(ev.target.tagName) || document.querySelector("dialog[open]")) return;
   const key = ev.key.toLowerCase();
   const slot = state.selectedPad;
@@ -1395,16 +1461,65 @@ async function loadProjects() {
   if (state.selectedProject && state.projects.some((p) => p.name === state.selectedProject)) showProject(state.selectedProject);
 }
 
+function fmtAgo(seconds) {
+  const diff = Date.now() / 1000 - seconds;
+  if (diff < 90) return "just now";
+  if (diff < 3600) return `${Math.round(diff / 60)} min ago`;
+  if (diff < 86400) return `${Math.round(diff / 3600)} h ago`;
+  if (diff < 86400 * 14) return `${Math.round(diff / 86400)} days ago`;
+  return new Date(seconds * 1000).toLocaleDateString();
+}
+
 function renderProjectList() {
   const wrap = document.getElementById("proj-list");
-  const projects = state.projects || [];
-  wrap.replaceChildren(...projects.map((p) =>
-    el("div", { class: "row" + (p.name === state.selectedProject ? " selected" : ""), "data-name": p.name, title: "Show tracks, sequences and samples of this project", onclick: () => showProject(p.name) },
-      el("span", { class: "name" }, p.name),
-      p.is_autosave ? el("span", { class: "badge" }, "autosave") : null,
-      p.missing.length ? el("span", { class: "err meta", title: "Missing samples:\n" + p.missing.join("\n") }, `${p.missing.length} missing`) : null)));
-  if (!projects.length) wrap.append(el("p", { class: "muted", style: "padding:12px" }, "No projects on the card."));
+  const search = document.getElementById("proj-search").value.trim().toLowerCase();
+  const sort = document.getElementById("proj-sort").value;
+  const type = document.getElementById("proj-type").value;
+  const autosave = document.getElementById("proj-autosave").checked;
+  const missingOnly = document.getElementById("proj-missing").checked;
+  const projects = (state.projects || []).filter((p) =>
+    (autosave || !p.is_autosave) &&
+    (!missingOnly || p.missing.length) &&
+    (!type || p.tracks.some((t) => t.type === type)) &&
+    (!search || p.name.toLowerCase().includes(search) || p.tracks.some((t) => t.name.toLowerCase().includes(search))));
+  const order = {
+    name: (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }),
+    modified: (a, b) => b.modified - a.modified,
+    tempo: (a, b) => a.tempo - b.tempo || a.name.localeCompare(b.name),
+  }[sort];
+  projects.sort(order);
+  wrap.replaceChildren(...projects.map((p) => {
+    const strip = el("div", { class: "pc-strip" }, [0, 1, 2, 3].map((pos) => {
+      const t = p.tracks.find((x) => x.position === pos);
+      if (!t) return el("span", { class: "pc-slot empty" });
+      const icon = trackIcon(t.type);
+      icon.title = `${pos + 1}: ${t.name || TRACK_LABELS[t.type] || t.type} (${TRACK_LABELS[t.type] || t.type})`;
+      return el("span", { class: "pc-slot", style: `--track:${TRACK_COLORS[pos]}` }, icon);
+    }));
+    return el("div", {
+      class: "pcard" + (p.name === state.selectedProject ? " selected" : ""),
+      "data-name": p.name,
+      title: "Show tracks, sequences and samples of this project",
+      onclick: () => showProject(p.name),
+    },
+      el("div", { class: "pc-top" },
+        el("span", { class: "pc-name" }, p.name.replace(/ - autosave$/, "")),
+        p.is_autosave ? el("span", { class: "badge" }, "autosave") : null),
+      strip,
+      el("div", { class: "pc-meta" },
+        p.tempo ? el("span", {}, `${p.tempo} BPM`) : null,
+        el("span", {}, `${p.references} refs`),
+        p.missing.length ? el("span", { class: "err", title: "Missing samples:\n" + p.missing.join("\n") }, `${p.missing.length} missing`) : null,
+        el("span", { class: "grow" }),
+        el("span", { title: new Date(p.modified * 1000).toLocaleString() }, fmtAgo(p.modified))));
+  }));
+  if (!projects.length) {
+    wrap.append(el("p", { class: "muted", style: "padding:12px" }, (state.projects || []).length ? "No project matches." : "No projects on the card."));
+  }
 }
+
+["proj-search", "proj-sort", "proj-type", "proj-autosave", "proj-missing"].forEach((id) =>
+  document.getElementById(id).addEventListener("input", renderProjectList));
 
 async function renderProjectSamples(name, detail) {
   if (!detail) return;
