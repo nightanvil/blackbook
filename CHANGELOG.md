@@ -26,6 +26,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 - Projects is the first tab, with the projects listed on the left. The tracks of a project look like the Tracks screen of the device: track colors, type icons, sample count, and a Config box with the MIDI channels.
 - Library is now called Patches, as on the device.
 - The top bar no longer lets the volume slider overlap the tabs in windows narrower than 1400 pixels.
+- On very wide screens the UI keeps a width of 1680 pixels and sits in the middle. Pads and pad editor are at most 960 pixels wide, so the sound settings stay in two columns below the pads.
 
 ### Fixed
 

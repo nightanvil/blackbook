@@ -567,3 +567,11 @@ input[type="number"]:focus { cursor: text; }
 .proj-pads { display: flex; gap: 12px; align-items: stretch; min-height: 480px; }
 .proj-pads aside.browser { width: 280px; flex-shrink: 0; border: 1px solid var(--line); border-radius: 6px; max-height: 640px; }
 .proj-pads-main { flex: 1; min-width: 0; }
+
+/* Very wide windows: the whole UI keeps a readable width and sits in the middle */
+:root { --page-max: 1680px; }
+.topinner, main { width: 100%; max-width: var(--page-max); margin-inline: auto; box-sizing: border-box; }
+.app-banner { padding-inline: max(16px, calc((100% - var(--page-max)) / 2 + 16px)); }
+@media (min-width: 1700px) { main { border-inline: 1px solid var(--line); } }
+/* Pads and pad editor only as wide as needed, sound settings in two or three columns below the pads */
+#b-oneshot { max-width: 960px; }
