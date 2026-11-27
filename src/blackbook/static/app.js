@@ -466,6 +466,9 @@ async function showPatch(ref) {
     el("tr", {},
       el("td", {}, el("button", { class: "small playbtn", disabled: !s.source, "data-src": s.source || "", onclick: () => play(s.source) })),
       el("td", {}, s.filename, s.source ? null : el("span", { class: "err" }, " (missing)")),
+      el("td", { class: "muted" }, isMulti
+        ? `${s.root_name}  keys ${noteName(s.key_low)}-${noteName(s.key_high)}  vel ${s.vel_low}-${s.vel_high}`
+        : s.slot != null ? "pad " + padNumber(s.slot) : ""),
       el("td", { class: "sample-actions" }, s.source && s.source.startsWith("card:")
         ? [
           el("button", { class: "small", title: isUser ? "Edit the sample, save as new file or overwrite the original" : "Edit the sample and save it as a new file, factory samples stay unchanged",
@@ -473,10 +476,7 @@ async function showPatch(ref) {
           isUser ? el("button", { class: "small", title: "Rename the file on the card and in every patch and project that uses it",
             onclick: async () => { if (await renameSample(s.source)) showPatch(ref); } }, "Rename") : null,
         ]
-        : null),
-      el("td", { class: "muted" }, isMulti
-        ? `${s.root_name}  keys ${noteName(s.key_low)}-${noteName(s.key_high)}  vel ${s.vel_low}-${s.vel_high}`
-        : s.slot != null ? "pad " + padNumber(s.slot) : "")
+        : null)
     )
   );
 
@@ -499,7 +499,7 @@ async function showPatch(ref) {
     tagBox,
     isUser ? el("div", { style: "margin-top:8px" }, saveButton) : null,
     el("div", { class: "label" }, `Samples (${rows.length})`),
-    el("table", {}, el("tbody", {}, rows))
+    el("table", { class: "samples-table" }, el("tbody", {}, rows))
   );
   markPlaying();
 }
@@ -1659,7 +1659,7 @@ async function renderProjectSamples(name, detail) {
   }
   fill(detail,
     el("div", { class: "label" }, `Samples of ${name} (${samples.length})`),
-    el("table", {}, el("tbody", {}, samples.map((s) =>
+    el("table", { class: "samples-table" }, el("tbody", {}, samples.map((s) =>
       el("tr", {},
         el("td", {}, el("button", { class: "small playbtn", disabled: !s.source, "data-src": s.source || "", onclick: () => play(s.source) })),
         el("td", {}, s.path || s.filename, s.source ? null : el("span", { class: "err" }, " (missing)")),

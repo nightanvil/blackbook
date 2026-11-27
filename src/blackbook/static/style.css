@@ -630,3 +630,6 @@ input[type="number"]:focus { cursor: text; }
 .sample-actions button + button { margin-left: 4px; }
 .rename-input { width: 100%; box-sizing: border-box; font-size: 14px; }
 .ae-rename { margin-left: 10px; vertical-align: middle; }
+/* Sample lists: actions on the right edge, aligned in every row */
+.samples-table { width: 100%; }
+.samples-table td.sample-actions { text-align: right; width: 1%; }
