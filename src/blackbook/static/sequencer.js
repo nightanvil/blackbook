@@ -500,7 +500,7 @@ function stepGrid(track, seq) {
   const [low, high] = offsetLimits(seq);
   return el("div", {},
     el("div", { class: "seq-toolbar" },
-      el("label", {}, "Move notes by ", nudgeSel),
+      el("label", { title: "Grid for dragging notes sideways. It only affects dragging here, not the file or the Snap setting of the sequence" }, "Drag grid ", nudgeSel),
       el("span", { class: "muted hint-small" }, `Offset ${low / OFFSET_UNIT} to +${high / OFFSET_UNIT} as on the device (10 ticks each, a step has ${TICKS}).` + (seq && seq.snap ? " Snap off allows -48, half a step, as with notes recorded on the device." : ""))),
     el("div", { class: "seq-grid-wrap" }, grid),
     el("p", { class: "muted hint-small" }, "Click an empty cell to add a note, click a note to select it, click the selected note again to remove it. Drag a note sideways to move it on the chosen grid, up or down to move it to another pad. E next to a pad opens the Euclidean generator. Click a pad name to hear the pad. Playback follows step length, velocity, probability, offset and the pad's level, pitch, pan, start and length; swing and choke groups are approximated, effects are heard on the device only."));
