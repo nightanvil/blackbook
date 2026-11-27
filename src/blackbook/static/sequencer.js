@@ -373,6 +373,29 @@ function placeEvent(ev, absTicks, steps, seq) {
   ev.offset = Math.round(off / OFFSET_UNIT);
 }
 
+// Muting and solo only affect listening here, per track; nothing of it is written to the card
+const EUCLID_ICON = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="5.5" stroke-dasharray="2 2"/><g fill="currentColor" stroke="none"><circle cx="8" cy="2.5" r="1.7"/><circle cx="13.2" cy="10" r="1.7"/><circle cx="3.6" cy="11.6" r="1.7"/></g></svg>';
+
+function muteState() {
+  const track = currentTrack();
+  if (!track.mute) track.mute = { muted: new Set(), solo: null };
+  return track.mute;
+}
+
+function isAudible(chan) {
+  const m = muteState();
+  return m.solo != null ? m.solo === chan : !m.muted.has(chan);
+}
+
+function toggleMute(chan, solo) {
+  const m = muteState();
+  if (solo) m.solo = m.solo === chan ? null : chan;
+  else if (m.solo != null) m.solo = null;
+  else if (m.muted.has(chan)) m.muted.delete(chan);
+  else m.muted.add(chan);
+  renderSequencer();
+}
+
 // Number of steps the grid shows
 function gridSteps(seq) {
   if (seq.stepcount > 0) return seq.stepcount;
@@ -459,9 +482,21 @@ function stepGrid(track, seq) {
     const row = r + 2;
     const pad = padBySlot.get(slot);
     const label = pad ? (pad.filename || "").split("\\").pop().replace(/\.wav$/i, "") : "empty";
-    grid.append(el("div", { class: "seq-pad" + (pad ? "" : " empty") + (proj.euclid && proj.euclid.chan === slot ? " euclid" : ""), style: `grid-row:${row};grid-column:1`, title: pad ? pad.filename : "No sample on this pad",
+    const audible = isAudible(slot);
+    const led = pad && pad.source
+      ? el("button", {
+        class: "seq-led" + (audible ? "" : " muted"),
+        "data-chan": slot,
+        title: audible ? "Lights up when the pad plays. Click to mute it while listening here, Ctrl+click to hear only this pad. Not saved to the card." : "Muted while listening here. Click to hear it again.",
+        onclick: (e) => { e.stopPropagation(); toggleMute(slot, e.ctrlKey || e.metaKey); },
+      })
+      : el("span", { class: "seq-led none", title: pad ? "The sample of this pad is missing" : "No sample on this pad" });
+    const euIcon = el("button", { class: "seq-eu", title: "Euclidean rhythm for this pad", onclick: (e) => { e.stopPropagation(); openEuclid(slot); } });
+    euIcon.innerHTML = EUCLID_ICON;
+    grid.append(el("div", { class: "seq-pad" + (pad ? "" : " empty") + (audible ? "" : " muted") + (proj.euclid && proj.euclid.chan === slot ? " euclid" : ""), style: `grid-row:${row};grid-column:1`, title: pad ? pad.filename : "No sample on this pad",
       onclick: () => { if (pad) seqPlayer.hit(pad, 100); } },
-      el("button", { class: "seq-eu", title: "Euclidean rhythm for this pad", onclick: (e) => { e.stopPropagation(); openEuclid(slot); } }, "E"),
+      led,
+      euIcon,
       el("b", {}, String(padNumber(slot))), " ", el("span", { class: "seq-pad-name" }, label)));
     for (let s = 0; s < steps; s++) {
       grid.append(el("div", {
@@ -776,7 +811,20 @@ const seqPlayer = {
     return buffer;
   },
 
+  // The LED of the pad lights up when its note sounds
+  flash(chan, when) {
+    const delay = Math.max(0, (when - audioOut.context().currentTime) * 1000);
+    setTimeout(() => {
+      const led = document.querySelector(`.seq-led[data-chan="${chan}"]`);
+      if (!led) return;
+      led.classList.remove("on");
+      void led.offsetWidth; // restart the fade
+      led.classList.add("on");
+    }, delay);
+  },
+
   voice(pad, buffer, velocity, when) {
+    this.flash(pad.slot, when);
     const ctx = audioOut.context();
     const p = pad.params || {};
     const node = ctx.createBufferSource();
@@ -856,7 +904,7 @@ const seqPlayer = {
           const t = this.loopStart + (e.strtks / TICKS) * stepDur + (e.step % 2 ? swingDelay : 0);
           if (t < this.until || t >= windowEnd) continue;
           const pad = pads.get(e.chan);
-          if (!pad || Math.random() * 100 >= e.prob) continue;
+          if (!pad || !isAudible(e.chan) || Math.random() * 100 >= e.prob) continue;
           const buffer = this.buffers.get(`${pad.source}|${pad.start}|${pad.length}|${pad.params.reverse ? 1 : 0}`);
           if (buffer) this.voice(pad, buffer, e.velocity ?? 100, Math.max(t, ctx.currentTime));
           else this.buffer(pad).catch(() => {}); // a pad changed while playing is loaded for the next pass
