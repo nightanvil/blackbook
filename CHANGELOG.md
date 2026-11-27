@@ -14,7 +14,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 - Project list with search, sorting (name, last change, tempo) and filters (track type, autosave copies, missing samples). Each project shows its tracks as color bars with type icons.
 - Pads tab in a project: edit the pads of a one-shot track right in the project with the pad editor and sample browser from Build. The pads are drawn compact there.
 - Sequencer: drag notes sideways on a grid down to 10 ticks and up or down to another pad. With Snap off notes can sit up to half a step off the grid.
-- Euclidean generator per pad in the sequencer. Each pad has its own settings; opening the generator changes nothing until a value is changed or Apply is clicked.
+- Euclidean generator per pad in the sequencer. Each pad has its own settings; opening the generator changes nothing until a value is changed or Apply is clicked. Presets for common patterns: 4/4, Offbeat, Backbeat, 8ths, 16ths, Tresillo, Cinquillo, Bossa, 7 in 16, Clear.
 - Number fields can be changed by pressing and dragging up or down, with a vertical slider next to the field. Fields with few values move slower, so they do not jump.
 - Double click on a field sets its default, a second double click brings back the previous value: sequence settings, note values, Euclid and pad parameters.
 - Project cards show tempo, references and missing samples as icons in fixed columns.

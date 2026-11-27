@@ -593,6 +593,20 @@ function closeEuclid(keep) {
   renderSequencer();
 }
 
+// Common patterns as starting points: hits, length, rotation
+const EUCLID_PRESETS = [
+  { label: "4/4", hits: 4, length: 16, rotate: 0, title: "Four on the floor: every beat" },
+  { label: "Offbeat", hits: 4, length: 16, rotate: 2, title: "Between the beats, like an open hi-hat" },
+  { label: "Backbeat", hits: 2, length: 16, rotate: 4, title: "Beats 2 and 4, like a snare" },
+  { label: "8ths", hits: 8, length: 16, rotate: 0, title: "Every eighth note" },
+  { label: "16ths", hits: 16, length: 16, rotate: 0, title: "Every step" },
+  { label: "Tresillo", hits: 3, length: 8, rotate: 0, title: "3 in 8: x..x..x." },
+  { label: "Cinquillo", hits: 5, length: 8, rotate: 0, title: "5 in 8: x.xx.xx." },
+  { label: "Bossa", hits: 5, length: 16, rotate: 0, title: "5 in 16" },
+  { label: "7 in 16", hits: 7, length: 16, rotate: 0, title: "7 in 16, a busy syncopated line" },
+  { label: "Clear", hits: 0, length: 16, rotate: 0, title: "No notes on this pad" },
+];
+
 function euclidPanel() {
   const eu = proj.euclid;
   if (!eu) return null;
@@ -610,8 +624,18 @@ function euclidPanel() {
     return el("label", { title }, label + " ", input);
   };
   const pattern = euclidPattern(eu.hits, eu.length, eu.rotate);
+  const presets = el("div", { class: "eu-presets" }, EUCLID_PRESETS.map((p) => {
+    const length = Math.min(p.length, steps);
+    const active = eu.touched && eu.hits === Math.min(p.hits, length) && eu.length === length && eu.rotate === p.rotate % length;
+    return el("button", {
+      class: "small" + (active ? " active" : ""),
+      title: p.title,
+      onclick: () => { Object.assign(eu, { hits: Math.min(p.hits, length), length, rotate: p.rotate % length }); applyEuclid(); },
+    }, p.label);
+  }));
   return el("div", { class: "seq-euclid" },
     el("b", {}, `Euclid for pad ${padNumber(eu.chan)}`),
+    presets,
     field("Hits", "hits", 0, eu.length, "Number of notes in the pattern"),
     field("Length", "length", 1, Math.min(64, steps), "Steps of the pattern; it repeats over the whole sequence"),
     field("Rotate", "rotate", 0, eu.length - 1, "Shifts the pattern to the right"),
