@@ -1657,11 +1657,33 @@ async function renderProjectSamples(name, detail) {
     detail.replaceChildren(el("p", { class: "err" }, err.message));
     return;
   }
+  const hasProject = typeof proj !== "undefined" && proj.data && proj.name === name;
+  const track = hasProject ? currentTrack() : null;
+  const all = !track || !!state.samplesAllTracks;
+  const shown = all ? samples : samples.filter((s) => (s.tracks || []).includes(track.position));
+  const trackOf = (pos) => (hasProject ? proj.data.tracks.find((t) => t.position === pos) : null);
+  const bubble = (pos) => {
+    const t = trackOf(pos);
+    return el("span", {
+      class: "track-bubble",
+      style: `--track:${TRACK_COLORS[pos] || "var(--accent)"};--track-ink:${TRACK_INK[pos] || "var(--accent-ink)"}`,
+      title: `Track ${pos + 1}${t && t.name ? ": " + t.name : ""}`,
+    }, t && t.name ? t.name : `Track ${pos + 1}`);
+  };
+  const switcher = track
+    ? el("div", { class: "seg samples-scope" },
+      el("button", { class: all ? "" : "active", onclick: () => { state.samplesAllTracks = false; renderProjectSamples(name, detail); } }, `Track ${track.position + 1}`),
+      el("button", { class: all ? "active" : "", onclick: () => { state.samplesAllTracks = true; renderProjectSamples(name, detail); } }, "All tracks"))
+    : null;
   fill(detail,
-    el("div", { class: "label" }, `Samples of ${name} (${samples.length})`),
-    el("table", { class: "samples-table" }, el("tbody", {}, samples.map((s) =>
+    el("div", { class: "samples-head" },
+      el("div", { class: "label" }, all ? `Samples of ${name} (${shown.length})` : `Samples of track ${track.position + 1}${track.name ? ": " + track.name : ""} (${shown.length})`),
+      switcher),
+    shown.length ? null : el("p", { class: "muted" }, "This track uses no samples."),
+    el("table", { class: "samples-table" }, el("tbody", {}, shown.map((s) =>
       el("tr", {},
         el("td", {}, el("button", { class: "small playbtn", disabled: !s.source, "data-src": s.source || "", onclick: () => play(s.source) })),
+        el("td", { class: "track-bubbles" }, (s.tracks || []).map(bubble)),
         el("td", {}, s.path || s.filename, s.source ? null : el("span", { class: "err" }, " (missing)")),
         el("td", { class: "muted" }, s.uses > 1 ? `${s.uses} uses` : ""),
         el("td", { class: "sample-actions" }, s.source

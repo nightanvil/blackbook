@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 
 from . import audioedit, builder, padparams, patchedit, projectseq, sampleupdate, settings, updater
 from .backup import Backup
-from .card import Card, browse, parse_xml
+from .card import Card, browse
 from .carddetect import find_cards
 from .cardpath import INVALID_NAME_CHARS, join_reference, resolve_sample_reference, validate_name
 from .eject import EjectError, eject
@@ -1082,7 +1082,7 @@ def create_app(
 
     @app.get("/api/project/samples")
     def project_samples(name: str) -> list[dict]:
-        """Every WAV a project references, once, with its card path and the number of uses."""
+        """Every WAV a project references, once, with its card path, the number of uses and the track positions."""
         try:
             project_dir = card.safe_path(f"Projects/{name}")
         except PermissionError as exc:
@@ -1090,22 +1090,27 @@ def create_app(
         xml_path = project_dir / "project.xml"
         if not xml_path.is_file():
             raise HTTPException(404, f"project not found: {name}")
-        root = parse_xml(xml_path)
+        text = xml_path.read_bytes().decode("utf-8-sig")
         found: dict[str, dict] = {}
-        for p in root.iter("params"):
-            ref = p.get("filename", "")
-            if not ref or ref.endswith("\\"):
-                continue
-            resolved = resolve_sample_reference(card.root, ref, project_dir)
-            exists = resolved is not None and resolved.is_file()
-            key = card.relative(resolved).casefold() if exists else ref.casefold()
-            entry = found.setdefault(key, {
-                "filename": ref,
-                "path": card.relative(resolved) if exists else "",
-                "source": f"card:{card.relative(resolved)}" if exists else None,
-                "uses": 0,
-            })
-            entry["uses"] += 1
+        for track in projectseq.tracks(text):
+            position = int(track.attrs.get("celldisppos", track.index) or 0)
+            for cell in patchedit.cells(text[track.start:track.end]):
+                ref = cell.attrs.get("filename", "") if cell.type == "samasst" else ""
+                if not ref or ref.endswith("\\"):
+                    continue
+                resolved = resolve_sample_reference(card.root, ref, project_dir)
+                exists = resolved is not None and resolved.is_file()
+                key = card.relative(resolved).casefold() if exists else ref.casefold()
+                entry = found.setdefault(key, {
+                    "filename": ref,
+                    "path": card.relative(resolved) if exists else "",
+                    "source": f"card:{card.relative(resolved)}" if exists else None,
+                    "uses": 0,
+                    "tracks": [],
+                })
+                entry["uses"] += 1
+                if position not in entry["tracks"]:
+                    entry["tracks"].append(position)
         return sorted(found.values(), key=lambda e: (e["path"] or e["filename"]).casefold())
 
     @app.get("/api/browse")

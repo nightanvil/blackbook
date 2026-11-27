@@ -633,3 +633,10 @@ input[type="number"]:focus { cursor: text; }
 /* Sample lists: actions on the right edge, aligned in every row */
 .samples-table { width: 100%; }
 .samples-table td.sample-actions { text-align: right; width: 1%; }
+/* Project samples: this track or all tracks, a colored bubble names the track */
+.samples-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.track-bubbles { white-space: nowrap; width: 1%; }
+.track-bubble { display: inline-block; width: 120px; box-sizing: border-box; padding: 1px 8px; border-radius: 10px; text-align: center; font-size: 11px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; background: var(--track); color: var(--track-ink); }
+.track-bubble + .track-bubble { margin-left: 4px; }
+.samples-table td:first-child { width: 1%; }
