@@ -1,6 +1,6 @@
 [project]
 name = "blackbook"
-version = "0.3.0"
+version = "0.3.1"
 description = "Local organizer for 1010music blackbox 2 microSD cards"
 license = "MIT"
 license-files = ["LICENSE"]

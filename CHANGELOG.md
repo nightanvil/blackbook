@@ -5,14 +5,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ## [Unreleased]
 
-### Fixed
-
-- Samples play from memory: the whole file is loaded before playback, so crackles from a slow card read during playback are gone.
+## [0.3.1] - 2026-11-27
 
 ### Added
 
 - Samples tab: every WAV on the card with the patches and projects that use it, with a folder tree on the left. Filters for recordings and unused files, search, place and sort. Play, Edit wave, Rename and Delete (unused files only) right there.
 - Projects: Change patch on a track card loads another patch into the track, as on the device; + Add patch fills an empty track slot. Patch chooser with search, type filter and preview. Sequences (same track type), MIDI channels and routing of the track stay.
+
+### Fixed
+
+- Samples play from memory: the whole file is loaded before playback, so crackles from a slow card read during playback are gone.
 
 ## [0.3.0] - 2026-11-27
 
@@ -157,7 +159,8 @@ First public, very early version.
 - Update check against GitHub releases with in-place update and restart prompt.
 - Dark and light theme, built-in help, Ko-fi and GitHub links, running version in the top bar with a restart hint after code changes.
 
-[Unreleased]: https://github.com/nightanvil/blackbook/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/nightanvil/blackbook/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/nightanvil/blackbook/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/nightanvil/blackbook/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/nightanvil/blackbook/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/nightanvil/blackbook/compare/v0.1.2...v0.1.3
