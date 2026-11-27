@@ -532,8 +532,8 @@ details.events input[type=search] { width: 100%; margin: 4px 0 6px; padding: 3px
 .eu-preview i.on { background: var(--track, var(--accent)); box-shadow: 0 0 6px var(--track, var(--accent)); }
 .eu-preview.pending i.on { box-shadow: none; opacity: 0.55; }
 /* Pads in a project: the grid of the builder at a compact size */
-.proj-pads-main .pads { grid-template-columns: repeat(8, minmax(48px, 76px)); gap: 6px; }
-.proj-pads-main .pad { aspect-ratio: 1.25; padding: 4px 5px; font-size: 11px; }
+.proj-pads-main .pads { grid-template-columns: repeat(8, minmax(64px, 108px)); gap: 6px; }
+.proj-pads-main .pad { aspect-ratio: 1.15; padding: 5px 6px; font-size: 12px; }
 .seq-pad:hover { background: var(--panel-3); }
 .seq-pad.empty { opacity: 0.5; cursor: default; }
 .seq-cell { background: var(--panel-2); border-radius: 3px; cursor: pointer; }
@@ -565,5 +565,5 @@ input[type="number"]:focus { cursor: text; }
 .proj-tabs button.active { color: var(--text); border-bottom-color: var(--track, var(--accent)); }
 .proj-tabs .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); margin-left: 6px; vertical-align: middle; }
 .proj-pads { display: flex; gap: 12px; align-items: stretch; min-height: 480px; }
-.proj-pads aside.browser { width: 250px; flex-shrink: 0; border: 1px solid var(--line); border-radius: 6px; max-height: 640px; }
+.proj-pads aside.browser { width: 280px; flex-shrink: 0; border: 1px solid var(--line); border-radius: 6px; max-height: 640px; }
 .proj-pads-main { flex: 1; min-width: 0; }
