@@ -347,6 +347,16 @@ def create_app(
     app.state.restart_requested = False
 
     @app.middleware("http")
+    async def revalidate_ui(request: Request, call_next):
+        response = await call_next(request)
+        # The browser asks again for the page and its scripts each time (cheap with the ETag), so an
+        # update or a new version on disk is never hidden behind a cached copy
+        path = request.url.path
+        if path == "/" or path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
+    @app.middleware("http")
     async def flush_after_write(request: Request, call_next):
         response = await call_next(request)
         # Audio edit sessions live in memory until saved to the local inbox or written to the card

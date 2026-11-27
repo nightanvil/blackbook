@@ -29,6 +29,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ### Fixed
 
+- After an update or a restart the browser always loads the current page and scripts instead of an older cached copy.
 - Sequencer playback picks up changes ahead of the playhead in the same pass instead of the next one.
 - Switching to another project opens its Sequences tab.
 

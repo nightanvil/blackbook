@@ -258,3 +258,16 @@ def test_card_detection(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(carddetect, "mount_points", lambda: [tmp_path / "USBSTICK", card])
     assert carddetect.find_cards() == [card]
     assert not carddetect.is_card(tmp_path / "missing")
+
+
+def test_ui_files_are_revalidated(card, tmp_path, monkeypatch) -> None:
+    from fastapi.testclient import TestClient
+
+    from blackbook import settings
+    from blackbook.server import create_app
+
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    app = create_app(card, [], tmp_path / "copies", inbox_dir=tmp_path / "inbox")
+    with TestClient(app) as client:
+        assert client.get("/static/sequencer.js").headers["cache-control"] == "no-cache"
+        assert client.get("/").headers["cache-control"] == "no-cache"
