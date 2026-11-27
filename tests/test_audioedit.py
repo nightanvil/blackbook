@@ -191,3 +191,38 @@ def test_rename_sample_updates_references(card: Path, tmp_path: Path, monkeypatc
     assert 'filename="Snap Hard.wav"' in (user / "patch.xml").read_text(encoding="utf-8-sig")
     assert 'filename="UserPatches\\OneShots\\Mine\\Snap Hard.wav"' in project_xml.read_text(encoding="utf-8")
     assert (user / "patch.xml").read_bytes().startswith(b"\xef\xbb\xbf")
+
+
+def test_relink_to_edited_file(card: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    user = card / "UserPatches" / "OneShots" / "Mine"
+    make_wav(user / "Hit.wav")
+    make_wav(user / "Hit_edit.wav")
+    (user / "patch.xml").write_text(
+        '<document><session version="1"><track type="samtrack">'
+        '<cell type="samasst"><params filename="Hit.wav" samlen="4410"/></cell></track></session></document>\n',
+        encoding="utf-8",
+    )
+    project_xml = card / "Projects" / "Song" / "project.xml"
+    project_xml.write_text(
+        project_xml.read_text(encoding="utf-8").replace(
+            "</track>", '<cell type="samasst"><params filename="Patches\\OneShots\\Kit A\\Kick.wav"/></cell>'
+            '<cell type="samasst"><params filename="UserPatches\\OneShots\\Mine\\Hit.wav"/></cell></track>'
+        ),
+        encoding="utf-8",
+    )
+    make_wav(card / "Samples" / "Edited" / "Kick_edit.wav")
+    app = create_app(card, [], tmp_path / "copies", inbox_dir=tmp_path / "inbox")
+    with TestClient(app) as client:
+        same = {"source": "card:UserPatches/OneShots/Mine/Hit.wav", "target": "card:UserPatches/OneShots/Mine/Hit_edit.wav"}
+        plan = client.post("/api/sample/relink", json=same).json()
+        assert len(plan["references"]) == 2 and (user / "patch.xml").read_text().count("Hit_edit") == 0
+        client.post("/api/sample/relink", json={**same, "apply": True})
+        factory = {"source": "card:Patches/OneShots/Kit A/Kick.wav", "target": "card:Samples/Edited/Kick_edit.wav", "apply": True}
+        result = client.post("/api/sample/relink", json=factory).json()
+        assert result["skipped"] == ["Patches/OneShots/Kit A/patch.xml"]
+    assert 'filename="Hit_edit.wav"' in (user / "patch.xml").read_text()
+    project = project_xml.read_text(encoding="utf-8")
+    assert 'filename="UserPatches\\OneShots\\Mine\\Hit_edit.wav"' in project
+    assert 'filename="Samples\\Edited\\Kick_edit.wav"' in project
+    assert 'filename="Kick.wav"' in (card / "Patches" / "OneShots" / "Kit A" / "patch.xml").read_text()

@@ -117,6 +117,12 @@ class ProjectChangeIn(BaseModel):
     tracks: list[TrackChangeIn]
 
 
+class RelinkIn(BaseModel):
+    source: str  # the original
+    target: str  # the new file that takes its place
+    apply: bool = False
+
+
 class RenameIn(BaseModel):
     source: str
     name: str
@@ -358,7 +364,8 @@ def create_app(
         # The browser asks again for the page and its scripts each time (cheap with the ETag), so an
         # update or a new version on disk is never hidden behind a cached copy
         path = request.url.path
-        if path == "/" or path.startswith("/static/"):
+        # Audio too: a WAV can be overwritten or renamed while the page is open
+        if path == "/" or path.startswith("/static/") or path in ("/api/audio", "/api/pcm"):
             response.headers["Cache-Control"] = "no-cache"
         return response
 
@@ -818,6 +825,62 @@ def create_app(
                 session.source = new_source
                 session.name = new_name
         return {**summary, "source": new_source, "name": new_name}
+
+    @app.post("/api/sample/relink")
+    def sample_relink(body: RelinkIn) -> dict:
+        """Point the patches and projects that use one WAV to another WAV on the card.
+
+        Factory patches are never changed. In the same folder only the file name changes; a file in another
+        folder is referenced from the card root, which projects use; patches keep their samples in their own
+        folder, so a patch is only changed when the new file is in the same folder.
+        """
+        for src in (body.source, body.target):
+            if src.partition(":")[0] != "card":
+                raise HTTPException(400, "only samples on the card can be used here")
+        old_path, new_path = sources.resolve(body.source), sources.resolve(body.target)
+        if not new_path.is_file():
+            raise HTTPException(404, "the new file does not exist")
+        old_rel, new_rel = card.relative(old_path), card.relative(new_path)
+        same_folder = old_path.parent == new_path.parent
+        root_reference = join_reference(*new_path.relative_to(card.root).parts)
+        updates: list[tuple[Path, bytes, int, str]] = []
+        skipped: list[str] = []
+        for ref in find_references(card.root, old_rel):
+            xml_path = card.root / ref.xml
+            if any(u[0] == xml_path for u in updates) or ref.xml in skipped:
+                continue
+            if overwrite_block(ref.xml) or (ref.kind == "patch" and not same_folder):
+                skipped.append(ref.xml)
+                continue
+            raw = xml_path.read_bytes()
+            bom = raw.startswith(b"\xef\xbb\xbf")
+            text = raw.decode("utf-8-sig")
+            new_text, count = sampleupdate.relink_in_text(
+                text, ref.xml, old_rel,
+                (lambda f: sampleupdate.renamed_reference(f, new_path.name)) if same_folder else (lambda _f: root_reference),
+            )
+            if count:
+                updates.append((xml_path, (b"\xef\xbb\xbf" if bom else b"") + new_text.encode("utf-8"), count, ref.kind))
+        summary = {
+            "path": old_rel,
+            "new_path": new_rel,
+            "references": [{"xml": card.relative(u[0]), "kind": u[3], "count": u[2]} for u in updates],
+            "skipped": skipped,
+        }
+        if not body.apply or not updates:
+            return summary
+        what = f"using {new_rel} instead of {old_rel}"
+        snapshots.before_write(what)
+        try:
+            for xml_path, data, _count, _kind in updates:
+                backup.save(xml_path)
+                tmp = xml_path.with_name(xml_path.name + ".blackbook-tmp")
+                tmp.write_bytes(data)
+                tmp.replace(xml_path)
+        except OSError as exc:
+            raise HTTPException(400, f"updating the references failed: {exc}") from exc
+        snapshots.after_write(what)
+        return summary
 
     @app.delete("/api/audio-edit/{session_id}")
     def audio_edit_close(session_id: str) -> dict:

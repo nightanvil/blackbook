@@ -123,6 +123,11 @@ def renamed_reference(filename: str, new_name: str) -> str:
 
 def rename_in_text(text: str, xml_rel: str, wav_rel: str, new_name: str) -> tuple[str, int]:
     """Point every samasst cell for wav_rel to new_name; returns the new text and the number of cells."""
+    return relink_in_text(text, xml_rel, wav_rel, lambda filename: renamed_reference(filename, new_name))
+
+
+def relink_in_text(text: str, xml_rel: str, wav_rel: str, new_reference) -> tuple[str, int]:
+    """Replace the filename of every samasst cell for wav_rel with new_reference(old filename)."""
     wanted = wav_rel.strip("/").casefold()
     pieces: list[str] = []
     count = 0
@@ -134,7 +139,7 @@ def rename_in_text(text: str, xml_rel: str, wav_rel: str, new_name: str) -> tupl
         filename = parse_attrs(params.group()).get("filename", "")
         if not filename or filename.endswith("\\") or reference_target(filename, xml_rel) != wanted:
             continue
-        new_params = set_attrs(params.group(), {"filename": renamed_reference(filename, new_name)})
+        new_params = set_attrs(params.group(), {"filename": new_reference(filename)})
         cell_text = cell.group()[: params.start()] + new_params + cell.group()[params.end():]
         pieces.append(text[last:cell.start()])
         pieces.append(cell_text)
@@ -142,4 +147,3 @@ def rename_in_text(text: str, xml_rel: str, wav_rel: str, new_name: str) -> tupl
         count += 1
     pieces.append(text[last:])
     return "".join(pieces), count
-

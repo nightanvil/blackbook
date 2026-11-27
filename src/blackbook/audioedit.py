@@ -16,7 +16,7 @@ import numpy as np
 
 from .wav import FORMAT_FLOAT, FORMAT_PCM, WavError, read_audio, read_info
 
-MAX_SESSIONS = 8
+MAX_SESSIONS = 32
 MAX_HISTORY = 50
 
 OPS = ("crop", "delete", "silence", "fade_in", "fade_out", "gain", "normalize", "reverse")
@@ -87,7 +87,7 @@ class Editor:
     def get(self, session_id: str) -> Session:
         session = self.sessions.get(session_id)
         if session is None:
-            raise EditError("edit session expired, open the sample again")
+            raise EditError("This edit is no longer open in blackbook (for example after a restart). Close the editor and open the sample again.")
         self.sessions.move_to_end(session_id)
         return session
 

@@ -972,6 +972,25 @@ function replaceSource(oldSource, newSource, newName) {
   if (pcmCache.has(oldSource)) { pcmCache.set(newSource, pcmCache.get(oldSource)); pcmCache.delete(oldSource); }
 }
 
+// After "Save as new file": offer to use the new file wherever the original is used
+async function offerRelink(oldSource, newSource) {
+  let plan;
+  try {
+    plan = await api("POST", "/api/sample/relink", { source: oldSource, target: newSource });
+  } catch (err) { toast(err.message, true); return; }
+  if (!plan.references.length) return;
+  const lines = [`Use ${plan.new_path}`, `instead of ${plan.path} in:`, ""];
+  plan.references.forEach((r) => lines.push(`  ${r.kind === "project" ? "Project" : "Patch"} ${r.xml}`));
+  if (plan.skipped.length) lines.push("", `Not changed: ${plan.skipped.join(", ")} (factory patches, or patches whose samples live in their own folder).`);
+  lines.push("", "The original file stays on the card. A snapshot is taken before and after, if the backup is set up.");
+  if (!(await confirmDialog("Use the edited sample?", lines.join("\n"), "Use it"))) return;
+  try {
+    await api("POST", "/api/sample/relink", { source: oldSource, target: newSource, apply: true });
+    replaceSource(oldSource, newSource, newSource.split("/").pop());
+    toast(`Now used in ${plan.references.length} file(s)`);
+  } catch (err) { toast(err.message, true); }
+}
+
 // Asks for the new name, shows every patch and project that changes, then renames. Returns the result or null.
 async function renameSample(source) {
   const current = source.split("/").pop();
@@ -1040,19 +1059,21 @@ async function openAudioEditor(source, target) {
     try {
       session = await api("POST", `/api/audio-edit/${session.id}/op`, { op, start, end, value });
     } catch (err) { toast(err.message, true); return; }
-    if (op === "crop") v.selection = null;
-    else if (op === "delete") v.selection = null;
+    // The audio got shorter: the selection and a cursor behind the new end no longer fit
+    if (op === "crop" || op === "delete") { v.selection = null; v.cursor = null; }
     await reload();
   };
   const history = async (which) => {
     session = await api("POST", `/api/audio-edit/${session.id}/${which}`);
     v.selection = null;
+    v.cursor = null;
     await reload();
   };
   const playToggle = () => {
     if (wavePlayer.playing) return wavePlayer.stop();
     const s = v.selection;
-    wavePlayer.play(v, s ? s.start : (v.cursor ?? 0), s ? s.end : v.frames);
+    const from = s ? s.start : Math.min(v.cursor ?? 0, Math.max(0, v.frames - 1));
+    wavePlayer.play(v, from, s ? s.end : v.frames);
   };
 
   const gainInput = el("input", { type: "number", value: 3, step: 0.5, title: "dB" });
@@ -1154,11 +1175,15 @@ async function openAudioEditor(source, target) {
       if (!(await confirmDialog("Overwrite the original?", lines.join("\n"), "Overwrite"))) return;
     }
     try {
+      const original = session.source;
       const result = await api("POST", `/api/audio-edit/${session.id}/write`, { mode });
       close();
       toast(mode === "new"
         ? `Saved as ${result.path}`
         : `${result.name} overwritten${result.adjusted.length ? `, ${result.adjusted.length} file(s) adjusted` : ""}`);
+      // The browser must not play the old audio of a file that was just overwritten
+      if (mode === "overwrite") pcmCache.delete(original);
+      if (mode === "new") await offerRelink(original, result.source);
       if (target.onWritten) target.onWritten(result);
     } catch (err) { toast(err.message, true); }
   };

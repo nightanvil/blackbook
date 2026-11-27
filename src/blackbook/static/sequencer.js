@@ -186,7 +186,11 @@ function openPads(container) {
   const browser = document.querySelector("#view-build aside.browser");
   const oneshot = document.getElementById("b-oneshot");
   if (!proj.padsOpen) {
+    // The sample browser is shared with Build; each side keeps its own folder
+    const buildBrowse = { root: state.browse.root, path: state.browse.path };
+    if (proj.browse) openFolder(proj.browse.root, proj.browse.path).catch(() => {});
     proj.padsOpen = {
+      buildBrowse,
       pads: state.pads, selectedPad: state.selectedPad, oneshotHidden: oneshot.hidden,
       browserHome: [browser.parentNode, browser.nextSibling], oneshotHome: [oneshot.parentNode, oneshot.nextSibling],
     };
@@ -212,6 +216,10 @@ function closePads() {
   home.browserHome[0].insertBefore(browser, home.browserHome[1]);
   home.oneshotHome[0].insertBefore(oneshot, home.oneshotHome[1]);
   oneshot.hidden = home.oneshotHidden;
+  proj.browse = { root: state.browse.root, path: state.browse.path };
+  if (home.buildBrowse.root !== proj.browse.root || home.buildBrowse.path !== proj.browse.path) {
+    openFolder(home.buildBrowse.root, home.buildBrowse.path).catch(() => {});
+  }
   state.pads = home.pads;
   state.selectedPad = home.selectedPad;
   proj.padsOpen = null;
@@ -590,7 +598,12 @@ function stepGrid(track, seq) {
     const huIcon = el("button", { class: "seq-eu seq-hu", title: "Humanize this pad: vary velocity and timing", onclick: (e) => { e.stopPropagation(); openHumanize(slot); } });
     huIcon.innerHTML = HUMANIZE_ICON;
     grid.append(el("div", { class: "seq-pad" + (pad ? "" : " empty") + (audible ? "" : " muted") + (proj.euclid && proj.euclid.chan === slot ? " euclid" : "") + (proj.human && proj.human.chan === slot ? " human" : ""), style: `grid-row:${row};grid-column:1`, title: pad ? pad.filename : "No sample on this pad",
-      onclick: () => { proj.lane = slot; if (pad) seqPlayer.hit(pad, 100); renderSequencer(); },
+      onclick: () => {
+        proj.lane = slot;
+        if (proj.selected && proj.selected.chan !== slot) proj.selected = null;
+        if (pad) seqPlayer.hit(pad, 100);
+        renderSequencer();
+      },
       oncontextmenu: (e) => { e.preventDefault(); rowMenu(e, slot); } },
       led,
       euIcon,
@@ -782,9 +795,13 @@ function quantize(events) {
   for (const e of events) { e.strtks = e.step * TICKS; e.offset = 0; }
 }
 
+// Notes of a pad within the visible steps. Notes beyond a shortened step count stay untouched by the tools.
+function inRow(e, chan, steps) { return e.chan === chan && e.step < steps; }
+function visible(events, steps) { return events.filter((e) => e.step < steps); }
+
 function shiftRow(chan, by) {
   editEvents((seq, steps) => {
-    for (const e of seq.events.filter((x) => x.chan === chan)) {
+    for (const e of seq.events.filter((x) => inRow(x, chan, steps))) {
       const off = e.strtks - e.step * TICKS;
       e.step = (e.step + by + steps) % steps;
       e.strtks = Math.max(0, e.step * TICKS + off);
@@ -794,19 +811,20 @@ function shiftRow(chan, by) {
 
 function rowMenu(ev, chan) {
   const seq = currentSeq(true);
-  const row = () => seq.events.filter((e) => e.chan === chan);
+  const steps = gridSteps(seq);
+  const row = () => seq.events.filter((e) => inRow(e, chan, steps));
   showMenu(ev, [
     { label: `Pad ${padNumber(chan)}: shift left`, run: () => shiftRow(chan, -1) },
     { label: "Shift right", run: () => shiftRow(chan, 1) },
     "-",
     { label: "Copy row", run: () => { proj.rowClip = row().map((e) => ({ ...e, extra: { ...e.extra } })); toast("Row copied"); } },
-    { label: "Paste row", disabled: !proj.rowClip, run: () => editEvents((s) => {
-      s.events = s.events.filter((e) => e.chan !== chan).concat(proj.rowClip.map((e) => ({ ...e, chan, extra: { ...e.extra } })));
+    { label: "Paste row", disabled: !proj.rowClip, run: () => editEvents((s, n) => {
+      s.events = s.events.filter((e) => !inRow(e, chan, n)).concat(proj.rowClip.filter((e) => e.step < n).map((e) => ({ ...e, chan, extra: { ...e.extra } })));
     }) },
-    { label: "Clear row", run: () => editEvents((s) => { s.events = s.events.filter((e) => e.chan !== chan); }) },
+    { label: "Clear row", run: () => editEvents((s, n) => { s.events = s.events.filter((e) => !inRow(e, chan, n)); }) },
     "-",
     { label: "Humanize row ...", run: () => openHumanize(chan) },
-    { label: "Quantize row", run: () => editEvents((s) => quantize(s.events.filter((e) => e.chan === chan))) },
+    { label: "Quantize row", run: () => editEvents((s, n) => quantize(s.events.filter((e) => inRow(e, chan, n)))) },
   ]);
 }
 
@@ -823,8 +841,8 @@ function seqMenu(ev) {
     }) },
     { label: "Clear sequence", run: () => editEvents((s) => { s.events = []; }) },
     "-",
-    { label: `Humanize all pads (intensity ${seqPrefs().humanize ?? 5})`, run: () => editEvents((s, steps) => humanize(s.events, s, steps)) },
-    { label: "Quantize: offsets to 0", run: () => editEvents((s) => quantize(s.events)) },
+    { label: `Humanize all pads (intensity ${seqPrefs().humanize ?? 5})`, run: () => editEvents((s, steps) => humanize(visible(s.events, steps), s, steps)) },
+    { label: "Quantize: offsets to 0", run: () => editEvents((s, steps) => quantize(visible(s.events, steps))) },
   ]);
 }
 
@@ -931,9 +949,10 @@ function openEuclid(chan) {
     proj.euclid = null;
   }
   const seq = currentSeq(true);
-  const existing = seq.events.filter((e) => e.chan === chan);
   const steps = gridSteps(seq);
+  const existing = seq.events.filter((e) => inRow(e, chan, steps));
   const key = `${proj.name}:${proj.track}:${proj.slot}:${chan}`;
+  proj.selected = null;
   const remembered = euclidMemory.get(key);
   proj.euclid = {
     key,
@@ -954,7 +973,7 @@ function applyEuclid() {
   euclidMemory.set(eu.key, { hits: eu.hits, length: eu.length, rotate: eu.rotate, velocity: eu.velocity });
   const seq = currentSeq(true);
   const steps = gridSteps(seq);
-  seq.events = seq.events.filter((e) => e.chan !== eu.chan);
+  seq.events = seq.events.filter((e) => !inRow(e, eu.chan, steps));
   const pattern = euclidPattern(eu.hits, eu.length, eu.rotate);
   for (let s = 0; s < steps; s++) {
     if (!pattern[s % eu.length]) continue;
@@ -969,7 +988,7 @@ function closeEuclid(keep) {
   const eu = proj.euclid;
   if (!keep && eu) {
     const seq = currentSeq(true);
-    seq.events = seq.events.filter((e) => e.chan !== eu.chan).concat(eu.before);
+    seq.events = seq.events.filter((e) => !inRow(e, eu.chan, gridSteps(seq))).concat(eu.before);
   }
   proj.euclid = null;
   renderSequencer();
@@ -1033,7 +1052,8 @@ function openHumanize(chan) {
   if (proj.euclid) closeEuclid(true);
   if (proj.human && proj.human.chan === chan) { proj.human = null; renderSequencer(); return; }
   const seq = currentSeq(true);
-  proj.human = { chan, before: seq.events.filter((e) => e.chan === chan).map((e) => ({ ...e, extra: { ...e.extra } })), touched: false };
+  proj.selected = null;
+  proj.human = { chan, before: seq.events.filter((e) => inRow(e, chan, gridSteps(seq))).map((e) => ({ ...e, extra: { ...e.extra } })), touched: false };
   renderSequencer();
 }
 
@@ -1041,7 +1061,7 @@ function applyHumanize() {
   const h = proj.human;
   const seq = currentSeq(true);
   const fresh = h.before.map((e) => ({ ...e, extra: { ...e.extra } }));
-  seq.events = seq.events.filter((e) => e.chan !== h.chan).concat(fresh);
+  seq.events = seq.events.filter((e) => !inRow(e, h.chan, gridSteps(seq))).concat(fresh);
   humanize(fresh, seq, gridSteps(seq));
   h.touched = true;
   proj.selected = null;
@@ -1053,7 +1073,7 @@ function closeHumanize(keep) {
   const h = proj.human;
   if (h && !keep && h.touched) {
     const seq = currentSeq(true);
-    seq.events = seq.events.filter((e) => e.chan !== h.chan).concat(h.before);
+    seq.events = seq.events.filter((e) => !inRow(e, h.chan, gridSteps(seq))).concat(h.before);
     renderSequencer();
   }
   proj.human = null;

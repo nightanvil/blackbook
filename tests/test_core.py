@@ -271,3 +271,4 @@ def test_ui_files_are_revalidated(card, tmp_path, monkeypatch) -> None:
     with TestClient(app) as client:
         assert client.get("/static/sequencer.js").headers["cache-control"] == "no-cache"
         assert client.get("/").headers["cache-control"] == "no-cache"
+        assert client.get("/api/audio", params={"src": "card:Samples/Pack/BD.wav"}).headers["cache-control"] == "no-cache"

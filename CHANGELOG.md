@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 ### Added
 
 - Audio editor for samples on the card: **Edit** next to every sample in the patch list and in the new sample list of a project. **Save as new file** writes `<name>_edit.wav` next to the original (factory samples go to `Samples/Edited`). **Overwrite original** replaces the file and first lists every patch and project that uses it; start, length, loop and slice positions there move with the edit, as do cue and loop points inside the WAV. The `.wav.pk` cache file is deleted. Factory samples are never overwritten.
+- After "Save as new file" in the audio editor, blackbook offers to use the new file in every patch and project that uses the original.
 - Rename samples on the card from the Patches tab, the samples of a project or the audio editor. Every patch and project that uses the file is updated; blackbook lists them before renaming. The buttons next to a sample are now "Edit wave" and "Rename".
 - Projects: click a project to see its tracks, sequences and samples. Play samples and open them in the audio editor. The samples tab shows the selected track or all tracks, with a bubble in the track color naming the track.
 - Step sequencer for one-shot tracks in projects: one row per pad, one column per step, eight sequence slots. Velocity, probability, offset and length per note; name, step length, step count (or Open), quant size and snap per sequence. Play loops the sequence with the pad sounds. Save to card writes only the changed sequences into project.xml.
@@ -34,6 +35,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ### Fixed
 
+- Audio editor: playback works again after Trim or Delete when the cursor was behind the new end.
+- Audio editor: up to 32 edits can be open at a time before the oldest expires; an expired edit says what to do.
+- Playing a sample after it was overwritten plays the new audio instead of a cached copy.
+- Sequencer: Humanize, Euclid and the row and sequence tools leave notes beyond a shortened step count alone instead of pulling them to the last step.
+- Sequencer: choosing another pad deselects the note of the previous pad, so it is not edited by accident.
+- The sample browser keeps its own folder in Build and in the Pads tab of a project.
 - A dialog that opens right after another one is no longer cancelled by the late close of the first.
 - Sequencer: the LED has a larger click area, so mute and unmute work reliably also while stopped. A muted pad shows a grey ring with M, like the M badge on the device.
 - Sequencer: opening the Euclid generator no longer highlights the Humanize button of the same pad.
