@@ -261,7 +261,8 @@ td input { width: 60px; padding: 3px 6px; }
 .pad.over, .dropzone.over, #br-list.over { outline: 2px dashed var(--accent); }
 
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
-.pad-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; align-items: end; }
+/* Four columns: a slider with number takes two, so two of them fill a row without a gap at the end */
+.pad-form { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 16px; align-items: end; }
 .pad-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
 .pad-form label.check { flex-direction: row; align-items: center; gap: 6px; }
 .pad-form label.pnum { grid-column: span 2; }
@@ -472,7 +473,7 @@ details.events input[type=search] { width: 100%; margin: 4px 0 6px; padding: 3px
 .proj-stat.warn b { color: var(--warn); }
 
 /* Tracks in the style of the Tracks screen of the device, always dark like its display */
-.bb-screen { background: #000; border: 1px solid #2a2d31; border-radius: 8px; padding: 10px 10px 6px; max-width: 860px; color: #e6e6e3; }
+.bb-screen { background: #000; border: 1px solid #2a2d31; border-radius: 8px; padding: 10px 10px 6px; color: #e6e6e3; }
 .bb-tracks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .bb-track { border: 2px solid var(--track); min-height: 200px; display: flex; flex-direction: column; align-items: stretch; cursor: pointer; background: #000; }
 .bb-track.empty { border-color: #1c1e21; cursor: default; }
@@ -483,7 +484,7 @@ details.events input[type=search] { width: 100%; margin: 4px 0 6px; padding: 3px
 .bb-config { display: flex; flex-direction: column; gap: 6px; padding: 6px 10px; margin: 0 8px; border: 1px solid color-mix(in srgb, var(--track) 55%, transparent); flex: 1; }
 .bb-config-title { color: var(--track); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; }
 .bb-config label { display: flex; justify-content: space-between; align-items: center; gap: 4px; font-size: 12px; color: #b9bcc0; white-space: nowrap; }
-.bb-config select { min-width: 0; max-width: 64px; }
+.bb-config select { min-width: 0; max-width: 84px; }
 .bb-config select { background: #111; color: #e6e6e3; border: 1px solid #333; padding: 1px 4px; font-size: 12px; }
 .bb-foot { display: flex; justify-content: space-between; color: #9a9ea4; font-size: 12px; padding: 6px 8px 5px; }
 .bb-toolbar { display: flex; gap: 14px; align-items: center; color: #9fd8ec; font-size: 13px; padding: 8px 2px 2px; }
@@ -532,7 +533,7 @@ details.events input[type=search] { width: 100%; margin: 4px 0 6px; padding: 3px
 .eu-preview i.on { background: var(--track, var(--accent)); box-shadow: 0 0 6px var(--track, var(--accent)); }
 .eu-preview.pending i.on { box-shadow: none; opacity: 0.55; }
 /* Pads in a project: the grid of the builder at a compact size */
-.proj-pads-main .pads { grid-template-columns: repeat(8, minmax(64px, 108px)); gap: 6px; }
+.proj-pads-main .pads { gap: 6px; }
 .proj-pads-main .pad { aspect-ratio: 1.15; padding: 5px 6px; font-size: 12px; }
 .seq-pad:hover { background: var(--panel-3); }
 .seq-pad.empty { opacity: 0.5; cursor: default; }
@@ -574,4 +575,7 @@ input[type="number"]:focus { cursor: text; }
 .app-banner { padding-inline: max(16px, calc((100% - var(--page-max)) / 2 + 16px)); }
 @media (min-width: 1700px) { main { border-inline: 1px solid var(--line); } }
 /* Pads and pad editor only as wide as needed, sound settings in two or three columns below the pads */
-#b-oneshot { max-width: 960px; }
+#b-oneshot { max-width: 960px; display: flex; flex-direction: column; gap: 14px; }
+/* Project detail: one centered column, every block on the same left and right edge */
+#proj-detail > div { max-width: 1240px; margin-inline: auto; }
+.proj-pads .proj-pads-main #b-oneshot { max-width: none; }
