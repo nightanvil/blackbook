@@ -143,9 +143,16 @@ def read_project(text: str) -> dict:
             continue
         body = text[track.start:track.end]
         sequences = sorted((read_sequence(m.group()) for m in NOTESEQ_RE.finditer(body)), key=lambda s: s["slot"])
+        samples = sum(
+            1
+            for c in cells(body)
+            if c.type == "samasst" and c.attrs.get("filename") and not c.attrs["filename"].endswith("\\")
+        )
         result["tracks"].append(
             {
                 "index": track.index,
+                "position": _int(track.attrs, "celldisppos", track.index),
+                "samples": samples,
                 "type": track.type,
                 "name": track.attrs.get("cellname", ""),
                 "midiinchan": _int(track.attrs, "midiinchan"),
@@ -154,6 +161,8 @@ def read_project(text: str) -> dict:
                 "pads": pads_of(text, track) if track.type == "samtrack" else [],
             }
         )
+    # The device shows the tracks by their position, not by their order in the file
+    result["tracks"].sort(key=lambda t: t["position"])
     return result
 
 

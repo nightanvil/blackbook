@@ -20,15 +20,15 @@ blackbook is free and stays free. If it helps you, you can buy me a coffee on [K
 | Next | Piano roll for multisample, slicer and shredder sequences, audio editor markers and loop points |
 | Then | Slicer, loop, shredder, multisample loop points |
 | Later | External editor (Reaper), project tools (pack, clean, rename), sample organization, card and firmware tools |
-| Done | Step sequencer for one-shot tracks in projects with playback, MIDI channels per track, library, tags, one-shot pad editor with all device settings, waveform and audio editor (pads, library, projects, overwrite with reference update), multisample basics, backup, installer, updates, eject |
+| Done | Step sequencer for one-shot tracks in projects with playback, MIDI channels per track, patch list, tags, one-shot pad editor with all device settings, waveform and audio editor (pads, patches, projects, overwrite with reference update), multisample basics, backup, installer, updates, eject |
 
 ## What it does
 
-- **Library:** all factory and user patches with type and tag filter. Listen to samples and previews.
+- **Patches:** all factory and user patches with type and tag filter. Listen to samples and previews.
 - **Tags:** tag your own patches, as on the device.
 - **Build:** one-shot kits on 16 pads with all pad settings of the device (sound, setup, envelope, LFO, start and length), and multisample instruments, by drag and drop. Key and velocity ranges are read from the file names.
 - **Edit:** change your own patches in place. Sequences, modulation and everything blackbook does not know stay untouched.
-- **Audio editor:** waveform view, trim, fades, gain, normalize and reverse with undo, edges snap to zero crossings so nothing clicks. Open it from a pad, the library or a project. Save as a new file, or overwrite the original: every patch and project that uses it is adjusted.
+- **Audio editor:** waveform view, trim, fades, gain, normalize and reverse with undo, edges snap to zero crossings so nothing clicks. Open it from a pad, the patch list or a project. Save as a new file, or overwrite the original: every patch and project that uses it is adjusted.
 - **Templates:** any one-shot or multisample patch, also factory patches, as a starting point for a new one.
 - **Projects:** step sequencer for one-shot tracks with playback, MIDI channels per track, missing samples and unused files, the samples of a project to play and edit.
 - **Backup:** snapshots of the card with history, comparison and restore. Automatic when the card is connected, and before and after blackbook writes. Restoring a single WAV shows where it is used.
@@ -40,7 +40,7 @@ What comes next is in the roadmap at the top. Tell me what you need most.
 | | |
 |---|---|
 | ![Library with patch details, tags and samples](docs/images/library.png) | ![Audio editor with trim, fades, gain, normalize and snap to zero](docs/images/audio-editor.png) |
-| **Library:** factory and user patches, tags, samples per pad | **Audio editor:** cut, fade, normalize, every edge on a zero crossing |
+| **Patches:** factory and user patches, tags, samples per pad | **Audio editor:** cut, fade, normalize, every edge on a zero crossing |
 | ![Pad editor with envelope and LFO graphics](docs/images/pad-editor-env-lfo.png) | ![One-shot builder with pad grid and waveform](docs/images/builder-oneshot.png) |
 | **Pad editor:** envelope and LFO as on the device | **Builder:** 16 pads, start and length on the waveform |
 
@@ -182,7 +182,7 @@ You never have to use git yourself, blackbook does everything in the background,
 ## First steps
 
 1. **Set up the backup.** On the first start a welcome window offers it. **Set up backup** creates the folder `blackbook-backup` in your documents folder, **Choose folder** lets you pick another place on your computer (not on the card). The first snapshot copies the whole card and can take several minutes, keep blackbook open until it is done. From then on blackbook takes snapshots by itself. If you click **Later**, a bar at the top reminds you. Without git: copy the whole card to your computer yourself.
-2. Look around in **Library**. Nothing is written to the card unless you click **Write to card**.
+2. Look around in **Projects** and **Patches**. Nothing is written to the card unless you click **Write to card**.
 3. Every write shows a review first: what is copied, what changes.
 
 The built-in help (**?** at the top right, or `F1`) explains more.

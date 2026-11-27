@@ -9,12 +9,12 @@ Creates and edits patches on the computer. The result is a patch folder `UserPat
 ### Workflow
 
 1. Choose the patch type: one-shot, multisample, loop, slicer, shredder.
-2. Assign WAVs via drag and drop from the file system or the library.
+2. Assign WAVs via drag and drop from the file system or the sample browser.
 3. Set parameters and audition samples.
 4. Enter name and tags.
 5. Review the result as file list and XML, then write.
 
-Existing patches are opened from the library:
+Existing patches are opened from the Patches tab:
 
 | Action | Available for | Result |
 |---|---|---|
@@ -79,7 +79,7 @@ The WAV tab of a one-shot pad shows the sample with the playback window. The whi
 
 ### Editing a sample
 
-"Edit audio" opens the editor for the sample of the selected pad. "Edit" next to a sample in the library detail of a patch and in the sample list of a project opens it for a sample on the card.
+"Edit audio" opens the editor for the sample of the selected pad. "Edit" next to a sample in the detail of a patch in the Patches tab and in the sample list of a project opens it for a sample on the card.
 
 | Operation | Effect |
 |---|---|
@@ -100,7 +100,7 @@ The WAV tab of a one-shot pad shows the sample with the playback window. The whi
 
 From the pad editor, "Use edited sample" writes the result as `<name>_edit.wav` into the local inbox (`.blackbook/inbox/edits/`) and puts it on the pad. Saving the patch copies it into the patch folder. The original file on the card is not changed. The edited file keeps bit depth, sample rate and channels of the original; samples outside the edited range are written back bit-identical.
 
-From the library and from projects the editor writes to the card:
+From the Patches tab and from projects the editor writes to the card:
 
 - **Save as new file** writes `<name>_edit.wav` (or `_edit_2` and so on) next to the original. Factory samples (below `Patches/`) go to `Samples/Edited/` instead. No patch or project changes.
 - **Overwrite original** replaces the WAV in place. Before writing, blackbook lists every `patch.xml` and `project.xml` (autosave folders included) that references the file and what changes in each. Factory samples cannot be overwritten.
@@ -176,9 +176,9 @@ Restoring a single WAV brings back only the file. Before the restore blackbook l
 
 ## 4. Projects
 
-The Projects tab lists every project with its WAVs, references, missing samples and unused files. Clicking a project shows:
+Projects is the first tab. The projects on the card are listed on the left, with the number of missing samples where there are any. Clicking a project shows the number of WAVs in its folder, references, missing samples and unused files, and below:
 
-- **Tracks** with type, name, MIDI in and MIDI out channel (None or 1 to 16). Changing a channel writes `midiinchan` or `midioutchan` of that track.
+- **Tracks** in the style of the Tracks screen of the device: four cards in the track colors of the device (cyan, orange, green, magenta by position), with name, an icon for the track type, the number of samples and sequences with notes. The cards follow the track position on the device (`celldisppos` of the track), not the order in the file. Instead of the level meters each card has a **Config** box with MIDI In and MIDI Out channel (None or 1 to 16); changing a channel writes `midiinchan` or `midioutchan` of that track. The bar below shows project name, tempo and swing.
 - **Sequences** of the selected track, the eight slots as tabs. For one-shot tracks a step editor shows one row per pad and one column per step. Settings per sequence: name, Step Len, Step Count (or Open), Quant Size and Snap. Per note: velocity, probability, offset (-47 to +47, 10 ticks each) and length in steps. Sequences of other track types are shown with their number of notes, editing follows later.
 - **Samples** of the project with playback and the audio editor.
 
@@ -194,7 +194,7 @@ Sequences are stored in the project. The device ignores sequences in a `patch.xm
 
 ## 5. Organization
 
-- library with filters, audition and waveform
+- patch list with filters, audition and waveform
 - tags for single patches or in bulk
 - renaming of WAVs, patches and projects including all references
 - batch rename by naming scheme

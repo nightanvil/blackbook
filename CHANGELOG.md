@@ -7,10 +7,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ### Added
 
-- Audio editor for samples on the card: **Edit** next to every sample in the library and in the new sample list of a project. **Save as new file** writes `<name>_edit.wav` next to the original (factory samples go to `Samples/Edited`). **Overwrite original** replaces the file and first lists every patch and project that uses it; start, length, loop and slice positions there move with the edit, as do cue and loop points inside the WAV. The `.wav.pk` cache file is deleted. Factory samples are never overwritten.
+- Audio editor for samples on the card: **Edit** next to every sample in the patch list and in the new sample list of a project. **Save as new file** writes `<name>_edit.wav` next to the original (factory samples go to `Samples/Edited`). **Overwrite original** replaces the file and first lists every patch and project that uses it; start, length, loop and slice positions there move with the edit, as do cue and loop points inside the WAV. The `.wav.pk` cache file is deleted. Factory samples are never overwritten.
 - Projects: click a project to see its tracks, sequences and samples. Play samples and open them in the audio editor.
 - Step sequencer for one-shot tracks in projects: one row per pad, one column per step, eight sequence slots. Velocity, probability, offset and length per note; name, step length, step count (or Open), quant size and snap per sequence. Play loops the sequence with the pad sounds. Save to card writes only the changed sequences into project.xml.
 - MIDI in and MIDI out channel per track in projects.
+
+### Changed
+
+- Projects is the first tab, with the projects listed on the left. The tracks of a project look like the Tracks screen of the device: track colors, type icons, sample count, and a Config box with the MIDI channels.
+- Library is now called Patches, as on the device.
+- The top bar no longer lets the volume slider overlap the tabs in windows narrower than 1400 pixels.
+
+### Fixed
+
+- Tracks of a project are numbered as on the device. The order in project.xml differs from the track positions.
 
 ### Documentation
 

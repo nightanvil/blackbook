@@ -53,6 +53,18 @@ def test_read_project() -> None:
     assert [(e["step"], e["chan"], e["offset"], e["prob"]) for e in events] == [(1, 9, 0, 100), (0, 0, 0, 100), (2, 8, -1, 50)]
     assert track["sequences"][1]["stepcount"] == 0 and not track["sequences"][1]["snap"]
     assert track["pads"][0]["slot"] == 8 and track["pads"][0]["length"] == 2000
+    assert track["samples"] == 1 and track["position"] == 0
+
+
+def test_tracks_sorted_by_device_position() -> None:
+    text = (
+        '<document><session version="2">'
+        '<track type="slicertrack"><params cellname="B" celldisppos="1"/></track>'
+        '<track type="samtrack"><params cellname="A" celldisppos="0"/></track>'
+        '<track type="mastrack"><params globtempo="90"/></track></session></document>'
+    )
+    tracks = projectseq.read_project(text)["tracks"]
+    assert [(t["name"], t["index"], t["position"]) for t in tracks] == [("A", 1, 0), ("B", 0, 1)]
 
 
 def test_unchanged_write_is_byte_identical() -> None:

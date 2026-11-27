@@ -1384,22 +1384,26 @@ async function loadIntoBuilder(ref, mode, switchView = true, acknowledged = fals
 
 async function loadProjects() {
   const wrap = document.getElementById("proj-list");
-  wrap.replaceChildren(el("p", { class: "muted" }, "Loading..."));
-  const projects = await api("GET", "/api/projects");
-  wrap.replaceChildren(
-    el("table", {},
-      el("thead", {}, el("tr", {}, ["Project", "WAVs in folder", "References", "Missing", "Unused in folder"].map((h) => el("th", {}, h)))),
-      el("tbody", {}, projects.map((p) =>
-        el("tr", { class: "clickable" + (p.name === state.selectedProject ? " selected" : ""), title: "Show tracks, sequences and samples of this project", onclick: () => showProject(p.name) },
-          el("td", {}, p.name, p.is_autosave ? el("span", { class: "badge", style: "margin-left:6px" }, "autosave") : null),
-          el("td", {}, p.wav_files),
-          el("td", {}, p.references),
-          el("td", { class: p.missing.length ? "err" : "muted", title: p.missing.join("\n") }, p.missing.length || "0"),
-          el("td", { class: p.unused.length ? "warn" : "muted", title: p.unused.join("\n") }, p.unused.length ? p.unused.join(", ") : "0"))
-      ))),
-    el("div", { id: "proj-detail" })
-  );
-  if (state.selectedProject) showProject(state.selectedProject);
+  if (!state.projects) wrap.replaceChildren(el("p", { class: "muted", style: "padding:12px" }, "Loading..."));
+  try {
+    state.projects = await api("GET", "/api/projects");
+  } catch (err) {
+    wrap.replaceChildren(el("p", { class: "err", style: "padding:12px" }, err.message));
+    return;
+  }
+  renderProjectList();
+  if (state.selectedProject && state.projects.some((p) => p.name === state.selectedProject)) showProject(state.selectedProject);
+}
+
+function renderProjectList() {
+  const wrap = document.getElementById("proj-list");
+  const projects = state.projects || [];
+  wrap.replaceChildren(...projects.map((p) =>
+    el("div", { class: "row" + (p.name === state.selectedProject ? " selected" : ""), "data-name": p.name, title: "Show tracks, sequences and samples of this project", onclick: () => showProject(p.name) },
+      el("span", { class: "name" }, p.name),
+      p.is_autosave ? el("span", { class: "badge" }, "autosave") : null,
+      p.missing.length ? el("span", { class: "err meta", title: "Missing samples:\n" + p.missing.join("\n") }, `${p.missing.length} missing`) : null)));
+  if (!projects.length) wrap.append(el("p", { class: "muted", style: "padding:12px" }, "No projects on the card."));
 }
 
 async function renderProjectSamples(name, detail) {
@@ -1662,7 +1666,7 @@ async function pollCard() {
   document.getElementById("eject-btn").disabled = !present;
   document.getElementById("b-plan").disabled = !present;
   if (present && state.cardPresent === false) {
-    toast("Card connected again, library reloaded");
+    toast("Card connected again, patches and projects reloaded");
     await loadLibrary();
   }
   state.cardPresent = present;
@@ -1968,6 +1972,7 @@ async function start() {
   state.roots = info.roots;
   state.cardPath = info.card;
   await loadLibrary();
+  loadProjects();
   tagChips(document.getElementById("b-tags"), state.buildTags);
   renderPads();
   renderZones();

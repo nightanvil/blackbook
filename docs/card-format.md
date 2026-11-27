@@ -183,6 +183,8 @@ Sequences live in the project. Save Patch writes the track's sequences into `pat
 
 ### MIDI channels
 
+The tracks of a project are not stored in the order the device shows them. The `celldisppos` in the track `<params>` (0 to 3) is the position on the Tracks screen.
+
 `midiinchan` and `midioutchan` in the track `<params>`: `0` is None, `1` to `16` the channel. `midiinport` and `midioutport` select the port. Projects store them per track. `patch.xml` also contains them; whether loading a patch applies its channels is not confirmed yet.
 
 ### Multisample patches

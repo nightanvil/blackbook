@@ -73,6 +73,8 @@ body {
 .topright > * { flex: none; }
 /* Narrow windows: tighter views, then the volume slider and the PID give way */
 @media (max-width: 1250px) { .topbar nav button { padding: 7px 9px; } .topinner { gap: 8px; } }
+/* Controls keep their full width, the brand gives way instead of overlapping the views */
+@media (max-width: 1400px) { .topinner { grid-template-columns: minmax(0, 1fr) auto auto; } }
 @media (max-width: 1050px) {
   .audioctl #volume { display: none; }
   #server-pid { display: none; }
@@ -437,20 +439,41 @@ details.events summary { cursor: pointer; }
 details.events input[type=search] { width: 100%; margin: 4px 0 6px; padding: 3px 8px; font-size: 12px; }
 .events-scroll { max-height: 180px; overflow: auto; }
 
-/* Projects: rows open the sample list below the table */
-#proj-list tr.clickable { cursor: pointer; }
-#proj-list tr.clickable:hover { background: var(--panel-2); }
-#proj-list tr.selected { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--accent); }
-#proj-detail { margin-top: 16px; }
+/* Projects: index on the left, detail on the right */
+#proj-list { width: 260px; border-right: 1px solid var(--line); flex-shrink: 0; }
+#proj-list .row .name { flex: 1; }
 
 /* Project detail: tracks and sequencer */
 .proj-title { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .proj-title h2 { margin: 0; }
+.proj-stats { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+.proj-stat b { color: var(--text); font-weight: 600; }
+.proj-stat.err b { color: var(--err); }
+.proj-stat.warn b { color: var(--warn); }
+
+/* Tracks in the style of the Tracks screen of the device, always dark like its display */
+.bb-screen { background: #000; border: 1px solid #2a2d31; border-radius: 8px; padding: 10px 10px 6px; max-width: 860px; color: #e6e6e3; }
+.bb-tracks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.bb-track { border: 2px solid var(--track); min-height: 200px; display: flex; flex-direction: column; align-items: stretch; cursor: pointer; background: #000; }
+.bb-track.empty { border-color: #1c1e21; cursor: default; }
+.bb-track.selected { outline: 2px solid #fff; outline-offset: 2px; }
+.bb-head { background: var(--track); color: var(--track-ink); text-align: center; font-weight: 600; padding: 3px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bb-icon { display: flex; justify-content: center; color: #f2f2f2; margin: 12px 0 8px; }
+.bb-icon svg { width: 30px; height: 30px; }
+.bb-config { display: flex; flex-direction: column; gap: 6px; padding: 6px 10px; margin: 0 8px; border: 1px solid color-mix(in srgb, var(--track) 55%, transparent); flex: 1; }
+.bb-config-title { color: var(--track); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; }
+.bb-config label { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 12px; color: #b9bcc0; }
+.bb-config select { background: #111; color: #e6e6e3; border: 1px solid #333; padding: 1px 4px; font-size: 12px; }
+.bb-foot { display: flex; justify-content: space-between; color: #9a9ea4; font-size: 12px; padding: 6px 8px 5px; }
+.bb-toolbar { display: flex; gap: 14px; align-items: center; color: #9fd8ec; font-size: 13px; padding: 8px 2px 2px; }
+.bb-toolbar .sep { width: 1px; height: 14px; background: #3a3d42; }
+.bb-toolbar .grow { flex: 1; }
+.bb-toolbar .muted { color: #6f747a; }
 .proj-title .grow { flex: 1; }
 #proj-detail table.tracks select { padding: 2px 4px; }
 #proj-seq { margin-top: 14px; }
 .seq-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 10px; }
-.seq-tabs button.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.seq-tabs button.active { background: var(--track, var(--accent)); color: var(--track-ink, var(--accent-ink)); border-color: var(--track, var(--accent)); }
 .seq-tabs button.empty:not(.active) { opacity: 0.55; }
 .seq-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-bottom: 10px; }
 .seq-settings label { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
@@ -465,8 +488,8 @@ details.events input[type=search] { width: 100%; margin: 4px 0 6px; padding: 3px
 .seq-pad.empty { opacity: 0.5; cursor: default; }
 .seq-cell { background: var(--panel-2); border-radius: 3px; cursor: pointer; }
 .seq-cell.odd { background: var(--panel-3); }
-.seq-cell:hover { outline: 1px solid var(--accent); }
-.seq-ev { background: var(--accent); border-radius: 3px; cursor: pointer; z-index: 1; position: relative; font-size: 11px; color: var(--accent-ink); text-align: center; line-height: 22px; }
+.seq-cell:hover { outline: 1px solid var(--track, var(--accent)); }
+.seq-ev { background: var(--track, var(--accent)); border-radius: 3px; cursor: pointer; z-index: 1; position: relative; font-size: 11px; color: var(--track-ink, var(--accent-ink)); text-align: center; line-height: 22px; }
 .seq-ev.prob { background-image: repeating-linear-gradient(135deg, transparent 0 4px, rgba(0, 0, 0, 0.25) 4px 6px); }
 .seq-ev.selected { outline: 2px solid var(--text); outline-offset: 1px; opacity: 1 !important; }
 .seq-ev .off { font-weight: bold; }

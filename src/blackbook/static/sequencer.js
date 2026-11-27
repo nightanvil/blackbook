@@ -55,8 +55,7 @@ async function showProject(name) {
   const keepEdits = proj.dirty && proj.name === name && proj.data;
   if (!keepEdits) seqPlayer.stop();
   state.selectedProject = name;
-  document.querySelectorAll("#proj-list tbody tr").forEach((row) =>
-    row.classList.toggle("selected", row.firstChild.firstChild.textContent === name));
+  document.querySelectorAll("#proj-list .row").forEach((row) => row.classList.toggle("selected", row.dataset.name === name));
   const detail = document.getElementById("proj-detail");
   if (!detail) return;
   if (keepEdits) {
@@ -95,6 +94,8 @@ async function showProject(name) {
 function renderProjectHead() {
   const head = document.getElementById("proj-head");
   if (!head || !proj.data) return;
+  const summary = (state.projects || []).find((p) => p.name === proj.name);
+  const stat = (label, value, cls, title) => el("span", { class: "proj-stat " + (cls || ""), title: title || "" }, el("b", {}, String(value)), " ", label);
   fill(head,
     el("div", { class: "proj-title" },
       el("h2", {}, proj.name),
@@ -102,7 +103,12 @@ function renderProjectHead() {
       el("span", { class: "grow" }),
       proj.dirty ? el("span", { class: "warn" }, "unsaved changes") : null,
       el("button", { disabled: !proj.dirty, onclick: () => showProjectReload() }, "Discard"),
-      el("button", { class: "primary", disabled: !proj.dirty, onclick: saveProject }, "Save to card")));
+      el("button", { class: "primary", disabled: !proj.dirty, onclick: saveProject }, "Save to card")),
+    summary ? el("div", { class: "proj-stats" },
+      stat("WAVs in folder", summary.wav_files),
+      stat("references", summary.references),
+      stat("missing", summary.missing.length, summary.missing.length ? "err" : "muted", summary.missing.join("\n")),
+      stat("unused in folder", summary.unused.length, summary.unused.length ? "warn" : "muted", summary.unused.join("\n"))) : null);
 }
 
 async function showProjectReload() {
@@ -110,31 +116,65 @@ async function showProjectReload() {
   await showProject(proj.name);
 }
 
+// Track colors of the device by position, from the Tracks screen in the manual
+const TRACK_COLORS = ["#00c0f0", "#f06000", "#00705a", "#f000f0"];
+const TRACK_INK = ["#001018", "#1a0a00", "#ffffff", "#1a001a"];
+
+// Track type icons in the style of the device, drawn for blackbook
+const TRACK_ICONS = {
+  samtrack: '<svg viewBox="0 0 24 24"><g fill="currentColor"><rect x="3" y="7" width="4" height="4"/><rect x="8" y="7" width="4" height="4"/><rect x="13" y="7" width="4" height="4"/><rect x="18" y="7" width="4" height="4"/><rect x="3" y="12" width="4" height="4"/><rect x="8" y="12" width="4" height="4"/><rect x="13" y="12" width="4" height="4"/><rect x="18" y="12" width="4" height="4"/></g></svg>',
+  looptrack: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7h7a5 5 0 0 1 0 10H9a5 5 0 0 1-3.6-8.5"/><path d="M10 4L7.5 7 10 10"/></svg>',
+  multisamtrack: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" fill="none" stroke="currentColor" stroke-width="1.6"/><g fill="currentColor"><rect x="6" y="4" width="2.4" height="9"/><rect x="10.8" y="4" width="2.4" height="9"/><rect x="15.6" y="4" width="2.4" height="9"/></g><g stroke="currentColor" stroke-width="1.2"><path d="M9.6 13v7M14.4 13v7"/></g></svg>',
+  slicertrack: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.5 7.8L20 17M8.5 16.2L20 7"/></svg>',
+  granslicertrack: '<svg viewBox="0 0 24 24"><g fill="currentColor"><rect x="3" y="9" width="3" height="3"/><rect x="7" y="9" width="3" height="3"/><rect x="11" y="9" width="3" height="3"/><rect x="5" y="13" width="3" height="3"/><rect x="9" y="13" width="3" height="3"/><rect x="3" y="17" width="2" height="2"/><rect x="7" y="17" width="2" height="2"/><rect x="11" y="17" width="2" height="2"/><rect x="16" y="3" width="2.4" height="10"/></g><path d="M17.2 13v4" stroke="currentColor" stroke-width="1.4"/></svg>',
+  exttrack: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><g fill="currentColor" stroke="none"><circle cx="8" cy="11" r="1.2"/><circle cx="16" cy="11" r="1.2"/><circle cx="12" cy="8" r="1.2"/><circle cx="9.5" cy="14.5" r="1.2"/><circle cx="14.5" cy="14.5" r="1.2"/></g></svg>',
+};
+
+function trackIcon(type) {
+  const node = el("span", { class: "bb-icon", title: TRACK_LABELS[type] || type });
+  node.innerHTML = TRACK_ICONS[type] || TRACK_ICONS.exttrack;
+  return node;
+}
+
 function renderTracks() {
   const wrap = document.getElementById("proj-tracks");
   if (!wrap) return;
   const tracks = proj.data.tracks;
-  if (!tracks.length) { fill(wrap, el("p", { class: "muted" }, "This project has no tracks.")); return; }
+  const byPos = new Map(tracks.map((t, i) => [t.position, i]));
+  const cards = [0, 1, 2, 3].map((pos) => {
+    const i = byPos.get(pos);
+    if (i == null) return el("div", { class: "bb-track empty", title: "Empty track" });
+    const t = tracks[i];
+    const inSel = midiOptions(t.midiinchan);
+    const outSel = midiOptions(t.midioutchan);
+    for (const sel of [inSel, outSel]) sel.addEventListener("click", (ev) => ev.stopPropagation());
+    inSel.addEventListener("change", () => { t.midiinchan = Number(inSel.value); t.midiChanged = true; markDirty(); });
+    outSel.addEventListener("change", () => { t.midioutchan = Number(outSel.value); t.midiChanged = true; markDirty(); });
+    const used = t.sequences.filter((s) => s.events.length).length;
+    return el("div", {
+      class: "bb-track" + (i === proj.track ? " selected" : ""),
+      style: `--track:${TRACK_COLORS[pos]};--track-ink:${TRACK_INK[pos]}`,
+      title: `Track ${pos + 1}: ${TRACK_LABELS[t.type] || t.type}`,
+      onclick: () => selectTrack(i),
+    },
+      el("div", { class: "bb-head" }, t.name || `Track ${pos + 1}`),
+      trackIcon(t.type),
+      el("div", { class: "bb-config" },
+        el("div", { class: "bb-config-title" }, "Config"),
+        el("label", { title: "MIDI channel the track listens on (MIDI In Chan)" }, "MIDI In", inSel),
+        el("label", { title: "MIDI channel the track sends on (MIDI OutCh)" }, "MIDI Out", outSel)),
+      el("div", { class: "bb-foot" }, `Samples: ${t.samples}`, el("span", {}, `Seq: ${used}/8`)));
+  });
   fill(wrap,
-    el("div", { class: "label" }, "Tracks"),
-    el("table", { class: "tracks" },
-      el("thead", {}, el("tr", {}, ["Track", "Type", "Name", "MIDI in", "MIDI out", "Sequences"].map((h) => el("th", {}, h)))),
-      el("tbody", {}, tracks.map((t, i) => {
-        const inSel = midiOptions(t.midiinchan);
-        const outSel = midiOptions(t.midioutchan);
-        inSel.addEventListener("click", (ev) => ev.stopPropagation());
-        outSel.addEventListener("click", (ev) => ev.stopPropagation());
-        inSel.addEventListener("change", () => { t.midiinchan = Number(inSel.value); t.midiChanged = true; markDirty(); });
-        outSel.addEventListener("change", () => { t.midioutchan = Number(outSel.value); t.midiChanged = true; markDirty(); });
-        const used = t.sequences.filter((s) => s.events.length).length;
-        return el("tr", { class: "clickable" + (i === proj.track ? " selected" : ""), onclick: () => selectTrack(i) },
-          el("td", {}, String(i + 1)),
-          el("td", {}, TRACK_LABELS[t.type] || t.type),
-          el("td", {}, t.name),
-          el("td", { title: "MIDI channel the track listens on" }, inSel),
-          el("td", { title: "MIDI channel the track sends on" }, outSel),
-          el("td", { class: "muted" }, `${used} of 8 with notes`));
-      }))));
+    el("div", { class: "bb-screen" },
+      el("div", { class: "bb-tracks" }, cards),
+      el("div", { class: "bb-toolbar" },
+        el("span", {}, proj.name),
+        el("span", { class: "sep" }),
+        el("span", { title: "Tempo of the project" }, `${proj.data.tempo} BPM`),
+        el("span", { title: "Swing of the project, 50 is straight" }, `Swing ${proj.data.swing}%`),
+        el("span", { class: "grow" }),
+        el("span", { class: "muted" }, `${tracks.length} of 4 tracks`))));
 }
 
 function selectTrack(i) {
@@ -179,8 +219,10 @@ function renderSequencer() {
   const settings = seqSettings(seq, editable);
   const body = editable ? stepGrid(track, seq) : el("p", { class: "muted" },
     seq ? `${seq.events.length} notes. Editing sequences of ${TRACK_LABELS[track.type] || track.type} tracks is not supported yet, only one-shot tracks.` : "Empty slot.");
+  wrap.style.setProperty("--track", TRACK_COLORS[track.position] || "var(--accent)");
+  wrap.style.setProperty("--track-ink", TRACK_INK[track.position] || "var(--accent-ink)");
   fill(wrap,
-    el("div", { class: "label" }, `Sequences of track ${proj.track + 1}${track.name ? ": " + track.name : ""}`),
+    el("div", { class: "label" }, `Sequences of track ${track.position + 1}${track.name ? ": " + track.name : ""}`),
     tabs,
     settings,
     body,
