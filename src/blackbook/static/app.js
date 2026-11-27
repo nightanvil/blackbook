@@ -76,9 +76,12 @@ function el(tag, attrs = {}, ...children) {
         document.body.classList.add("scrubbing");
         show();
       }
-      const fine = ev.shiftKey ? 0.1 : 1;
-      const perPixel = ranged ? Math.max(step, (max - min) / 160) : step / 4;
-      let value = start + Math.round((dy * perPixel * fine) / step) * step;
+      // The whole range takes 16 pixels per value step, at least 120 and at most 400 pixels,
+      // so a field with few values does not jump and one with many values stays reachable
+      const count = ranged ? (max - min) / step : Infinity;
+      const pxPerStep = Number.isFinite(count) ? Math.min(400, Math.max(120, count * 16)) / count : 6;
+      const fine = ev.shiftKey ? 5 : 1;
+      let value = start + Math.trunc(dy / (pxPerStep * fine)) * step;
       if (min != null) value = Math.max(min, value);
       if (max != null) value = Math.min(max, value);
       value = Number(value.toFixed(decimals));
@@ -100,6 +103,32 @@ function el(tag, attrs = {}, ...children) {
     window.addEventListener("pointerup", up);
   });
 })();
+
+// Double click on a field with data-default sets the default; double click again brings back the value
+// it had before. data-reset-key keeps that value across redraws of the field.
+const resetMemory = new Map();
+document.addEventListener("dblclick", (ev) => {
+  const node = ev.target;
+  if (!(node instanceof HTMLInputElement || node instanceof HTMLSelectElement) || node.disabled || node.dataset.default == null) return;
+  ev.preventDefault();
+  const key = node.dataset.resetKey || node;
+  const current = node.value;
+  const fallback = node.dataset.default;
+  let next;
+  if (Number(current) !== Number(fallback) || (Number.isNaN(Number(current)) && current !== fallback)) {
+    resetMemory.set(key, current);
+    next = fallback;
+  } else if (resetMemory.has(key)) {
+    next = resetMemory.get(key);
+    resetMemory.delete(key);
+  } else {
+    return;
+  }
+  node.value = next;
+  node.dispatchEvent(new Event("input", { bubbles: true }));
+  node.dispatchEvent(new Event("change", { bubbles: true }));
+  toast(next === fallback ? "Default value, double click again for the previous one" : "Previous value");
+});
 
 // replaceChildren that skips null children, as el() does
 function fill(node, ...children) {
@@ -797,8 +826,11 @@ function paramControl(pad, param) {
   };
   number.addEventListener("change", () => set(number.value, number));
   slider.addEventListener("input", () => set(slider.value, slider));
-  // Double click on the slider resets to the default of a new pad
-  slider.addEventListener("dblclick", () => set(param.default / param.scale, null));
+  // Double click resets to the default of a new pad, a second one brings the value back
+  for (const node of [number, slider]) {
+    node.dataset.default = (param.default / param.scale).toFixed(digits);
+    node.dataset.resetKey = `pad:${pad.source || ""}:${param.key}`;
+  }
   return el("label", { class: "pnum" }, el("span", { class: "plabel" }, param.label, el("span", { class: "unit" }, param.unit)), el("span", { class: "prow" }, slider, number));
 }
 
@@ -1470,6 +1502,17 @@ function fmtAgo(seconds) {
   return new Date(seconds * 1000).toLocaleDateString();
 }
 
+const META_ICONS = {
+  metronome: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"><path d="M5.5 2h5l2.5 12H3z"/><path d="M8 11l3.5-7"/><path d="M5 11h6"/></svg>',
+  wave: '<svg viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="6.5" width="1.6" height="3" rx=".8"/><rect x="4" y="4" width="1.6" height="8" rx=".8"/><rect x="7" y="1.5" width="1.6" height="13" rx=".8"/><rect x="10" y="4.5" width="1.6" height="7" rx=".8"/><rect x="13" y="6" width="1.6" height="4" rx=".8"/></svg>',
+};
+
+function metaIcon(name, text, cls, title) {
+  const icon = el("span", { class: "mi" });
+  icon.innerHTML = META_ICONS[name];
+  return el("span", { class: "pc-mi " + cls, title }, icon, text);
+}
+
 function renderProjectList() {
   const wrap = document.getElementById("proj-list");
   const search = document.getElementById("proj-search").value.trim().toLowerCase();
@@ -1507,11 +1550,12 @@ function renderProjectList() {
         p.is_autosave ? el("span", { class: "badge" }, "autosave") : null),
       strip,
       el("div", { class: "pc-meta" },
-        p.tempo ? el("span", {}, `${p.tempo} BPM`) : null,
-        el("span", {}, `${p.references} refs`),
-        p.missing.length ? el("span", { class: "err", title: "Missing samples:\n" + p.missing.join("\n") }, `${p.missing.length} missing`) : null,
-        el("span", { class: "grow" }),
-        el("span", { title: new Date(p.modified * 1000).toLocaleString() }, fmtAgo(p.modified))));
+        metaIcon("metronome", p.tempo ? String(p.tempo) : "-", "", "Tempo in BPM"),
+        metaIcon("wave", String(p.references), "", "Sample references"),
+        p.missing.length
+          ? metaIcon("wave", String(p.missing.length), "err", "Missing samples:\n" + p.missing.join("\n"))
+          : el("span"),
+        el("span", { class: "pc-ago", title: "Last changed " + new Date(p.modified * 1000).toLocaleString() }, fmtAgo(p.modified))));
   }));
   if (!projects.length) {
     wrap.append(el("p", { class: "muted", style: "padding:12px" }, (state.projects || []).length ? "No project matches." : "No projects on the card."));

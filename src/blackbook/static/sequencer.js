@@ -307,7 +307,7 @@ function renderTracks() {
       el("div", { class: "bb-toolbar" },
         el("span", {}, proj.name),
         el("span", { class: "sep" }),
-        el("span", { title: "Tempo of the project" }, `${proj.data.tempo} BPM`),
+        metaIcon("metronome", `${proj.data.tempo} BPM`, "", "Tempo of the project"),
         el("span", { title: "Swing of the project, 50 is straight" }, `Swing ${proj.data.swing}%`),
         el("span", { class: "grow" }),
         el("span", { class: "muted" }, `${tracks.length} of 4 tracks`))));
@@ -392,12 +392,15 @@ function seqSettings(seq, editable) {
   const change = (fn) => () => { const target = currentSeq(true); fn(target); markDirty(target); renderSequencer(); };
   const lenSel = el("select", { disabled: !editable }, proj.data.step_lengths.map((l, i) => el("option", { value: i }, l)));
   lenSel.value = String(s.steplen);
+  Object.assign(lenSel.dataset, { default: "10", resetKey: `seq:${proj.track}:${proj.slot}:steplen` });
   lenSel.addEventListener("change", change((t) => { t.steplen = Number(lenSel.value); }));
   const quantSel = el("select", { disabled: !editable }, proj.data.quant_sizes.map((l, i) => el("option", { value: i }, l)));
   quantSel.value = String(s.quant);
+  Object.assign(quantSel.dataset, { default: "1", resetKey: `seq:${proj.track}:${proj.slot}:quant` });
   quantSel.addEventListener("change", change((t) => { t.quant = Number(quantSel.value); }));
   const open = s.stepcount === 0;
   const countIn = el("input", { type: "number", min: 1, max: 256, value: open ? 16 : s.stepcount, disabled: !editable || open, class: "num" });
+  Object.assign(countIn.dataset, { default: "16", resetKey: `seq:${proj.track}:${proj.slot}:stepcount` });
   countIn.addEventListener("change", change((t) => { t.stepcount = Math.max(1, Math.min(256, Math.round(Number(countIn.value) || 16))); }));
   const openBox = el("input", { type: "checkbox", checked: open, disabled: !editable });
   openBox.addEventListener("change", change((t) => { t.stepcount = openBox.checked ? 0 : gridSteps(t); }));
@@ -406,6 +409,7 @@ function seqSettings(seq, editable) {
   const nameIn = el("input", { type: "text", value: s.name, maxlength: 16, disabled: !editable, class: "seq-name" });
   nameIn.addEventListener("change", change((t) => { t.name = nameIn.value.trim() || `Seq ${t.slot + 1}`; }));
   const tempoIn = el("input", { type: "number", min: 20, max: 300, value: proj.tempo, class: "num", title: "Tempo for playback here; the project tempo on the device is not changed" });
+  Object.assign(tempoIn.dataset, { default: String(proj.data.tempo), resetKey: "seq:tempo" });
   tempoIn.addEventListener("change", () => { proj.tempo = Math.max(20, Math.min(300, Number(tempoIn.value) || 120)); });
   const playBtn = el("button", { class: "primary small seq-play" + (seqPlayer.playing ? " playing" : ""), disabled: !editable, onclick: () => seqPlayer.toggle() },
     seqPlayer.playing ? "■ Stop" : "▶ Play");
@@ -466,6 +470,7 @@ function stepGrid(track, seq) {
   grid.append(head);
   const nudgeSel = el("select", { title: "Grid for dragging notes sideways" }, NUDGE.map((n, i) => el("option", { value: i }, n.label)));
   nudgeSel.value = String(proj.nudge);
+  Object.assign(nudgeSel.dataset, { default: "0", resetKey: "seq:nudge" });
   nudgeSel.addEventListener("change", () => { proj.nudge = Number(nudgeSel.value); });
   const [low, high] = offsetLimits(seq);
   return el("div", {},
@@ -579,8 +584,10 @@ function euclidPanel() {
   if (!eu) return null;
   const seq = currentSeq(true);
   const steps = gridSteps(seq);
+  const defaults = { hits: 4, length: Math.min(16, steps), rotate: 0, velocity: 100 };
   const field = (label, key, min, max, title) => {
     const input = el("input", { type: "number", min, max, value: eu[key], class: "num", title });
+    Object.assign(input.dataset, { default: String(defaults[key]), resetKey: `euclid:${key}` });
     const apply = () => {
       const v = Math.max(min, Math.min(max, Math.round(Number(input.value))));
       if (Number.isFinite(v)) { eu[key] = v; if (eu.hits > eu.length) eu.hits = eu.length; applyEuclid(); }
@@ -618,8 +625,9 @@ function eventInspector(track, seq) {
     return el("div", { class: "seq-inspector muted" }, "Select a note to change velocity, probability, offset and length.");
   }
   const update = () => { markDirty(seq); renderSequencer(); };
-  const num = (label, value, min, max, title, apply) => {
+  const num = (label, value, min, max, title, apply, fallback) => {
     const input = el("input", { type: "number", min, max, value, class: "num", title });
+    Object.assign(input.dataset, { default: String(fallback), resetKey: `note:${label}` });
     input.addEventListener("change", () => {
       const v = Math.max(min, Math.min(max, Math.round(Number(input.value))));
       if (Number.isFinite(v)) { apply(v); update(); }
@@ -628,14 +636,14 @@ function eventInspector(track, seq) {
   };
   return el("div", { class: "seq-inspector" },
     el("b", {}, `Pad ${padNumber(ev.chan)}, step ${ev.step + 1}`),
-    num("Velocity", ev.velocity ?? 100, 1, 127, "How hard the pad plays, 1 to 127", (v) => { ev.velocity = v; }),
-    num("Prob %", ev.prob, 1, 100, "Probability that the note plays each time, 100 is Always", (v) => { ev.prob = v; }),
+    num("Velocity", ev.velocity ?? 100, 1, 127, "How hard the pad plays, 1 to 127", (v) => { ev.velocity = v; }, 100),
+    num("Prob %", ev.prob, 1, 100, "Probability that the note plays each time, 100 is Always", (v) => { ev.prob = v; }, 100),
     num("Offset", ev.strtks - ev.step * TICKS, offsetLimits(seq)[0], offsetLimits(seq)[1], "Ticks before or after the step, a step has 960. The Offset knob of the device moves in steps of 10 up to +-470.", (v) => {
       placeEvent(ev, ev.step * TICKS + v, gridSteps(seq), seq);
-    }),
+    }, 0),
     ev.lencount === 0
       ? el("span", { class: "muted", title: "Recorded with Snap off" }, `Length ${ev.lentks} ticks`)
-      : num("Length", ev.lencount, 1, 256, "Length in steps", (v) => { ev.lencount = v; ev.lentks = v * TICKS; }),
+      : num("Length", ev.lencount, 1, 256, "Length in steps", (v) => { ev.lencount = v; ev.lentks = v * TICKS; }, 1),
     el("button", { class: "small", onclick: () => { seq.events.splice(seq.events.indexOf(ev), 1); proj.selected = null; update(); } }, "Remove"));
 }
 

@@ -15,7 +15,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 - Pads tab in a project: edit the pads of a one-shot track right in the project with the pad editor and sample browser from Build.
 - Sequencer: drag notes sideways on a grid down to 10 ticks and up or down to another pad. With Snap off notes can sit up to half a step off the grid.
 - Euclidean generator per pad in the sequencer.
-- Number fields can be changed by pressing and dragging up or down, with a vertical slider next to the field.
+- Number fields can be changed by pressing and dragging up or down, with a vertical slider next to the field. Fields with few values move slower, so they do not jump.
+- Double click on a field sets its default, a second double click brings back the previous value: sequence settings, note values, Euclid and pad parameters.
+- Project cards show tempo, references and missing samples as icons in fixed columns.
 
 ### Changed
 

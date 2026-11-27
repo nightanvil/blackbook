@@ -456,8 +456,12 @@ details.events input[type=search] { width: 100%; margin: 4px 0 6px; padding: 3px
 .pc-slot.empty { border-top-color: #2a2d31; background: color-mix(in srgb, #000 40%, var(--panel)); }
 .pc-slot .bb-icon { margin: 0; color: #e8e8e8; }
 .pc-slot .bb-icon svg { width: 15px; height: 15px; }
-.pc-meta { display: flex; gap: 10px; font-size: 11px; color: var(--muted); }
-.pc-meta .grow { flex: 1; }
+.pc-meta { display: grid; grid-template-columns: 52px 44px 44px 1fr; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pc-mi { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.pc-mi .mi { display: inline-flex; }
+.pc-mi .mi svg { width: 13px; height: 13px; }
+.pc-mi.err { color: var(--err); font-weight: 600; }
+.pc-ago { text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Project detail: tracks and sequencer */
 .proj-title { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
@@ -478,7 +482,8 @@ details.events input[type=search] { width: 100%; margin: 4px 0 6px; padding: 3px
 .bb-icon svg { width: 30px; height: 30px; }
 .bb-config { display: flex; flex-direction: column; gap: 6px; padding: 6px 10px; margin: 0 8px; border: 1px solid color-mix(in srgb, var(--track) 55%, transparent); flex: 1; }
 .bb-config-title { color: var(--track); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; text-align: center; }
-.bb-config label { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 12px; color: #b9bcc0; }
+.bb-config label { display: flex; justify-content: space-between; align-items: center; gap: 4px; font-size: 12px; color: #b9bcc0; white-space: nowrap; }
+.bb-config select { min-width: 0; max-width: 64px; }
 .bb-config select { background: #111; color: #e6e6e3; border: 1px solid #333; padding: 1px 4px; font-size: 12px; }
 .bb-foot { display: flex; justify-content: space-between; color: #9a9ea4; font-size: 12px; padding: 6px 8px 5px; }
 .bb-toolbar { display: flex; gap: 14px; align-items: center; color: #9fd8ec; font-size: 13px; padding: 8px 2px 2px; }
@@ -507,12 +512,18 @@ details.events input[type=search] { width: 100%; margin: 4px 0 6px; padding: 3px
 .seq-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-bottom: 6px; }
 .seq-toolbar label { display: inline-flex; align-items: center; gap: 6px; }
 .seq-ev { touch-action: none; }
-.seq-euclid { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 10px 0; padding: 8px 10px; border: 1px solid var(--track, var(--accent)); border-radius: 6px; }
+.seq-euclid { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 18px 0 12px; padding: 12px 16px; border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--track, var(--accent)) 60%, transparent); border-left: 5px solid var(--track, var(--accent));
+  background: linear-gradient(120deg, color-mix(in srgb, var(--track, var(--accent)) 26%, var(--panel)), color-mix(in srgb, var(--track, var(--accent)) 8%, var(--panel)));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); }
+.seq-euclid > b { text-transform: uppercase; letter-spacing: 0.08em; font-size: 12px; color: var(--track, var(--accent)); filter: brightness(1.35); }
+.seq-euclid input.num { background: var(--bg, var(--panel)); }
 .seq-euclid label { display: inline-flex; align-items: center; gap: 6px; }
 .seq-euclid input.num { width: 64px; }
 .eu-preview { display: inline-flex; gap: 2px; }
-.eu-preview i { width: 9px; height: 14px; border-radius: 2px; background: var(--panel-3); }
-.eu-preview i.on { background: var(--track, var(--accent)); }
+.eu-preview { padding: 4px 6px; border-radius: 6px; background: rgba(0, 0, 0, 0.35); }
+.eu-preview i { width: 9px; height: 16px; border-radius: 2px; background: rgba(255, 255, 255, 0.12); }
+.eu-preview i.on { background: var(--track, var(--accent)); box-shadow: 0 0 6px var(--track, var(--accent)); }
 .seq-pad:hover { background: var(--panel-3); }
 .seq-pad.empty { opacity: 0.5; cursor: default; }
 .seq-cell { background: var(--panel-2); border-radius: 3px; cursor: pointer; }
