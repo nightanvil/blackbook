@@ -640,3 +640,10 @@ input[type="number"]:focus { cursor: text; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; background: var(--track); color: var(--track-ink); }
 .track-bubble + .track-bubble { margin-left: 4px; }
 .samples-table td:first-child { width: 1%; }
+.proj-tabs { align-items: center; }
+.proj-tabs .grow { flex: 1; }
+.proj-tabs .samples-scope { margin: 0 8px 4px 0; }
+.proj-tabs .samples-scope button { padding: 3px 12px; border-bottom: 1px solid var(--line); border-radius: 0; color: var(--text); }
+.proj-tabs .samples-scope button:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+.proj-tabs .samples-scope button:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
+.proj-tabs .samples-scope button.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }

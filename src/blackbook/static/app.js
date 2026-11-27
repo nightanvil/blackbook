@@ -1670,15 +1670,8 @@ async function renderProjectSamples(name, detail) {
       title: `Track ${pos + 1}${t && t.name ? ": " + t.name : ""}`,
     }, t && t.name ? t.name : `Track ${pos + 1}`);
   };
-  const switcher = track
-    ? el("div", { class: "seg samples-scope" },
-      el("button", { class: all ? "" : "active", onclick: () => { state.samplesAllTracks = false; renderProjectSamples(name, detail); } }, `Track ${track.position + 1}`),
-      el("button", { class: all ? "active" : "", onclick: () => { state.samplesAllTracks = true; renderProjectSamples(name, detail); } }, "All tracks"))
-    : null;
   fill(detail,
-    el("div", { class: "samples-head" },
-      el("div", { class: "label" }, all ? `Samples of ${name} (${shown.length})` : `Samples of track ${track.position + 1}${track.name ? ": " + track.name : ""} (${shown.length})`),
-      switcher),
+    el("div", { class: "label" }, all ? `Samples of ${name} (${shown.length})` : `Samples of track ${track.position + 1}${track.name ? ": " + track.name : ""} (${shown.length})`),
     shown.length ? null : el("p", { class: "muted" }, "This track uses no samples."),
     el("table", { class: "samples-table" }, el("tbody", {}, shown.map((s) =>
       el("tr", {},

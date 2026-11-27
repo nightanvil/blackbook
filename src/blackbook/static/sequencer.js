@@ -249,9 +249,17 @@ function renderProjectTabs() {
   const oneShot = track && track.type === "samtrack";
   if (proj.tab === "pads" && !oneShot) proj.tab = "seq";
   wrap.style.setProperty("--track", track ? TRACK_COLORS[track.position] : "var(--accent)");
+  const all = !!state.samplesAllTracks;
+  const scope = (value) => () => { state.samplesAllTracks = value; renderProjectBody(); };
   fill(wrap, PROJECT_TABS.filter((t) => !t.oneShotOnly || oneShot).map((t) =>
     el("button", { class: proj.tab === t.id ? "active" : "", onclick: () => selectProjectTab(t.id) },
-      t.label, t.id === "pads" && track && padsChanged(track) ? el("span", { class: "dot", title: "unsaved changes" }) : null)));
+      t.label, t.id === "pads" && track && padsChanged(track) ? el("span", { class: "dot", title: "unsaved changes" }) : null)),
+    // Only on the Samples tab: the samples of the selected track or of all tracks
+    proj.tab === "samples" && track
+      ? [el("span", { class: "grow" }), el("div", { class: "seg samples-scope" },
+        el("button", { class: "small" + (all ? "" : " active"), onclick: scope(false) }, `Track ${track.position + 1}`),
+        el("button", { class: "small" + (all ? " active" : ""), onclick: scope(true) }, "All tracks"))]
+      : null);
 }
 
 function selectProjectTab(id) {
