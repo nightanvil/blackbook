@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import audioedit, builder, padparams, patchedit, projectseq, sampleupdate, settings, updater
+from . import audioedit, builder, padparams, patchedit, projectseq, samplelib, sampleupdate, settings, updater
 from .backup import Backup
 from .card import Card, browse
 from .carddetect import find_cards
@@ -129,6 +129,10 @@ class RelinkIn(BaseModel):
     source: str  # the original
     target: str  # the new file that takes its place
     apply: bool = False
+
+
+class SampleIn(BaseModel):
+    source: str
 
 
 class RenameIn(BaseModel):
@@ -833,6 +837,42 @@ def create_app(
                 session.source = new_source
                 session.name = new_name
         return {**summary, "source": new_source, "name": new_name}
+
+    @app.get("/api/samples")
+    def samples_index(factory: bool = False) -> list[dict]:
+        """Every WAV on the card with the patches and projects that use it."""
+        if not snapshots.card_present():
+            raise HTTPException(409, "card not connected")
+        return samplelib.sample_index(card.root, factory)
+
+    @app.post("/api/sample/delete")
+    def sample_delete(body: SampleIn) -> dict:
+        """Delete a WAV nobody uses. The file is copied to the local backup folder first."""
+        if body.source.partition(":")[0] != "card":
+            raise HTTPException(400, "only samples on the card can be deleted")
+        if not snapshots.card_present():
+            raise HTTPException(409, "card not connected")
+        path = sources.resolve(body.source)
+        if not path.is_file() or path.suffix.lower() != ".wav":
+            raise HTTPException(404, "WAV file not found")
+        rel = card.relative(path)
+        if overwrite_block(rel):
+            raise HTTPException(403, "Factory samples are never deleted.")
+        refs = find_references(card.root, rel)
+        if refs:
+            raise HTTPException(409, "still used by " + ", ".join(sorted({r.xml for r in refs})))
+        what = f"deleting {rel}"
+        snapshots.before_write(what)
+        try:
+            backup.save(path)
+            path.unlink()
+            cache = path.with_name(path.name + ".pk")
+            if cache.is_file():
+                cache.unlink()
+        except OSError as exc:
+            raise HTTPException(400, f"deleting failed: {exc}") from exc
+        snapshots.after_write(what)
+        return {"deleted": rel}
 
     @app.post("/api/sample/relink")
     def sample_relink(body: RelinkIn) -> dict:

@@ -21,6 +21,7 @@
       <nav>
         <button data-view="projects" class="active">Projects</button>
         <button data-view="library">Patches</button>
+        <button data-view="samples">Samples</button>
         <button data-view="build">Build</button>
         <button data-view="backup">Backup</button>
       </nav>
@@ -74,6 +75,28 @@
       </aside>
       <div id="lib-list" class="list"></div>
       <div id="lib-detail" class="detail"><p class="muted">Select a patch.</p></div>
+    </section>
+
+    <!-- Samples -->
+    <section id="view-samples" class="view">
+      <aside class="filters">
+        <input id="smp-search" type="search" placeholder="Search file, folder, project, patch">
+        <label>Where
+          <select id="smp-project"><option value="">All places</option></select>
+        </label>
+        <label>Sort
+          <select id="smp-sort">
+            <option value="folder">Folder</option>
+            <option value="name">Name</option>
+            <option value="duration">Length</option>
+          </select>
+        </label>
+        <label class="check"><input id="smp-recordings" type="checkbox">Recordings only (RC...)</label>
+        <label class="check"><input id="smp-unused" type="checkbox">Unused only</label>
+        <label class="check"><input id="smp-factory" type="checkbox">Include factory samples</label>
+        <button id="smp-reload" class="small" type="button">Reload</button>
+      </aside>
+      <div id="smp-list" class="detail"></div>
     </section>
 
     <!-- Build -->
@@ -268,5 +291,6 @@
   <script src="/static/waveform.js"></script>
   <script src="/static/app.js"></script>
   <script src="/static/sequencer.js"></script>
+  <script src="/static/samples.js"></script>
 </body>
 </html>

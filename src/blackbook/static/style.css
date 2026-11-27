@@ -665,3 +665,15 @@ input[type="number"]:focus { cursor: text; }
 .cp-list { max-height: 52vh; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
 .cp-list .row { display: grid; grid-template-columns: 34px 62px minmax(0, 1fr) 90px; gap: 8px; }
 .cp-list .row .badge { justify-self: start; }
+
+/* Samples tab */
+#view-samples .filters .check { flex-direction: row; align-items: center; gap: 6px; }
+.smp-head { margin-bottom: 8px; font-size: 13px; }
+.smp-name div:first-child { font-weight: 500; display: flex; align-items: center; gap: 6px; }
+.smp-folder { font-size: 11px; }
+.smp-dur { white-space: nowrap; width: 1%; font-variant-numeric: tabular-nums; }
+.smp-uses { max-width: 360px; }
+.use-pill { display: inline-block; margin: 1px 4px 1px 0; padding: 1px 8px; border-radius: 10px; font-size: 11px; white-space: nowrap; border: 1px solid var(--line); background: var(--panel-2); }
+.use-pill.project { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.use-pill.unused { color: var(--muted); border-style: dashed; background: transparent; }
+.rec-dot { width: 8px; height: 8px; border-radius: 50%; background: #e5615b; display: inline-block; }

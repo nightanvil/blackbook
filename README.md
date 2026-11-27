@@ -16,15 +16,16 @@ blackbook is free and stays free. If it helps you, you can buy me a coffee on [K
 
 | Status | What |
 |---|---|
-| In progress | Change the patch of a project track, as Change Patch on the device |
+| In progress | Acceptance of Change patch and the Samples tab |
 | Next | MIDI CC numbers shown on the controls, piano roll for multisample, slicer and shredder sequences |
 | Then | Slicer, loop, shredder, multisample loop points, audio editor markers and loop points |
 | Later | External editor (Reaper), project tools (pack, clean, rename), sample organization, card and firmware tools |
-| Done | Projects view like the device, step sequencer for one-shot tracks with playback, Euclid and humanize, pads and MIDI channels per track, sample rename with reference update, patch list, tags, one-shot pad editor with all device settings, waveform and audio editor (pads, patches, projects, overwrite with reference update), multisample basics, backup, installer, updates, eject |
+| Done | Samples tab for all WAVs on the card, change the patch of a project track, projects view like the device, step sequencer for one-shot tracks with playback, Euclid and humanize, pads and MIDI channels per track, sample rename with reference update, patch list, tags, one-shot pad editor with all device settings, waveform and audio editor (pads, patches, projects, overwrite with reference update), multisample basics, backup, installer, updates, eject |
 
 ## What it does
 
 - **Patches:** all factory and user patches with type and tag filter. Listen to samples and previews.
+- **Samples:** every WAV on the card with where it is used; clean up recordings: play, edit, rename, delete unused files.
 - **Tags:** tag your own patches, as on the device.
 - **Build:** one-shot kits on 16 pads with all pad settings of the device (sound, setup, envelope, LFO, start and length), and multisample instruments, by drag and drop. Key and velocity ranges are read from the file names.
 - **Edit:** change your own patches in place. Sequences, modulation and everything blackbook does not know stay untouched.

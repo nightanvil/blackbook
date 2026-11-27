@@ -226,3 +226,20 @@ def test_relink_to_edited_file(card: Path, tmp_path: Path, monkeypatch) -> None:
     assert 'filename="UserPatches\\OneShots\\Mine\\Hit_edit.wav"' in project
     assert 'filename="Samples\\Edited\\Kick_edit.wav"' in project
     assert 'filename="Kick.wav"' in (card / "Patches" / "OneShots" / "Kit A" / "patch.xml").read_text()
+
+
+def test_sample_index_and_delete(card: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "SETTINGS_PATH", tmp_path / "settings.json")
+    app = create_app(card, [], tmp_path / "copies", inbox_dir=tmp_path / "inbox")
+    with TestClient(app) as client:
+        index = {s["path"]: s for s in client.get("/api/samples").json()}
+        assert "Patches/OneShots/Kit A/Kick.wav" not in index
+        assert index["Projects/Song/RC000001.wav"]["recording"] is True
+        assert [u["name"] for u in index["Projects/Song/RC000001.wav"]["uses"]] == ["Song"]
+        assert index["Projects/Song/RC000002.wav"]["uses"] == [] and index["Samples/Pack/SD.wav"]["duration"] > 0
+        assert "Patches/OneShots/Kit A/Kick.wav" in {s["path"] for s in client.get("/api/samples", params={"factory": True}).json()}
+        assert client.post("/api/sample/delete", json={"source": "card:Projects/Song/RC000001.wav"}).status_code == 409
+        assert client.post("/api/sample/delete", json={"source": "card:Patches/OneShots/Kit A/Kick.wav"}).status_code == 403
+        assert client.post("/api/sample/delete", json={"source": "card:Projects/Song/RC000002.wav"}).json() == {"deleted": "Projects/Song/RC000002.wav"}
+    assert not (card / "Projects" / "Song" / "RC000002.wav").exists()
+    assert list((tmp_path / "copies").rglob("RC000002.wav"))

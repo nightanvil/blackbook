@@ -220,7 +220,15 @@ Play runs the sequence of a one-shot track in a loop through Web Audio. It sched
 
 Sequences are stored in the project. The device ignores sequences in a `patch.xml` when a patch is loaded onto an existing track, so blackbook edits them in projects only.
 
-## 5. Organization
+## 5. Samples
+
+The Samples tab lists every WAV in `Projects`, `UserPatches` and `Samples` (factory samples in `Patches` on request), without going through a project or patch. Each row shows name, folder, length and the patches and projects that use the file; files nobody uses are marked "unused". Recordings (`RC000001.wav` and so on in project folders) carry a red dot.
+
+Filters: search over file, folder, project and patch names; place (a project, the Samples folder, user patches, factory patches); recordings only; unused only. Sort by folder, name or length.
+
+Per file: play, **Edit wave** (audio editor, with save as new file or overwrite), **Rename** (with every reference updated) and **Delete**. Delete is only possible for files nobody uses and never for factory samples; the file is copied to the local backup folder first, the `.wav.pk` is removed and a snapshot is taken before and after.
+
+## 6. Organization
 
 - patch list with filters, audition and waveform
 - tags for single patches or in bulk
