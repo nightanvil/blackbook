@@ -4,6 +4,24 @@ const TICKS = 960;
 const OFFSET_UNIT = 10;
 // Length of one step in quarter notes, by notesteplen index
 const STEP_QUARTERS = [32, 16, 8, 4, 2, 4 / 3, 1, 2 / 3, 0.5, 1 / 3, 0.25, 1 / 6, 0.125, 1 / 12, 0.0625, 1 / 24];
+// Length of the quant size in quarter notes, by quantsizeseq index
+const QUANT_QUARTERS = [8, 4, 2, 4 / 3, 1, 2 / 3, 0.5, 1 / 3, 0.25, 1 / 6, 0.125, 1 / 12, 0.0625];
+
+// The device starts and repeats a sequence on the quant boundary: a sequence shorter than a
+// multiple of the quant size waits until the next boundary
+function loopTiming(seq) {
+  const steps = gridSteps(seq);
+  const seqQuarters = steps * STEP_QUARTERS[seq.steplen];
+  const quant = QUANT_QUARTERS[seq.quant] ?? seqQuarters;
+  const loopQuarters = Math.ceil(seqQuarters / quant - 1e-9) * quant;
+  return { steps, seqQuarters, loopQuarters, waitQuarters: loopQuarters - seqQuarters };
+}
+
+function fmtQuarters(q) {
+  if (q >= 4 && Math.abs(q / 4 - Math.round(q / 4)) < 1e-9) return `${q / 4} bar${q / 4 === 1 ? "" : "s"}`;
+  const sixteenths = Math.round(q * 4 * 100) / 100;
+  return Number.isInteger(sixteenths) ? `${sixteenths}/16` : `${Math.round(q * 1000) / 1000} beats`;
+}
 
 const CELL_PITCH = 28; // grid column width plus gap in pixels
 const ROW_PITCH = 24;
@@ -559,7 +577,21 @@ function seqSettings(seq, editable) {
   tempoIn.addEventListener("change", () => { proj.tempo = Math.max(20, Math.min(300, Number(tempoIn.value) || 120)); });
   const playBtn = el("button", { class: "primary small seq-play" + (seqPlayer.playing ? " playing" : ""), disabled: !editable, onclick: () => seqPlayer.toggle() },
     seqPlayer.playing ? "■ Stop" : "▶ Play");
-  return el("div", { class: "seq-settings" },
+  const timing = seq ? loopTiming(seq) : null;
+  let warn = null;
+  if (timing && timing.waitQuarters > 1e-9) {
+    const fit = QUANT_QUARTERS.findIndex((q) => Math.abs(q - timing.seqQuarters) < 1e-9);
+    warn = el("p", { class: "seq-warn" },
+      `Quant ${proj.data.quant_sizes[seq.quant]} is longer than the sequence (${fmtQuarters(timing.seqQuarters)}): the device waits ${fmtQuarters(timing.waitQuarters)} before it repeats, and Play here does the same.`,
+      editable && fit >= 0 ? el("button", { class: "small", onclick: change((t) => { t.quant = fit; }) }, `Set Quant to ${proj.data.quant_sizes[fit]}`) : null);
+  }
+  const hidden = seq && seq.stepcount > 0 ? seq.events.filter((e) => e.step >= seq.stepcount).length : 0;
+  const hiddenNote = hidden
+    ? el("p", { class: "seq-warn muted-warn" },
+      `${hidden} ${hidden > 1 ? "notes lie" : "note lies"} beyond step ${seq.stepcount} and do not play.`,
+      editable ? el("button", { class: "small", onclick: () => removeHidden() }, "Remove them") : null)
+    : null;
+  return [el("div", { class: "seq-settings" },
     playBtn,
     el("label", { title: "Tempo for playback here; the project tempo on the device is not changed" }, "BPM ", tempoIn),
     metroButton(),
@@ -568,7 +600,11 @@ function seqSettings(seq, editable) {
     el("label", {}, "Steps ", countIn),
     el("label", { class: "check", title: "Open: the sequence grows while recording on the device" }, openBox, "Open"),
     el("label", {}, "Quant ", quantSel),
-    el("label", { class: "check", title: "Snap events to the step grid" }, snapBox, "Snap"));
+    el("label", { class: "check", title: "Snap events to the step grid" }, snapBox, "Snap")), warn, hiddenNote];
+}
+
+function removeHidden() {
+  editEvents((seq) => { seq.events = seq.events.filter((e) => seq.stepcount === 0 || e.step < seq.stepcount); });
 }
 
 function stepGrid(track, seq) {
@@ -840,6 +876,7 @@ function seqMenu(ev) {
       s.events = proj.seqClip.events.map((e) => ({ ...e, extra: { ...e.extra } }));
     }) },
     { label: "Clear sequence", run: () => editEvents((s) => { s.events = []; }) },
+    { label: "Remove notes beyond the last step", run: () => removeHidden() },
     "-",
     { label: `Humanize all pads (intensity ${seqPrefs().humanize ?? 5})`, run: () => editEvents((s, steps) => humanize(visible(s.events, steps), s, steps)) },
     { label: "Quantize: offsets to 0", run: () => editEvents((s, steps) => quantize(visible(s.events, steps))) },
@@ -1296,7 +1333,7 @@ const seqPlayer = {
     const horizon = ctx.currentTime + 0.12;
     const stepDur = this.stepSeconds(seq || { steplen: 10 });
     const steps = seq ? gridSteps(seq) : 16;
-    const loopDur = steps * stepDur;
+    const loopDur = seq ? (60 / proj.tempo) * loopTiming(seq).loopQuarters : steps * stepDur;
     const swingDelay = (proj.swing / 50 - 1) * stepDur;
     const pads = new Map(trackPads(track).filter((p) => p.source).map((p) => [p.slot, p]));
     const events = (seq ? seq.events : []).filter((e) => e.step < steps);
@@ -1343,8 +1380,10 @@ const seqPlayer = {
     const now = audioOut.context().currentTime;
     const loop = [...this.loops].reverse().find((l) => l.start <= now);
     if (!loop) { head.hidden = true; return; }
-    const step = Math.min(loop.steps - 1, Math.floor((now - loop.start) / loop.stepDur));
-    head.hidden = false;
+    const step = Math.floor((now - loop.start) / loop.stepDur);
+    // While the sequence waits for the quant boundary there is no step to show
+    head.hidden = step >= loop.steps;
+    if (head.hidden) return;
     head.style.gridColumn = String(step + 2);
   },
 

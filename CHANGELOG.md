@@ -19,6 +19,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 - Sequencer: the "Drag grid" for moving notes is remembered per project.
 - Sequencer: the offset of a note is shown as on the device, -47 to +47, instead of in ticks.
 - Sequencer: an LED per pad lights up in the track color when the pad plays. Click mutes the pad for listening, Ctrl+click solos it; nothing of it is saved.
+- Sequencer: playback repeats on the Quant Size boundary as the device does, and a hint warns when Quant is longer than the sequence (for example 2 bars for a 1 bar sequence, which plays a bar of silence), with a button for the fitting Quant. Notes beyond the last step are shown with a button to remove them, also in the ⋯ menu.
 - Euclidean generator per pad in the sequencer, opened with a small ring-of-dots icon.
 - Sequencer: paint notes by dragging, remove them by dragging with the right mouse button. Velocity lane under the grid. Row tools on right-click (shift, copy, paste, clear, humanize, quantize) and sequence tools in a menu (copy, paste, clear, humanize, quantize). Space plays and stops. Metronome for listening with its own volume. Humanize per pad with an intensity from 1 to 10.
 - Undo and redo for sequence, pad and MIDI changes in a project: buttons next to Discard, Ctrl+Z and Ctrl+Shift+Z, up to 100 steps. Each pad has its own settings; opening the generator changes nothing until a value is changed or Apply is clicked. Presets for common patterns: 4/4, Offbeat, Backbeat, 8ths, 16ths, Tresillo, Cinquillo, Bossa, 7 in 16, Clear.
