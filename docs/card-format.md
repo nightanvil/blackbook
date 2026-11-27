@@ -141,6 +141,50 @@ The device shows the pads in two rows of eight. Pad 1 is bottom left, numbering 
 
 Factory patches store the cells in the order 8, 0, 9, 1, ..., 15, 7.
 
+### Sequences
+
+Every track holds up to eight sequences, each a `noteseq` cell after the instrument cells. Its `<params>` describe the sequence, `<sequence>` holds the events (`<sequence/>` when empty). A cell may also contain `<automation>` with one `<lane idx="N" slide="0|1">` per automation lane; the lane content is hex-encoded binary data and not decoded yet. The parameters an automation lane drives appear as `<modsource src="seqN" .../>` in the instrument cell.
+
+| Attribute of `noteseq/params` | Meaning |
+|---|---|
+| `cellname` | name shown on the Launch screen, default `Seq 1` to `Seq 8` |
+| `celldisppos` | slot 0 to 7 |
+| `notesteplen` | Step Len, index into the list below |
+| `notestepcount` | Step Count 1 to 256, `0` is Open |
+| `quantsizeseq` | Quant Size, index into the list below |
+| `seqstepmode` | Snap: `1` on, `0` off |
+| `uiseqknobmode` | last selected tab: `0` Event, `1` Dynamics, `2` Seq (assumed `3` Auto) |
+| `seqslide` | automation Slide |
+| `notestepcountset` | unknown, kept as it is |
+
+Step Len (`notesteplen`): 0 = 8 bars, 1 = 4 bars, 2 = 2 bars, 3 = 1 bar, 4 = 1/2, 5 = 1/2T, 6 = 1/4, 7 = 1/4T, 8 = 1/8, 9 = 1/8T, 10 = 1/16 (default), 11 = 1/16T, 12 = 1/32, 13 = 1/32T, 14 = 1/64, 15 = 1/64T.
+
+Quant Size (`quantsizeseq`): 0 = 2 bars, 1 = 1 bar (default), 2 = 1/2, 3 = 1/2T, 4 = 1/4, 5 = 1/4T, 6 = 1/8, 7 = 1/8T, 8 = 1/16, 9 = 1/16T, 10 = 1/32, 11 = 1/32T, 12 = 1/64.
+
+Events:
+
+```xml
+<seqevent step="2" chan="8" type="note" strtks="1910" pitch="0" lencount="1" lentks="960" velocity="100" cond="50"/>
+```
+
+| Attribute | Meaning |
+|---|---|
+| `step` | step index from 0 |
+| `strtks` | start in ticks, 960 ticks per step whatever the Step Len; `strtks - step * 960` is the Offset in steps of 10 ticks (-47 to +47 on the device, -470 to +470 ticks) |
+| `chan` | one-shot: `celldisppos` of the pad; missing means 0 (pad 9) |
+| `pitch` | one-shot: `0`; pitched tracks: MIDI note |
+| `lencount`, `lentks` | length in steps and in ticks (960 per step); with Snap off `lencount="0"` and a free `lentks` |
+| `velocity` | 1 to 127; missing in events from the Pad Sequencer, treated as 100 |
+| `cond` | Prob in percent 1 to 99; missing means Always |
+
+The events are not sorted. The Step Sequencer and the Pad Sequencer edit the same events; the track attribute `uiSequencerType` stores which of the two opens.
+
+Sequences live in the project. Save Patch writes the track's sequences into `patch.xml` as well, but loading a patch onto an existing track with Change Patch keeps the sequences of the track and ignores those in the patch (manual p. 42, confirmed on the device). Whether loading a patch into an empty track slot takes over its sequences is not confirmed yet.
+
+### MIDI channels
+
+`midiinchan` and `midioutchan` in the track `<params>`: `0` is None, `1` to `16` the channel. `midiinport` and `midioutport` select the port. Projects store them per track. `patch.xml` also contains them; whether loading a patch applies its channels is not confirmed yet.
+
 ### Multisample patches
 
 Each WAV is a `samasst` cell with a key and velocity range:
