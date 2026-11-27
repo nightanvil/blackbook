@@ -539,23 +539,37 @@ function euclidPattern(hits, length, rotate) {
   return pattern;
 }
 
+// Last Euclid settings per track, sequence and pad, so every pad keeps its own
+const euclidMemory = new Map();
+
 function openEuclid(chan) {
+  // Another pad's open panel stays as it is; its notes only changed if a value was touched
+  if (proj.euclid) {
+    if (proj.euclid.chan === chan) { closeEuclid(true); return; }
+    proj.euclid = null;
+  }
   const seq = currentSeq(true);
   const existing = seq.events.filter((e) => e.chan === chan);
   const steps = gridSteps(seq);
+  const key = `${proj.name}:${proj.track}:${proj.slot}:${chan}`;
+  const remembered = euclidMemory.get(key);
   proj.euclid = {
+    key,
     chan,
-    hits: Math.max(1, Math.min(existing.length || 4, 16)),
-    length: Math.min(16, steps),
-    rotate: 0,
-    velocity: existing[0] ? (existing[0].velocity ?? 100) : 100,
+    hits: remembered ? remembered.hits : 4,
+    length: remembered ? Math.min(remembered.length, steps) : Math.min(16, steps),
+    rotate: remembered ? remembered.rotate : 0,
+    velocity: remembered ? remembered.velocity : (existing[0] ? (existing[0].velocity ?? 100) : 100),
+    touched: false,
     before: existing.map((e) => ({ ...e })),
   };
-  applyEuclid();
+  renderSequencer();
 }
 
 function applyEuclid() {
   const eu = proj.euclid;
+  eu.touched = true;
+  euclidMemory.set(eu.key, { hits: eu.hits, length: eu.length, rotate: eu.rotate, velocity: eu.velocity });
   const seq = currentSeq(true);
   const steps = gridSteps(seq);
   seq.events = seq.events.filter((e) => e.chan !== eu.chan);
@@ -602,7 +616,8 @@ function euclidPanel() {
     field("Length", "length", 1, Math.min(64, steps), "Steps of the pattern; it repeats over the whole sequence"),
     field("Rotate", "rotate", 0, eu.length - 1, "Shifts the pattern to the right"),
     field("Velocity", "velocity", 1, 127, "Velocity of the notes"),
-    el("span", { class: "eu-preview", title: "Pattern" }, pattern.map((on) => el("i", { class: on ? "on" : "" }))),
+    el("span", { class: "eu-preview" + (eu.touched ? "" : " pending"), title: eu.touched ? "Pattern" : "Preview, the pad's notes change as soon as you change a value" }, pattern.map((on) => el("i", { class: on ? "on" : "" }))),
+    eu.touched ? null : el("button", { class: "small", onclick: applyEuclid, title: "Write this pattern into the pad's row" }, "Apply"),
     el("button", { class: "small", onclick: () => closeEuclid(false), title: "Restore the notes this pad had before" }, "Cancel"),
     el("button", { class: "small primary", onclick: () => closeEuclid(true) }, "Done"));
 }

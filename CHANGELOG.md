@@ -12,9 +12,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 - Step sequencer for one-shot tracks in projects: one row per pad, one column per step, eight sequence slots. Velocity, probability, offset and length per note; name, step length, step count (or Open), quant size and snap per sequence. Play loops the sequence with the pad sounds. Save to card writes only the changed sequences into project.xml.
 - MIDI in and MIDI out channel per track in projects.
 - Project list with search, sorting (name, last change, tempo) and filters (track type, autosave copies, missing samples). Each project shows its tracks as color bars with type icons.
-- Pads tab in a project: edit the pads of a one-shot track right in the project with the pad editor and sample browser from Build.
+- Pads tab in a project: edit the pads of a one-shot track right in the project with the pad editor and sample browser from Build. The pads are drawn compact there.
 - Sequencer: drag notes sideways on a grid down to 10 ticks and up or down to another pad. With Snap off notes can sit up to half a step off the grid.
-- Euclidean generator per pad in the sequencer.
+- Euclidean generator per pad in the sequencer. Each pad has its own settings; opening the generator changes nothing until a value is changed or Apply is clicked.
 - Number fields can be changed by pressing and dragging up or down, with a vertical slider next to the field. Fields with few values move slower, so they do not jump.
 - Double click on a field sets its default, a second double click brings back the previous value: sequence settings, note values, Euclid and pad parameters.
 - Project cards show tempo, references and missing samples as icons in fixed columns.
