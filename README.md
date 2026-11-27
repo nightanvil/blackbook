@@ -17,7 +17,8 @@ blackbook is free and stays free. If it helps you, you can buy me a coffee on [K
 | Status | What |
 |---|---|
 | In progress | Audio editor for library and project samples |
-| Next | Slicer, loop, shredder, multisample loop points |
+| Next | One-shot step sequencer, MIDI channel per track, MIDI CC numbers shown on the controls |
+| Then | Slicer, loop, shredder, multisample loop points |
 | Later | External editor (Reaper), project tools (pack, clean, rename), sample organization, card and firmware tools |
 | Done | Library, tags, one-shot pad editor with all device settings, waveform and audio editor, multisample basics, backup, installer, updates, eject |
 
