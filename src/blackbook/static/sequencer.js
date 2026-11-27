@@ -29,6 +29,25 @@ const proj = {
   swing: 50,
 };
 
+// View settings per project in this browser, such as the grid for moving notes
+function projectPrefs(name) {
+  try {
+    return JSON.parse(localStorage.getItem("blackbook-projects") || "{}")[name] || {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function saveProjectPrefs(name, values) {
+  try {
+    const all = JSON.parse(localStorage.getItem("blackbook-projects") || "{}");
+    all[name] = { ...(all[name] || {}), ...values };
+    localStorage.setItem("blackbook-projects", JSON.stringify(all));
+  } catch (_) {
+    // Storage blocked or full: the setting lasts until the page is reloaded
+  }
+}
+
 // Pad slots in the order pad 1 to pad 16
 const PAD_SLOTS = [8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7];
 
@@ -213,9 +232,12 @@ async function showProject(name) {
     detail.replaceChildren(el("p", { class: "err" }, err.message));
     return;
   }
-  const keepTrack = proj.name === name ? proj.track : null;
+  const sameProject = proj.name === name;
+  const keepTrack = sameProject ? proj.track : null;
   Object.assign(proj, { name, data, dirty: false, selected: null, euclid: null, tempo: data.tempo, swing: data.swing });
-  if (proj.name !== name || !proj.tab) proj.tab = "seq";
+  if (!sameProject || !proj.tab) proj.tab = "seq";
+  const prefs = projectPrefs(name);
+  proj.nudge = Number.isInteger(prefs.nudge) && NUDGE[prefs.nudge] ? prefs.nudge : 0;
   const firstOneShot = data.tracks.findIndex((t) => t.type === "samtrack");
   proj.track = keepTrack != null && keepTrack < data.tracks.length ? keepTrack : Math.max(0, firstOneShot);
   const firstSeq = currentTrack() && currentTrack().sequences[0];
@@ -471,7 +493,10 @@ function stepGrid(track, seq) {
   const nudgeSel = el("select", { title: "Grid for dragging notes sideways" }, NUDGE.map((n, i) => el("option", { value: i }, n.label)));
   nudgeSel.value = String(proj.nudge);
   Object.assign(nudgeSel.dataset, { default: "0", resetKey: "seq:nudge" });
-  nudgeSel.addEventListener("change", () => { proj.nudge = Number(nudgeSel.value); });
+  nudgeSel.addEventListener("change", () => {
+    proj.nudge = Number(nudgeSel.value);
+    saveProjectPrefs(proj.name, { nudge: proj.nudge });
+  });
   const [low, high] = offsetLimits(seq);
   return el("div", {},
     el("div", { class: "seq-toolbar" },
@@ -727,9 +752,10 @@ const seqPlayer = {
   timer: 0,
   raf: 0,
   buffers: new Map(),
-  next: 0, // context time where the next loop starts
-  loops: [], // scheduled loops: { start, steps, stepDur }
-  queue: [], // events of the loop being scheduled, sorted by time
+  loopStart: 0,
+  until: 0,
+  loopPushed: false,
+  loops: [], // started loops for the playhead: { start, steps, stepDur }
   voices: [],
 
   async buffer(pad) {
@@ -796,43 +822,55 @@ const seqPlayer = {
   },
 
   restart() {
-    this.next = audioOut.context().currentTime + 0.08;
+    const start = audioOut.context().currentTime + 0.08;
+    this.loopStart = start; // start of the loop being scheduled
+    this.until = start; // everything before this time is scheduled
     this.loops = [];
-    this.queue = [];
+    this.loopPushed = false;
   },
 
+  // Schedules only the next fraction of a second from the current notes, so an edit ahead of the
+  // playhead is heard in the same pass
   schedule() {
     const seq = currentSeq();
     const track = currentTrack();
     if (!this.playing || !track) return;
     const ctx = audioOut.context();
-    const horizon = ctx.currentTime + 0.15;
-    const stepDur = seq ? this.stepSeconds(seq) : this.stepSeconds({ steplen: 10 });
+    const horizon = ctx.currentTime + 0.12;
+    const stepDur = this.stepSeconds(seq || { steplen: 10 });
     const steps = seq ? gridSteps(seq) : 16;
     const loopDur = steps * stepDur;
     const swingDelay = (proj.swing / 50 - 1) * stepDur;
     const pads = new Map(trackPads(track).filter((p) => p.source).map((p) => [p.slot, p]));
-    while (true) {
-      if (!this.queue.length) {
-        const loopStart = this.next;
-        if (loopStart > horizon) break;
-        this.next = loopStart + loopDur;
-        this.loops.push({ start: loopStart, steps, stepDur });
+    const events = (seq ? seq.events : []).filter((e) => e.step < steps);
+    while (this.until < horizon) {
+      if (!this.loopPushed) {
+        this.loops.push({ start: this.loopStart, steps, stepDur });
         if (this.loops.length > 4) this.loops.shift();
-        this.queue = (seq ? seq.events : [])
-          .filter((e) => e.step < steps)
-          .map((e) => ({ e, t: loopStart + (e.strtks / TICKS) * stepDur + (e.step % 2 ? swingDelay : 0) }))
-          .sort((a, b) => a.t - b.t);
-        if (!this.queue.length) continue;
+        this.loopPushed = true;
       }
-      if (this.queue[0].t > horizon) break;
-      const { e, t } = this.queue.shift();
-      const pad = pads.get(e.chan);
-      if (!pad || Math.random() * 100 >= e.prob) continue;
-      const key = `${pad.source}|${pad.start}|${pad.length}|${pad.params.reverse ? 1 : 0}`;
-      const buffer = this.buffers.get(key);
-      if (buffer) this.voice(pad, buffer, e.velocity ?? 100, Math.max(t, ctx.currentTime));
+      const loopEnd = this.loopStart + loopDur;
+      if (loopEnd > this.until) {
+        const windowEnd = Math.min(horizon, loopEnd);
+        for (const e of events) {
+          const t = this.loopStart + (e.strtks / TICKS) * stepDur + (e.step % 2 ? swingDelay : 0);
+          if (t < this.until || t >= windowEnd) continue;
+          const pad = pads.get(e.chan);
+          if (!pad || Math.random() * 100 >= e.prob) continue;
+          const buffer = this.buffers.get(`${pad.source}|${pad.start}|${pad.length}|${pad.params.reverse ? 1 : 0}`);
+          if (buffer) this.voice(pad, buffer, e.velocity ?? 100, Math.max(t, ctx.currentTime));
+          else this.buffer(pad).catch(() => {}); // a pad changed while playing is loaded for the next pass
+        }
+        this.until = windowEnd;
+      }
+      if (this.until >= loopEnd) {
+        this.loopStart = loopEnd;
+        this.loopPushed = false;
+      }
     }
+    // The current loop follows changes of step length and step count for the playhead
+    const current = this.loops[this.loops.length - 1];
+    if (current) Object.assign(current, { steps, stepDur });
   },
 
   drawHead() {
@@ -852,7 +890,6 @@ const seqPlayer = {
     cancelAnimationFrame(this.raf);
     for (const v of this.voices) { try { v.node.stop(); } catch (_) { /* ended */ } }
     this.voices = [];
-    this.queue = [];
     const head = document.getElementById("seq-playhead");
     if (head) head.hidden = true;
   },
