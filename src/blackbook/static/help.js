@@ -6,98 +6,19 @@
 (function (root) {
   "use strict";
 
-  const todo = '<p class="placeholder">This section is still being written.</p>';
-
   const repo = "https://github.com/nightanvil/blackbook";
   const kofi = "https://ko-fi.com/nightanvil";
 
   const sections = [
-    {
-      id: "start", title: "Getting started",
-      html: `
-<p class="note"><b>This is a very, very, very early version.</b> Expect rough edges and missing pieces. Please try it, and tell me what you would like blackbook to do: every idea and every bug report helps. <a href="${repo}/issues" target="_blank" rel="noopener noreferrer">Ideas and feedback</a></p>
-<p><b>blackbook</b> organizes the microSD card of the 1010music <b>blackbox 2</b>: browse and tag patches, build one-shot and multisample patches, edit your own patches and keep a versioned backup of the card.</p>
-<p>blackbook runs on your computer. The page you see is served by the small program in the terminal window, nothing is uploaded anywhere. Keep that window open while you work.</p>
-<p>At the top right, the <b>round arrow</b> restarts blackbook and the <b>power button</b> stops it. Both work also when there is no terminal window. After a restart the page reloads by itself; after a stop, start blackbook again the same way as before. <b>PID</b> at the top left is the process id of blackbook, for the task manager. When the version at the top left turns red ("restart needed"), click it to restart.</p>
-<h3>What you need</h3>
-<ul>
-  <li>The blackbox 2 connected over USB and switched to <b>microSD mode</b>, or its card in a card reader. blackbook finds the card by itself.</li>
-  <li>For the backup: <b>git</b>. The start script takes care of it, see "What is git".</li>
-</ul>
-<h3>Before the first save</h3>
-<p>On the first start a welcome window offers to set up the backup: <b>Set up backup</b> uses <code>blackbook-backup</code> in your documents folder, <b>Choose folder</b> lets you pick another place. The first snapshot copies the whole card and can take several minutes. From then on blackbook saves a snapshot before and after every write, and every time the card is connected. If you skip it, a bar at the top reminds you.</p>
-<h3>Updates</h3>
-<p>When blackbook starts, it checks GitHub for a newer version. If there is one, a bar at the top offers <b>Update now</b>. After the update blackbook stops, start it again as usual. Settings, backup and card stay untouched.</p>
-${todo}`,
-    },
+    { id: "start", title: "Getting started", html: `<p class="note"><b>Very early version.</b> Expect rough edges. Ideas and bug reports help: <a href="${repo}/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a></p><p>blackbook organizes the microSD card of the 1010music <b>blackbox 2</b>. It runs on your computer and nothing is uploaded. Keep the terminal window open while you work.</p><h3>You need</h3><ul><li>The blackbox in <b>microSD mode</b> over USB, or the card in a card reader. blackbook finds it by itself.</li><li><b>git</b> for the backup. The start script takes care of it.</li></ul><h3>First start</h3><p><b>Set up backup</b> in the welcome window. The first snapshot copies the whole card and takes a few minutes. After that blackbook saves a snapshot before and after every write.</p><h3>Top bar</h3><table class="help-keys"><tr><td>Round arrow, top right</td><td>Restart blackbook. The page reloads by itself.</td></tr><tr><td>Power button</td><td>Stop blackbook. Start it again as before.</td></tr><tr><td>Card icon</td><td>Green: card connected. Red: no card. Grey: ejected.</td></tr><tr><td>Eject icon</td><td>Write everything to the card and eject it. Do this before you unplug.</td></tr><tr><td>Loop, volume</td><td>Repeat and volume for all playback.</td></tr><tr><td><kbd>Esc</kbd></td><td>Stop playback.</td></tr><tr><td><kbd>F1</kbd></td><td>This help.</td></tr><tr><td>Version, top left</td><td>Red "restart needed": click to restart. PID: process id of blackbook.</td></tr></table><h3>Updates</h3><p>A bar at the top offers <b>Update now</b> when a new version is out. Settings, backup and card stay as they are.</p>` },
     { id: "projects", title: "Projects", html: `<p>Projects on the card are on the left; search, sort and filter above the list. Click a project for its tracks, sequences, pads and samples. Nothing reaches the card before <b>Save to card</b>.</p><h3>Tracks</h3><p>As on the Tracks screen of the blackbox. Click a card to select the track. <b>Config</b>: MIDI In and MIDI Out.</p><h3>Sequences</h3><table class="help-keys"><tr><td><span class="hk-led"></span></td><td>Lights up when the pad plays. Click: mute while listening. Ctrl+click: solo.</td></tr><tr><td><span class="hk-icon"><svg viewBox="0 0 14 14" width="14" height="14"><circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-opacity=".45" stroke-width="1.2"/><circle cx="7" cy="2.4" r="1.7" fill="currentColor"/><circle cx="11" cy="9.3" r="1.7" fill="currentColor"/><circle cx="3" cy="9.3" r="1.7" fill="currentColor"/></svg></span></td><td>Euclidean pattern for this pad, with presets.</td></tr><tr><td><span class="hk-icon"><svg viewBox="0 0 14 14" width="14" height="14"><path d="M1.5 9.5c1.5-4 3-4 4.5 0s3 4 4.5 0 2-3 2-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span></td><td>Humanize this pad: vary velocity and timing, intensity 1 to 10.</td></tr><tr><td>Click or drag on empty cells</td><td>Add notes.</td></tr><tr><td>Right mouse button, drag</td><td>Remove notes.</td></tr><tr><td>Click a note, drag a note</td><td>Select it (velocity, prob, offset, length below), move it. <i>Drag grid</i> sets how far it jumps.</td></tr><tr><td>Right-click a pad name</td><td>Row tools: shift, copy, paste, clear, humanize, quantize.</td></tr><tr><td><kbd>⋯</kbd></td><td>Sequence tools: copy, paste, clear, humanize, quantize.</td></tr><tr><td>Velocity lane</td><td>Bars under the grid for the selected pad. Drag to draw velocities.</td></tr><tr><td><span class="hk-icon"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"><path d="M5.5 2h5l2.5 12H3z"/><path d="M8 11l3.5-7"/><path d="M5 11h6"/></svg></span> and slider</td><td>Metronome while listening, and its volume.</td></tr><tr><td><kbd>Space</kbd></td><td>Play and stop.</td></tr><tr><td><kbd>Ctrl+Z</kbd> <kbd>Ctrl+Shift+Z</kbd>, ↶ ↷</td><td>Undo and redo, also for pads.</td></tr><tr><td>Double click a field</td><td>Default value, double click again for the previous one.</td></tr><tr><td>Drag up or down on a number</td><td>Change it, with <kbd>Shift</kbd> finer.</td></tr></table><p><b>Quant</b> is the launch quantization of the device, it does not move notes. <b>Offset</b> runs from -47 to +47 as on the device. BPM is for listening here only. Filter, envelope and effects are heard on the device only.</p><h3>Pads</h3><p>The pad editor from Build for this track. Drag WAVs onto pads. Samples from the inbox or a library are copied into the project folder; the patch in Patches stays as it is.</p><h3>Samples</h3><p>All samples of the project. <b>Edit</b> opens the audio editor: save as a new file, or overwrite the original with every patch and project adjusted.</p>` },
-    {
-      id: "library", title: "Patches",
-      html: `
-<p>All patches on the card: the factory patches from 1010music and your own user patches.</p>
-<ul>
-  <li><b>Search</b> finds patches by name or tag.</li>
-  <li><b>Source</b> shows only user patches (the default), only factory patches or all.</li>
-  <li><b>Type</b> filters by One-shot, Multisample, Loop, Slicer or Shredder.</li>
-  <li><b>Tags</b> on the left: click one or more to show only patches with all of them.</li>
-</ul>
-<p>Click a patch to see its samples. <b>Play preview</b> plays the patch's <code>preview.wav</code>, the play button next to a sample plays that sample. <code>Esc</code> or the Stop button at the top stops playback.</p>
-<p>For your own patches you can change the tags and save them. One-shot and multisample patches can be opened in the builder: <b>Edit in builder</b> changes the patch itself, <b>Use as template</b> starts a new patch from it. Factory patches can only be used as templates.</p><p><b>Edit</b> next to a sample opens the audio editor for the file on the card. <b>Save as new file</b> writes the result next to the original (factory samples go to Samples/Edited). <b>Overwrite original</b> replaces the file and first lists every patch and project that uses it; blackbook moves start, length, loop and slice positions with the edit. Factory samples are never overwritten.</p>`,
-    },
-    { id: "build", title: "Build", html: `<p>One-shot kits on 16 pads and multisample instruments, new or based on an existing patch.</p>
-<h3>One-shot pads</h3>
-<p>Click a pad to select and hear it. Drag a pad onto another to move it; a filled pad swaps places. <b>Copy</b>, <b>Paste</b> and <b>Clear</b> work as on the device (Ctrl+C, Ctrl+V, Ctrl+X); Clear keeps the pad in the clipboard, so Paste brings it back. The pad editor below the grid has the same tabs as the pad dashboard on the device:</p>
-<ul>
-  <li><b>Sound:</b> level, pitch, filter, resonance, pan, overdrive, delay and reverb send.</li>
-  <li><b>Setup:</b> reverse, launch (trigger, gate, toggle), polyphony, choke group, interpolation.</li>
-  <li><b>Env/LFO:</b> attack, decay, sustain, release, velocity, LFO shape, depth, rate, beat sync and restart.</li>
-  <li><b>WAV:</b> start and length of the part of the sample the pad plays.</li>
-</ul>
-<p>In the <b>WAV</b> tab the waveform shows the part the pad plays: drag the white lines. <b>Edit audio</b> opens the editor: select with the mouse, then trim, delete, silence, fade, reverse, change the gain or normalize. Undo and redo with Ctrl+Z and Ctrl+Shift+Z, Space plays. With <b>Snap to zero</b> every edge lands on a zero crossing, so the sample starts and ends without a click. <b>Use edited sample</b> puts the result on the pad as a new file; the original stays untouched, saving the patch copies the new file into the patch folder.</p>
-<p>Clicking a pad plays it with its level, pitch, pan, reverse, start and length. Filter, resonance, overdrive, envelope, LFO, delay and reverb are not reproduced on the computer, you hear them on the device. The Env/LFO tab draws the envelope (times from the device manual, curve shape approximated) and the LFO shape.</p>
-<p>The loop switch and the volume slider in the header apply to all playback. In the sample browser every row has a play button; switch off <b>Preview</b> if clicking a row should not play it.</p>
-<p>Drag a slider or type a value. A double click on a slider sets the value of a new pad.</p>
-${todo}` },
-    { id: "backup", title: "Backup", html: `<p>Snapshots of the card in a backup folder, with history, diff and restore.</p><p>Restoring a single WAV brings back only that file. blackbook lists the patches and projects that use it and warns when its length no longer fits; restore the whole patch or project folder to keep everything consistent.</p><p>Only one running blackbook may use a backup folder. If the folder is shared between computers through sync, close blackbook on one computer before you start it on the other.</p><p><b>The backup folder must be outside the blackbook folder.</b> An update or a new installation can delete the blackbook folder, and a backup inside it would be lost. blackbook does not accept such a folder.</p>${todo}` },
-    {
-      id: "git", title: "What is git",
-      html: `
-<p>git is a free program that keeps every version of a set of files. blackbook uses it as a <b>time machine for your card</b>:</p>
-<ul>
-  <li>A <b>snapshot</b> stores the state of the card at one moment: when you connect the card, before blackbook writes and after it has written.</li>
-  <li>In <b>Backup</b> you see all snapshots and what changed, and you can bring back a file, a folder or the whole card.</li>
-  <li>Unchanged files are stored only once. The snapshots stay in a folder on your computer, nothing is uploaded.</li>
-</ul>
-<p>You never use git yourself. On Windows blackbook brings its own copy, on macOS and Linux the start script offers to install it. <b>Without git</b> blackbook works the same, only Backup is switched off. Then copy the whole card to your computer yourself before you write to it.</p>
-<h3>Install git yourself</h3>
-<ul>
-  <li><b>Windows:</b> in PowerShell <code>winget install --id Git.Git -e --source winget</code>, or the installer from <a href="https://git-scm.com/downloads/win" target="_blank" rel="noopener noreferrer">git-scm.com</a> (click Next on every page).</li>
-  <li><b>macOS:</b> in Terminal <code>xcode-select --install</code>.</li>
-  <li><b>Linux:</b> <code>sudo apt install git</code> (Ubuntu, Debian, Mint), <code>sudo dnf install git</code> (Fedora), <code>sudo pacman -S git</code> (Arch, CachyOS), <code>sudo zypper install git</code> (openSUSE).</li>
-</ul>
-<p>Then close blackbook (the terminal window) and start it again.</p>`,
-    },
-    {
-      id: "card", title: "Card and microSD mode",
-      html: `
-<p>While the blackbox is in microSD mode, the computer sees the card like a USB stick and the blackbox itself cannot be used. Leave microSD mode to play, switch back to work with blackbook. blackbook notices both and shows the state at the top right: the card icon is green when the card is connected, red when it is not, grey after Eject.</p>
-<p>Before you unplug the blackbox or leave microSD mode, click the <b>eject icon</b> (triangle over a line) at the top right. blackbook writes everything to the card and ejects it through the operating system. If another program still uses the card, for example a file manager window that shows a folder on the card, blackbook says so: close it and click Eject again. When you connect the card again, blackbook finds it by itself.</p>
-${todo}`,
-    },
-    {
-      id: "about", title: "About",
-      html: `
-<p>blackbook is an unofficial hobby project, <b>not affiliated with 1010music</b>. The card format was worked out by looking at the files the blackbox writes. A firmware update can change it. Use blackbook at your own risk and keep backups of your card.</p>
-<p>blackbook was built together with Claude (Anthropic) as a coding assistant.</p>
-<p>1010music and blackbox are trademarks of 1010music LLC, used here only to describe compatibility.</p>
-<p>License: MIT, without any warranty. Source code: <a href="${repo}" target="_blank" rel="noopener noreferrer">GitHub</a>.</p>`,
-    },
-    {
-      id: "support", title: "Feedback and support",
-      html: `
-<p>Questions, ideas, bug reports: <a href="${repo}/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a>. Please describe what you did, what you expected and what happened instead, and which system you use (Linux, Windows, macOS).</p>
-<p>blackbook is free and stays free. If it helps you, you can buy me a coffee on <a href="${kofi}" target="_blank" rel="noopener noreferrer">Ko-fi</a>.</p>`,
-    },
+    { id: "library", title: "Patches", html: `<p>All patches on the card: factory patches from 1010music and your user patches.</p><table class="help-keys"><tr><td>Search</td><td>Name or tag.</td></tr><tr><td>Source, Type</td><td>User, factory or all; One-shot, Multisample, Loop, Slicer, Shredder.</td></tr><tr><td>Tags, left</td><td>Click one or more to show only patches with all of them.</td></tr><tr><td>▶ next to a sample</td><td>Play it. <b>Preview</b> plays the patch's preview.wav.</td></tr><tr><td>Save tags</td><td>Change the tags of your own patches.</td></tr><tr><td>Edit in builder</td><td>Change your own patch in Build.</td></tr><tr><td>Use as template</td><td>Start a new patch from any patch.</td></tr><tr><td>Edit next to a sample</td><td>Audio editor. <b>Save as new file</b> next to the original (factory samples go to Samples/Edited) or <b>Overwrite original</b> with every patch and project adjusted. Factory samples are never overwritten.</td></tr></table>` },
+    { id: "build", title: "Build", html: `<p>One-shot kits on 16 pads and multisample instruments, new or from an existing patch. Drag WAVs from the sample browser onto pads or the zone list.</p><h3>Pads</h3><table class="help-keys"><tr><td>Click a pad</td><td>Select and hear it.</td></tr><tr><td>Drag a pad onto another</td><td>Move it; a filled pad swaps places.</td></tr><tr><td>Copy, Paste, Clear</td><td><kbd>Ctrl+C</kbd> <kbd>Ctrl+V</kbd> <kbd>Ctrl+X</kbd>. Clear keeps the pad in the clipboard.</td></tr><tr><td>Sound, Setup, Env/LFO, WAV</td><td>The tabs of the pad dashboard on the device.</td></tr><tr><td>WAV tab, white lines</td><td>Part of the sample the pad plays.</td></tr><tr><td>Edit audio</td><td>Audio editor for the pad's sample.</td></tr><tr><td>Double click a field</td><td>Default value, again for the previous one.</td></tr><tr><td>Drag up or down on a number</td><td>Change it, with <kbd>Shift</kbd> finer.</td></tr><tr><td>Preview, sample browser</td><td>Off: a click on a row does not play it.</td></tr></table><h3>Audio editor</h3><table class="help-keys"><tr><td>Drag</td><td>Select. <kbd>Shift</kbd>+click extends, double click clears.</td></tr><tr><td>Wheel, <kbd>Shift</kbd>+wheel</td><td>Zoom, scroll.</td></tr><tr><td><kbd>Space</kbd></td><td>Play the selection or from the cursor.</td></tr><tr><td><kbd>Del</kbd></td><td>Delete the selection.</td></tr><tr><td><kbd>Ctrl+Z</kbd> <kbd>Ctrl+Shift+Z</kbd></td><td>Undo, redo.</td></tr><tr><td>Snap to zero</td><td>Edges land on zero crossings, no clicks.</td></tr><tr><td>Use edited sample</td><td>Puts the result on the pad as a new file. The original stays.</td></tr></table><p>Playback on the computer covers level, pitch, pan, reverse, start and length. Filter, envelope, LFO and effects are heard on the device only.</p>` },
+    { id: "backup", title: "Backup", html: `<p>Snapshots of the card in a backup folder: history, diff and restore.</p><table class="help-keys"><tr><td>History</td><td>Every snapshot with what changed. Click one for the diff.</td></tr><tr><td>Restore</td><td>A file, a folder or the whole card. A single WAV comes back alone; blackbook lists who uses it.</td></tr><tr><td>Events</td><td>What happened since the start, collapsed and filterable.</td></tr></table><p><b>The backup folder must be outside the blackbook folder</b>, an update can delete that folder. Only one running blackbook may use a backup folder at a time.</p>` },
+    { id: "git", title: "What is git", html: `<p>git keeps every version of a set of files. blackbook uses it as a time machine for your card: snapshots, diff, restore. Unchanged files are stored once, everything stays on your computer. You never use git yourself.</p><p>Without git blackbook works the same, only Backup is off. Then copy the card yourself before writing.</p><h3>Install git</h3><table class="help-keys"><tr><td>Windows</td><td><code>winget install --id Git.Git -e --source winget</code> or <a href="https://git-scm.com/downloads/win" target="_blank" rel="noopener noreferrer">git-scm.com</a></td></tr><tr><td>macOS</td><td><code>xcode-select --install</code></td></tr><tr><td>Ubuntu, Debian, Mint</td><td><code>sudo apt install git</code></td></tr><tr><td>Fedora</td><td><code>sudo dnf install git</code></td></tr><tr><td>Arch, CachyOS</td><td><code>sudo pacman -S git</code></td></tr><tr><td>openSUSE</td><td><code>sudo zypper install git</code></td></tr></table><p>Then restart blackbook.</p>` },
+    { id: "card", title: "Card and microSD mode", html: `<p>In microSD mode the computer sees the card like a USB stick and the blackbox cannot play. Leave microSD mode to play, switch back to work with blackbook; it notices both.</p><p>Click <b>Eject</b> at the top right before you unplug or leave microSD mode. If another program still uses the card, blackbook says so: close it and eject again.</p>` },
+    { id: "about", title: "About", html: `<p>Unofficial hobby project, <b>not affiliated with 1010music</b>. The card format was worked out from the files the blackbox writes; a firmware update can change it. Keep backups.</p><p>Built together with Claude (Anthropic) as a coding assistant. 1010music and blackbox are trademarks of 1010music LLC, used only to describe compatibility.</p><p>MIT license, without warranty. <a href="${repo}" target="_blank" rel="noopener noreferrer">Source on GitHub</a>.</p>` },
+    { id: "support", title: "Feedback and support", html: `<p>Questions, ideas, bugs: <a href="${repo}/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a>. Say what you did, what you expected, what happened, and your system.</p><p>blackbook is free. If it helps you: <a href="${kofi}" target="_blank" rel="noopener noreferrer">Ko-fi</a>.</p>` },
   ];
 
   root.BlackbookHelp = { sections };

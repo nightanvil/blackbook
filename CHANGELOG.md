@@ -41,7 +41,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ### Documentation
 
-- Help: the Projects section is a short table of the controls with their icons and keys.
+- Help: every section is short; controls, keys and icons are listed in tables instead of running text. No more placeholder sections.
 - Card format: encoding of sequences, events and MIDI channels as measured on the device.
 
 ## [0.2.0] - 2026-11-26
