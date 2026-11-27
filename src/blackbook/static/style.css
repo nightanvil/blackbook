@@ -677,3 +677,12 @@ input[type="number"]:focus { cursor: text; }
 .use-pill.project { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
 .use-pill.unused { color: var(--muted); border-style: dashed; background: transparent; }
 .rec-dot { width: 8px; height: 8px; border-radius: 50%; background: #e5615b; display: inline-block; }
+/* Samples tab: folder tree */
+.smp-tree { display: flex; flex-direction: column; font-size: 12px; margin: 0 -12px; overflow: auto; }
+.tree-row { display: flex; align-items: center; gap: 4px; padding: 3px 10px 3px 6px; cursor: pointer; white-space: nowrap; }
+.tree-row:hover { background: var(--panel-2); }
+.tree-row.selected { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--accent); }
+.tree-toggle { width: 12px; flex: none; color: var(--muted); text-align: center; }
+.tree-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.tree-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+#view-samples .filters { width: 280px; }

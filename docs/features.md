@@ -212,7 +212,7 @@ Double click on a field with a default (sequence settings, note values, Euclid, 
 
 ### Playback
 
-Play runs the sequence of a one-shot track in a loop through Web Audio. It schedules only the next 120 milliseconds from the current notes, so a note added or moved ahead of the playhead is heard in the same pass. It follows Step Len, Step Count, velocity, probability, offset and the pad's level, pitch, pan, reverse, start and length. Choke groups cut the other pads of the group. Like the device, a sequence repeats on the Quant Size boundary: a 1 bar sequence with Quant 2 bars plays one bar and waits one bar. The sequence settings warn about that and offer the fitting Quant; they also show notes beyond the last step (left over from a longer step count), which do not play, with a button to remove them. Swing delays every second step by (swing / 50 - 1) steps, an approximation of the device. The tempo field sets the tempo for playback only; the project tempo on the device does not change. Filter, envelope, LFO, effects and automation are not played.
+Samples everywhere in blackbook play from memory: the whole file is loaded and decoded first, so a slow card cannot cause dropouts while it plays. Play runs the sequence of a one-shot track in a loop through Web Audio. It schedules only the next 120 milliseconds from the current notes, so a note added or moved ahead of the playhead is heard in the same pass. It follows Step Len, Step Count, velocity, probability, offset and the pad's level, pitch, pan, reverse, start and length. Choke groups cut the other pads of the group. Like the device, a sequence repeats on the Quant Size boundary: a 1 bar sequence with Quant 2 bars plays one bar and waits one bar. The sequence settings warn about that and offer the fitting Quant; they also show notes beyond the last step (left over from a longer step count), which do not play, with a button to remove them. Swing delays every second step by (swing / 50 - 1) steps, an approximation of the device. The tempo field sets the tempo for playback only; the project tempo on the device does not change. Filter, envelope, LFO, effects and automation are not played.
 
 ### Saving
 
@@ -222,9 +222,9 @@ Sequences are stored in the project. The device ignores sequences in a `patch.xm
 
 ## 5. Samples
 
-The Samples tab lists every WAV in `Projects`, `UserPatches` and `Samples` (factory samples in `Patches` on request), without going through a project or patch. Each row shows name, folder, length and the patches and projects that use the file; files nobody uses are marked "unused". Recordings (`RC000001.wav` and so on in project folders) carry a red dot.
+The Samples tab lists every WAV in `Projects`, `UserPatches` and `Samples`. A folder tree on the left (with the number of samples below each folder) limits the list to a folder and its subfolders; "All samples" shows everything. The tab lists every WAV (factory samples in `Patches` on request), without going through a project or patch. Each row shows name, folder, length and the patches and projects that use the file; files nobody uses are marked "unused". Recordings (`RC000001.wav` and so on in project folders) carry a red dot.
 
-Filters: search over file, folder, project and patch names; place (a project, the Samples folder, user patches, factory patches); recordings only; unused only. Sort by folder, name or length.
+Filters: search over file, folder, project and patch names; used by a project; recordings only; unused only. Sort by folder, name or length.
 
 Per file: play, **Edit wave** (audio editor, with save as new file or overwrite), **Rename** (with every reference updated) and **Delete**. Delete is only possible for files nobody uses and never for factory samples; the file is copied to the local backup folder first, the `.wav.pk` is removed and a snapshot is taken before and after.
 

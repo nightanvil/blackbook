@@ -5,9 +5,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ## [Unreleased]
 
+### Fixed
+
+- Samples play from memory: the whole file is loaded before playback, so crackles from a slow card read during playback are gone.
+
 ### Added
 
-- Samples tab: every WAV on the card with the patches and projects that use it. Filters for recordings and unused files, search, place and sort. Play, Edit wave, Rename and Delete (unused files only) right there.
+- Samples tab: every WAV on the card with the patches and projects that use it, with a folder tree on the left. Filters for recordings and unused files, search, place and sort. Play, Edit wave, Rename and Delete (unused files only) right there.
 - Projects: Change patch on a track card loads another patch into the track, as on the device; + Add patch fills an empty track slot. Patch chooser with search, type filter and preview. Sequences (same track type), MIDI channels and routing of the track stay.
 
 ## [0.3.0] - 2026-11-27

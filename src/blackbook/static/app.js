@@ -187,8 +187,14 @@ function setPlaying(source) {
 }
 
 // Elements with data-src show a stop state while their source plays
+// Samples play from memory through Web Audio: the whole file is loaded first, so a slow card or
+// network during playback cannot cause dropouts. The audio element stays as a fallback.
+const samplePlayer = { node: null, source: null, cache: new Map(), token: 0 };
+
+function samplePlaying() { return !!samplePlayer.node || !player.paused; }
+
 function markPlaying() {
-  const active = state.playing && !player.paused ? state.playing : null;
+  const active = state.playing && samplePlaying() ? state.playing : null;
   document.querySelectorAll("[data-src]").forEach((node) => node.classList.toggle("playing", node.dataset.src === active));
 }
 
@@ -231,6 +237,7 @@ function setupAudioControls() {
   loop.addEventListener("click", () => {
     audioOut.loop = !audioOut.loop;
     player.loop = audioOut.loop;
+    if (samplePlayer.node) samplePlayer.node.loop = audioOut.loop;
     loop.classList.toggle("on", audioOut.loop);
     // Running Web Audio playback follows the switch
     if (padPreview.node) padPreview.node.loop = audioOut.loop;
@@ -241,25 +248,62 @@ function setupAudioControls() {
 }
 
 function stop() {
+  samplePlayer.token += 1;
+  if (samplePlayer.node) { try { samplePlayer.node.stop(); } catch (_) { /* ended */ } samplePlayer.node = null; }
   player.pause();
   player.currentTime = 0;
   setPlaying(null);
 }
 
+async function sampleBuffer(source) {
+  if (samplePlayer.cache.has(source)) return samplePlayer.cache.get(source);
+  const response = await fetch("/api/audio?src=" + encodeURIComponent(source));
+  if (!response.ok) throw new Error(response.statusText);
+  const buffer = await audioOut.context().decodeAudioData(await response.arrayBuffer());
+  samplePlayer.cache.set(source, buffer);
+  // A few recent files stay decoded; long recordings take memory
+  while (samplePlayer.cache.size > 8) samplePlayer.cache.delete(samplePlayer.cache.keys().next().value);
+  return buffer;
+}
+
 // Clicking the same sample again stops it
-function play(source) {
+async function play(source) {
   if (!source) return;
-  if (state.playing === source && !player.paused) {
+  if (state.playing === source && samplePlaying()) {
     stop();
     return;
   }
-  player.src = "/api/audio?src=" + encodeURIComponent(source);
+  stop();
+  const token = samplePlayer.token;
   setPlaying(source);
-  player.play().catch((err) => {
+  let buffer;
+  try {
+    buffer = await sampleBuffer(source);
+  } catch (_) {
+    // Fallback: formats the browser cannot decode in memory still play through the audio element
+    if (token !== samplePlayer.token) return;
+    player.src = "/api/audio?src=" + encodeURIComponent(source);
+    player.play().catch((err) => { setPlaying(null); toast("Playback failed: " + err.message, true); });
+    return;
+  }
+  if (token !== samplePlayer.token) return; // stopped or another sample started while loading
+  const node = audioOut.context().createBufferSource();
+  node.buffer = buffer;
+  node.loop = audioOut.loop;
+  node.connect(audioOut.master);
+  node.onended = () => {
+    if (samplePlayer.node !== node) return;
+    samplePlayer.node = null;
     setPlaying(null);
-    toast("Playback failed: " + err.message, true);
-  });
+  };
+  samplePlayer.node = node;
+  samplePlayer.source = source;
+  node.start();
+  markPlaying();
 }
+
+// A file that changed on the card is decoded again the next time it plays
+function forgetSample(source) { samplePlayer.cache.delete(source); }
 
 player.addEventListener("ended", () => setPlaying(null));
 player.addEventListener("pause", markPlaying);
@@ -970,6 +1014,7 @@ function replaceSource(oldSource, newSource, newName) {
   }
   if (typeof proj !== "undefined" && proj.padsOpen) Object.values(proj.padsOpen.pads || {}).forEach(fix);
   if (pcmCache.has(oldSource)) { pcmCache.set(newSource, pcmCache.get(oldSource)); pcmCache.delete(oldSource); }
+  forgetSample(oldSource);
 }
 
 // After "Save as new file": offer to use the new file wherever the original is used
@@ -1182,7 +1227,7 @@ async function openAudioEditor(source, target) {
         ? `Saved as ${result.path}`
         : `${result.name} overwritten${result.adjusted.length ? `, ${result.adjusted.length} file(s) adjusted` : ""}`);
       // The browser must not play the old audio of a file that was just overwritten
-      if (mode === "overwrite") pcmCache.delete(original);
+      if (mode === "overwrite") { pcmCache.delete(original); forgetSample(original); }
       if (mode === "new") await offerRelink(original, result.source);
       if (target.onWritten) target.onWritten(result);
     } catch (err) { toast(err.message, true); }

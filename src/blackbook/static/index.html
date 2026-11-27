@@ -81,8 +81,8 @@
     <section id="view-samples" class="view">
       <aside class="filters">
         <input id="smp-search" type="search" placeholder="Search file, folder, project, patch">
-        <label>Where
-          <select id="smp-project"><option value="">All places</option></select>
+        <label>Used by
+          <select id="smp-project"><option value="">Any project or none</option></select>
         </label>
         <label>Sort
           <select id="smp-sort">
@@ -95,6 +95,8 @@
         <label class="check"><input id="smp-unused" type="checkbox">Unused only</label>
         <label class="check"><input id="smp-factory" type="checkbox">Include factory samples</label>
         <button id="smp-reload" class="small" type="button">Reload</button>
+        <div class="label">Folders</div>
+        <div id="smp-tree" class="smp-tree"></div>
       </aside>
       <div id="smp-list" class="detail"></div>
     </section>

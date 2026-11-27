@@ -4,6 +4,8 @@ const lib = {
   items: null,
   factory: false,
   loading: false,
+  folder: "", // selected folder in the tree, "" for all
+  open: new Set(["Projects", "Samples", "UserPatches"]),
 };
 
 function fmtDuration(seconds) {
@@ -36,12 +38,9 @@ async function loadSamples(force = false) {
 function fillProjectFilter() {
   const select = document.getElementById("smp-project");
   const current = select.value;
-  const projects = [...new Set(lib.items.filter((s) => s.path.startsWith("Projects/")).map((s) => s.path.split("/")[1]))].sort();
-  select.replaceChildren(el("option", { value: "" }, "All places"),
-    el("option", { value: "@Samples" }, "Samples folder"),
-    el("option", { value: "@UserPatches" }, "User patches"),
-    lib.factory ? el("option", { value: "@Patches" }, "Factory patches") : null,
-    ...projects.map((p) => el("option", { value: p }, `Project: ${p}`)));
+  const projects = [...new Set(lib.items.flatMap((s) => s.uses.filter((u) => u.kind === "project").map((u) => u.name)))].sort();
+  select.replaceChildren(el("option", { value: "" }, "Any project or none"),
+    ...projects.map((p) => el("option", { value: p }, p)));
   select.value = [...select.options].some((o) => o.value === current) ? current : "";
 }
 
@@ -50,15 +49,50 @@ function sampleMatches(s) {
   const where = document.getElementById("smp-project").value;
   if (document.getElementById("smp-recordings").checked && !s.recording) return false;
   if (document.getElementById("smp-unused").checked && s.uses.length) return false;
-  if (where.startsWith("@") && !s.path.startsWith(where.slice(1) + "/")) return false;
-  if (where && !where.startsWith("@") && !s.path.startsWith(`Projects/${where}/`) && !s.uses.some((u) => u.kind === "project" && u.name === where)) return false;
+  if (lib.folder && s.folder !== lib.folder && !s.folder.startsWith(lib.folder + "/")) return false;
+  if (where && !s.uses.some((u) => u.kind === "project" && u.name === where)) return false;
   if (q && !s.path.toLowerCase().includes(q) && !s.uses.some((u) => u.name.toLowerCase().includes(q))) return false;
   return true;
+}
+
+// Folder tree of all folders that hold samples, with the number of samples below each
+function renderTree() {
+  const tree = document.getElementById("smp-tree");
+  const root = { name: "", path: "", count: 0, children: new Map() };
+  for (const s of lib.items) {
+    let node = root;
+    root.count += 1;
+    let path = "";
+    for (const part of s.folder.split("/")) {
+      path = path ? `${path}/${part}` : part;
+      if (!node.children.has(part)) node.children.set(part, { name: part, path, count: 0, children: new Map() });
+      node = node.children.get(part);
+      node.count += 1;
+    }
+  }
+  const row = (node, depth) => {
+    const kids = [...node.children.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    const isOpen = lib.open.has(node.path);
+    const item = el("div", {
+      class: "tree-row" + (lib.folder === node.path ? " selected" : ""),
+      style: `padding-left:${6 + depth * 14}px`,
+      title: node.path || "All samples",
+      onclick: () => { lib.folder = node.path; if (kids.length) lib.open.add(node.path); renderTree(); renderSamples(); },
+    },
+      kids.length && node.path
+        ? el("span", { class: "tree-toggle", onclick: (e) => { e.stopPropagation(); if (isOpen) lib.open.delete(node.path); else lib.open.add(node.path); renderTree(); } }, isOpen ? "▾" : "▸")
+        : el("span", { class: "tree-toggle" }, ""),
+      el("span", { class: "tree-name" }, node.path ? node.name : "All samples"),
+      el("span", { class: "tree-count" }, String(node.count)));
+    return [item, ...(isOpen || !node.path ? kids.flatMap((k) => row(k, depth + 1)) : [])];
+  };
+  fill(tree, row(root, 0));
 }
 
 function renderSamples() {
   const list = document.getElementById("smp-list");
   if (!lib.items) return;
+  renderTree();
   const sort = document.getElementById("smp-sort").value;
   const items = lib.items.filter(sampleMatches);
   const by = {
@@ -71,6 +105,7 @@ function renderSamples() {
   const usePill = (u) => el("span", { class: "use-pill " + u.kind, title: `${u.kind === "project" ? "Project" : "Patch"}: ${u.xml}` }, u.name);
   fill(list,
     el("div", { class: "smp-head" },
+      lib.folder ? el("b", {}, lib.folder + "  ") : null,
       el("span", {}, `${items.length} sample${items.length === 1 ? "" : "s"}`),
       unused ? el("span", { class: "muted" }, ` · ${unused} not used by any patch or project`) : null),
     el("table", { class: "samples-table smp-table" }, el("tbody", {}, items.slice(0, 1000).map((s) =>
