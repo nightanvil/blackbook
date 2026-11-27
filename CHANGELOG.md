@@ -17,7 +17,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 - Sequencer: the "Drag grid" for moving notes is remembered per project.
 - Sequencer: the offset of a note is shown as on the device, -47 to +47, instead of in ticks.
 - Sequencer: an LED per pad lights up in the track color when the pad plays. Click mutes the pad for listening, Ctrl+click solos it; nothing of it is saved.
-- Euclidean generator per pad in the sequencer, opened with a small ring-of-dots icon. Each pad has its own settings; opening the generator changes nothing until a value is changed or Apply is clicked. Presets for common patterns: 4/4, Offbeat, Backbeat, 8ths, 16ths, Tresillo, Cinquillo, Bossa, 7 in 16, Clear.
+- Euclidean generator per pad in the sequencer, opened with a small ring-of-dots icon.
+- Sequencer: paint notes by dragging, remove them by dragging with the right mouse button. Velocity lane under the grid. Row tools on right-click (shift, copy, paste, clear, humanize, quantize) and sequence tools in a menu (copy, paste, clear, humanize, quantize). Space plays and stops. Metronome for listening. Each pad has its own settings; opening the generator changes nothing until a value is changed or Apply is clicked. Presets for common patterns: 4/4, Offbeat, Backbeat, 8ths, 16ths, Tresillo, Cinquillo, Bossa, 7 in 16, Clear.
 - Number fields can be changed by pressing and dragging up or down, with a vertical slider next to the field. Fields with few values move slower, so they do not jump.
 - Double click on a field sets its default, a second double click brings back the previous value: sequence settings, note values, Euclid and pad parameters.
 - Project cards show tempo, references and missing samples as icons in fixed columns.

@@ -374,7 +374,7 @@ function placeEvent(ev, absTicks, steps, seq) {
 }
 
 // Muting and solo only affect listening here, per track; nothing of it is written to the card
-const EUCLID_ICON = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="5.5" stroke-dasharray="2 2"/><g fill="currentColor" stroke="none"><circle cx="8" cy="2.5" r="1.7"/><circle cx="13.2" cy="10" r="1.7"/><circle cx="3.6" cy="11.6" r="1.7"/></g></svg>';
+const EUCLID_ICON = '<svg viewBox="0 0 14 14" width="14" height="14"><circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-opacity=".45" stroke-width="1.2"/><circle cx="7" cy="2.4" r="1.7" fill="currentColor"/><circle cx="11" cy="9.3" r="1.7" fill="currentColor"/><circle cx="3" cy="9.3" r="1.7" fill="currentColor"/></svg>';
 
 function muteState() {
   const track = currentTrack();
@@ -461,6 +461,7 @@ function seqSettings(seq, editable) {
   return el("div", { class: "seq-settings" },
     playBtn,
     el("label", { title: "Tempo for playback here; the project tempo on the device is not changed" }, "BPM ", tempoIn),
+    metroButton(),
     el("label", {}, "Name ", nameIn),
     el("label", {}, "Step Len ", lenSel),
     el("label", {}, "Steps ", countIn),
@@ -494,7 +495,8 @@ function stepGrid(track, seq) {
     const euIcon = el("button", { class: "seq-eu", title: "Euclidean rhythm for this pad", onclick: (e) => { e.stopPropagation(); openEuclid(slot); } });
     euIcon.innerHTML = EUCLID_ICON;
     grid.append(el("div", { class: "seq-pad" + (pad ? "" : " empty") + (audible ? "" : " muted") + (proj.euclid && proj.euclid.chan === slot ? " euclid" : ""), style: `grid-row:${row};grid-column:1`, title: pad ? pad.filename : "No sample on this pad",
-      onclick: () => { if (pad) seqPlayer.hit(pad, 100); } },
+      onclick: () => { proj.lane = slot; if (pad) seqPlayer.hit(pad, 100); renderSequencer(); },
+      oncontextmenu: (e) => { e.preventDefault(); rowMenu(e, slot); } },
       led,
       euIcon,
       el("b", {}, String(padNumber(slot))), " ", el("span", { class: "seq-pad-name" }, label)));
@@ -502,7 +504,7 @@ function stepGrid(track, seq) {
       grid.append(el("div", {
         class: "seq-cell" + (Math.floor(s / 4) % 2 ? " odd" : ""),
         style: `grid-row:${row};grid-column:${s + 2}`,
-        onclick: () => addEvent(slot, s),
+        onpointerdown: (e) => paint(e, grid, steps),
       }));
     }
   });
@@ -519,12 +521,13 @@ function stepGrid(track, seq) {
         style: `grid-row:${r + 2};grid-column:${ev.step + 2} / span ${span};opacity:${0.35 + 0.65 * vel / 127};transform:translateX(${(offTicks / TICKS) * CELL_PITCH}px)` + (width ? `;width:${width}px` : ""),
         title: `Pad ${padNumber(ev.chan)}, step ${ev.step + 1}, velocity ${vel}, prob ${ev.prob < 100 ? ev.prob + "%" : "always"}, offset ${Math.round(offTicks / OFFSET_UNIT)}, length ${ev.lencount || ev.lentks + " ticks"}. Drag to move.`,
       });
-      node.addEventListener("pointerdown", (e) => dragEvent(e, ev, node, steps, seq));
+      node.addEventListener("pointerdown", (e) => (e.button === 2 ? paint(e, grid, steps) : dragEvent(e, ev, node, steps, seq)));
       grid.append(node);
     }
   }
   const head = el("div", { class: "seq-playhead", id: "seq-playhead", style: `grid-row:1 / span ${PAD_SLOTS.length + 1};grid-column:2`, hidden: true });
   grid.append(head);
+  grid.addEventListener("contextmenu", (e) => e.preventDefault());
   const nudgeSel = el("select", { title: "Grid for dragging notes sideways" }, NUDGE.map((n, i) => el("option", { value: i }, n.label)));
   nudgeSel.value = String(proj.nudge);
   Object.assign(nudgeSel.dataset, { default: "0", resetKey: "seq:nudge" });
@@ -536,12 +539,225 @@ function stepGrid(track, seq) {
   return el("div", {},
     el("div", { class: "seq-toolbar" },
       el("label", { title: "Grid for dragging notes sideways. It only affects dragging here, not the file or the Snap setting of the sequence" }, "Drag grid ", nudgeSel),
+      el("button", { class: "small seq-more", title: "Sequence tools: copy, paste, clear, humanize, quantize", onclick: (e) => seqMenu(e) }, "⋯"),
       el("span", { class: "muted hint-small" }, `Offset ${low / OFFSET_UNIT} to +${high / OFFSET_UNIT} as on the device (10 ticks each, a step has ${TICKS}).` + (seq && seq.snap ? " Snap off allows -48, half a step, as with notes recorded on the device." : ""))),
-    el("div", { class: "seq-grid-wrap" }, grid),
-    el("p", { class: "muted hint-small" }, "Click an empty cell to add a note, click a note to select it, click the selected note again to remove it. Drag a note sideways to move it on the chosen grid, up or down to move it to another pad. E next to a pad opens the Euclidean generator. Click a pad name to hear the pad. Playback follows step length, velocity, probability, offset and the pad's level, pitch, pan, start and length; swing and choke groups are approximated, effects are heard on the device only."));
+    el("div", { class: "seq-grid-wrap" }, grid, velocityLane(seq, steps)),
+    el("p", { class: "muted hint-small" }, "Click or drag over empty cells to add notes, drag with the right mouse button to remove them. Click a note to select it, click it again to remove it, drag it to move it. Right-click a pad name for row tools, ⋯ for sequence tools. Space plays and stops. Playback follows step length, velocity, probability, offset and the pad's level, pitch, pan, start and length; swing and choke groups are approximated, effects are heard on the device only."));
 }
 
-function addEvent(chan, step) {
+// ---------- painting, velocity lane, tools ----------
+
+// Cell under the pointer from the grid geometry, so painting works while the grid is redrawn
+function cellAt(grid, x, y, steps) {
+  const box = grid.getBoundingClientRect();
+  const first = grid.querySelector(".seq-cell").getBoundingClientRect();
+  const step = Math.floor((x - first.left) / CELL_PITCH);
+  const row = Math.floor((y - first.top) / ROW_PITCH);
+  if (x < box.left || step < 0 || step >= steps || row < 0 || row >= PAD_SLOTS.length) return null;
+  return { chan: PAD_SLOTS[row], step };
+}
+
+// Left button paints notes into empty cells, right button removes notes
+function paint(down, grid, steps) {
+  if (down.button !== 0 && down.button !== 2) return;
+  down.preventDefault();
+  down.stopPropagation();
+  const erase = down.button === 2;
+  const seq = currentSeq(true);
+  const done = new Set();
+  let changed = false;
+  const at = (e) => {
+    const cell = cellAt(document.querySelector("#proj-seq .seq-grid") || grid, e.clientX, e.clientY, steps);
+    if (!cell) return;
+    const key = `${cell.chan}:${cell.step}`;
+    if (done.has(key)) return;
+    done.add(key);
+    const here = seq.events.filter((ev) => ev.chan === cell.chan && ev.step === cell.step);
+    if (erase) {
+      if (!here.length) return;
+      seq.events = seq.events.filter((ev) => !here.includes(ev));
+      if (here.includes(proj.selected)) proj.selected = null;
+      changed = true;
+      renderSequencer();
+    } else if (!here.length) {
+      addEvent(cell.chan, cell.step, done.size > 1);
+      changed = true;
+    }
+  };
+  at(down);
+  const up = () => {
+    window.removeEventListener("pointermove", at);
+    window.removeEventListener("pointerup", up);
+    if (changed) markDirty(seq);
+  };
+  window.addEventListener("pointermove", at);
+  window.addEventListener("pointerup", up);
+}
+
+function laneChan(seq) {
+  if (proj.lane != null) return proj.lane;
+  const first = seq && seq.events.find(() => true);
+  return first ? first.chan : 8;
+}
+
+// Velocity of the notes of one pad as bars under the grid; drag to draw
+function velocityLane(seq, steps) {
+  const chan = laneChan(seq);
+  const lane = el("div", { class: "seq-lane", style: `grid-template-columns: 150px repeat(${steps}, 26px)` },
+    el("div", { class: "seq-lane-label", title: "Click a pad name or a note to show its velocity here" }, el("span", {}, "Velocity"), el("b", {}, `Pad ${padNumber(chan)}`)));
+  const bars = [];
+  for (let s = 0; s < steps; s++) {
+    const evs = seq ? seq.events.filter((e) => e.chan === chan && e.step === s) : [];
+    const bar = el("i", { style: `height:${evs.length ? ((evs[0].velocity ?? 100) / 127) * 100 : 0}%` });
+    bars.push({ bar, evs });
+    lane.append(el("div", { class: "seq-lane-cell" + (evs.length ? " has" : ""), title: evs.length ? `Step ${s + 1}: velocity ${evs[0].velocity ?? 100}` : "" }, bar));
+  }
+  lane.addEventListener("pointerdown", (down) => {
+    if (down.button !== 0 || !seq) return;
+    down.preventDefault();
+    let changed = false;
+    const at = (e) => {
+      const cells = lane.querySelectorAll(".seq-lane-cell");
+      const box = cells[0].getBoundingClientRect();
+      const s = Math.floor((e.clientX - box.left) / CELL_PITCH);
+      if (s < 0 || s >= steps || !bars[s].evs.length) return;
+      const cellBox = cells[s].getBoundingClientRect();
+      const v = Math.max(1, Math.min(127, Math.round(((cellBox.bottom - e.clientY) / cellBox.height) * 127)));
+      for (const ev of bars[s].evs) ev.velocity = v;
+      bars[s].bar.style.height = `${(v / 127) * 100}%`;
+      changed = true;
+    };
+    at(down);
+    const up = () => {
+      window.removeEventListener("pointermove", at);
+      window.removeEventListener("pointerup", up);
+      if (changed) { markDirty(seq); renderSequencer(); }
+    };
+    window.addEventListener("pointermove", at);
+    window.addEventListener("pointerup", up);
+  });
+  return lane;
+}
+
+// Small popup menu at the pointer
+function showMenu(ev, items) {
+  document.querySelectorAll(".seq-menu").forEach((m) => m.remove());
+  const menu = el("div", { class: "seq-menu" }, items.map((item) => item === "-"
+    ? el("hr")
+    : el("button", { disabled: item.disabled || false, onclick: () => { close(); item.run(); } }, item.label)));
+  document.body.append(menu);
+  const x = Math.min(ev.clientX, window.innerWidth - menu.offsetWidth - 8);
+  const y = Math.min(ev.clientY, window.innerHeight - menu.offsetHeight - 8);
+  Object.assign(menu.style, { left: `${x}px`, top: `${y}px` });
+  const outside = (e) => { if (!menu.contains(e.target)) close(); };
+  const key = (e) => { if (e.key === "Escape") close(); };
+  function close() {
+    menu.remove();
+    document.removeEventListener("pointerdown", outside, true);
+    document.removeEventListener("keydown", key, true);
+  }
+  setTimeout(() => {
+    document.addEventListener("pointerdown", outside, true);
+    document.addEventListener("keydown", key, true);
+  });
+}
+
+function editEvents(fn) {
+  const seq = currentSeq(true);
+  fn(seq, gridSteps(seq));
+  proj.selected = null;
+  markDirty(seq);
+  renderSequencer();
+}
+
+function humanize(events, seq, steps) {
+  const [low, high] = offsetLimits(seq);
+  for (const e of events) {
+    e.velocity = Math.max(1, Math.min(127, (e.velocity ?? 100) + Math.round((Math.random() - 0.5) * 24)));
+    const off = e.strtks - e.step * TICKS + Math.round((Math.random() - 0.5) * 10) * OFFSET_UNIT;
+    placeEvent(e, e.step * TICKS + Math.max(low, Math.min(high, off)), steps, seq);
+  }
+}
+
+function quantize(events) {
+  for (const e of events) { e.strtks = e.step * TICKS; e.offset = 0; }
+}
+
+function shiftRow(chan, by) {
+  editEvents((seq, steps) => {
+    for (const e of seq.events.filter((x) => x.chan === chan)) {
+      const off = e.strtks - e.step * TICKS;
+      e.step = (e.step + by + steps) % steps;
+      e.strtks = Math.max(0, e.step * TICKS + off);
+    }
+  });
+}
+
+function rowMenu(ev, chan) {
+  const seq = currentSeq(true);
+  const row = () => seq.events.filter((e) => e.chan === chan);
+  showMenu(ev, [
+    { label: `Pad ${padNumber(chan)}: shift left`, run: () => shiftRow(chan, -1) },
+    { label: "Shift right", run: () => shiftRow(chan, 1) },
+    "-",
+    { label: "Copy row", run: () => { proj.rowClip = row().map((e) => ({ ...e, extra: { ...e.extra } })); toast("Row copied"); } },
+    { label: "Paste row", disabled: !proj.rowClip, run: () => editEvents((s) => {
+      s.events = s.events.filter((e) => e.chan !== chan).concat(proj.rowClip.map((e) => ({ ...e, chan, extra: { ...e.extra } })));
+    }) },
+    { label: "Clear row", run: () => editEvents((s) => { s.events = s.events.filter((e) => e.chan !== chan); }) },
+    "-",
+    { label: "Humanize row", run: () => editEvents((s, steps) => humanize(s.events.filter((e) => e.chan === chan), s, steps)) },
+    { label: "Quantize row", run: () => editEvents((s) => quantize(s.events.filter((e) => e.chan === chan))) },
+  ]);
+}
+
+function seqMenu(ev) {
+  showMenu(ev, [
+    { label: "Copy sequence", run: () => {
+      const seq = currentSeq(true);
+      proj.seqClip = { steplen: seq.steplen, stepcount: seq.stepcount, quant: seq.quant, snap: seq.snap, events: seq.events.map((e) => ({ ...e, extra: { ...e.extra } })) };
+      toast("Sequence copied");
+    } },
+    { label: "Paste sequence", disabled: !proj.seqClip, run: () => editEvents((s) => {
+      Object.assign(s, { steplen: proj.seqClip.steplen, stepcount: proj.seqClip.stepcount, quant: proj.seqClip.quant, snap: proj.seqClip.snap });
+      s.events = proj.seqClip.events.map((e) => ({ ...e, extra: { ...e.extra } }));
+    }) },
+    { label: "Clear sequence", run: () => editEvents((s) => { s.events = []; }) },
+    "-",
+    { label: "Humanize: vary velocity and timing a little", run: () => editEvents((s, steps) => humanize(s.events, s, steps)) },
+    { label: "Quantize: offsets to 0", run: () => editEvents((s) => quantize(s.events)) },
+  ]);
+}
+
+// Metronome for listening here, remembered in this browser
+function seqPrefs() {
+  try { return JSON.parse(localStorage.getItem("blackbook-seq") || "{}"); } catch (_) { return {}; }
+}
+
+function metroButton() {
+  const on = !!seqPrefs().metronome;
+  const btn = el("button", { class: "small seq-metro" + (on ? " active" : ""), title: on ? "Metronome on (listening here only)" : "Metronome off" });
+  btn.innerHTML = META_ICONS.metronome;
+  btn.addEventListener("click", () => {
+    try { localStorage.setItem("blackbook-seq", JSON.stringify({ ...seqPrefs(), metronome: !on })); } catch (_) { /* per page only */ }
+    renderSequencer();
+  });
+  return btn;
+}
+
+// Space plays and stops the sequencer when the Sequences tab is open
+document.addEventListener("keydown", (ev) => {
+  if (ev.key !== " " || ev.repeat || document.querySelector("dialog[open]")) return;
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(ev.target.tagName)) return;
+  if (!document.getElementById("view-projects").classList.contains("active") || proj.tab !== "seq" || !proj.data) return;
+  const track = currentTrack();
+  if (!track || track.type !== "samtrack") return;
+  ev.preventDefault();
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  seqPlayer.toggle();
+});
+
+function addEvent(chan, step, quiet = false) {
   const seq = currentSeq(true);
   const last = proj.selected;
   const ev = {
@@ -550,9 +766,10 @@ function addEvent(chan, step) {
   };
   seq.events.push(ev);
   proj.selected = ev;
+  proj.lane = chan;
   markDirty(seq);
   const pad = trackPads(currentTrack()).find((p) => p.slot === chan);
-  if (pad && !seqPlayer.playing) seqPlayer.hit(pad, ev.velocity);
+  if (pad && !seqPlayer.playing && !quiet) seqPlayer.hit(pad, ev.velocity);
   renderSequencer();
 }
 
@@ -714,6 +931,7 @@ function clickEvent(ev) {
     markDirty(seq);
   } else {
     proj.selected = ev;
+    proj.lane = ev.chan;
   }
   renderSequencer();
 }
@@ -811,15 +1029,27 @@ const seqPlayer = {
     return buffer;
   },
 
+  click(when, accent) {
+    const ctx = audioOut.context();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = accent ? 1600 : 1100;
+    gain.gain.setValueAtTime(0.25, when);
+    gain.gain.exponentialRampToValueAtTime(0.001, when + 0.04);
+    osc.connect(gain).connect(audioOut.master);
+    osc.start(when);
+    osc.stop(when + 0.05);
+  },
+
   // The LED of the pad lights up when its note sounds
   flash(chan, when) {
     const delay = Math.max(0, (when - audioOut.context().currentTime) * 1000);
     setTimeout(() => {
       const led = document.querySelector(`.seq-led[data-chan="${chan}"]`);
       if (!led) return;
-      led.classList.remove("on");
-      void led.offsetWidth; // restart the fade
       led.classList.add("on");
+      clearTimeout(led.offTimer);
+      led.offTimer = setTimeout(() => led.classList.remove("on"), 90);
     }, delay);
   },
 
@@ -908,6 +1138,13 @@ const seqPlayer = {
           const buffer = this.buffers.get(`${pad.source}|${pad.start}|${pad.length}|${pad.params.reverse ? 1 : 0}`);
           if (buffer) this.voice(pad, buffer, e.velocity ?? 100, Math.max(t, ctx.currentTime));
           else this.buffer(pad).catch(() => {}); // a pad changed while playing is loaded for the next pass
+        }
+        if (seqPrefs().metronome) {
+          const beat = 60 / proj.tempo;
+          for (let k = Math.ceil((this.until - this.loopStart) / beat - 1e-9); this.loopStart + k * beat < windowEnd; k++) {
+            if (k < 0) continue;
+            this.click(this.loopStart + k * beat, k % 4 === 0);
+          }
         }
         this.until = windowEnd;
       }
