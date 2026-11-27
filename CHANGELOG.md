@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), ver
 
 ## [Unreleased]
 
+### Added
+
+- Projects: Change patch on a track card loads another patch into the track, as on the device; + Add patch fills an empty track slot. Patch chooser with search, type filter and preview. Sequences (same track type), MIDI channels and routing of the track stay.
+
 ## [0.3.0] - 2026-11-27
 
 ### Added
