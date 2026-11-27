@@ -16,11 +16,11 @@ blackbook is free and stays free. If it helps you, you can buy me a coffee on [K
 
 | Status | What |
 |---|---|
-| In progress | MIDI CC numbers shown on the controls |
-| Next | Piano roll for multisample, slicer and shredder sequences, audio editor markers and loop points |
-| Then | Slicer, loop, shredder, multisample loop points |
+| In progress | Change the patch of a project track, as Change Patch on the device |
+| Next | MIDI CC numbers shown on the controls, piano roll for multisample, slicer and shredder sequences |
+| Then | Slicer, loop, shredder, multisample loop points, audio editor markers and loop points |
 | Later | External editor (Reaper), project tools (pack, clean, rename), sample organization, card and firmware tools |
-| Done | Step sequencer for one-shot tracks in projects with playback, MIDI channels per track, patch list, tags, one-shot pad editor with all device settings, waveform and audio editor (pads, patches, projects, overwrite with reference update), multisample basics, backup, installer, updates, eject |
+| Done | Projects view like the device, step sequencer for one-shot tracks with playback, Euclid and humanize, pads and MIDI channels per track, sample rename with reference update, patch list, tags, one-shot pad editor with all device settings, waveform and audio editor (pads, patches, projects, overwrite with reference update), multisample basics, backup, installer, updates, eject |
 
 ## What it does
 
