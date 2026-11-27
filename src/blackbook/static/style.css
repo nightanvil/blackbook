@@ -215,7 +215,7 @@ td input { width: 60px; padding: 3px 6px; }
 
 /* Build */
 .browser {
-  width: 340px;
+  width: 440px;
   border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
@@ -573,7 +573,7 @@ input[type="number"]:focus { cursor: text; }
 .proj-tabs button.active { color: var(--text); border-bottom-color: var(--track, var(--accent)); }
 .proj-tabs .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); margin-left: 6px; vertical-align: middle; }
 .proj-pads { display: flex; gap: 12px; align-items: stretch; min-height: 480px; }
-.proj-pads aside.browser { width: 280px; flex-shrink: 0; border: 1px solid var(--line); border-radius: 6px; max-height: 640px; }
+.proj-pads aside.browser { width: 420px; flex-shrink: 0; border: 1px solid var(--line); border-radius: 6px; max-height: 640px; }
 .proj-pads-main { flex: 1; min-width: 0; }
 
 /* Very wide windows: the whole UI keeps a readable width and sits in the middle */
@@ -611,3 +611,12 @@ input[type="number"]:focus { cursor: text; }
 .seq-metro-vol { width: 70px; }
 .seq-metro-vol.off { opacity: 0.4; }
 .proj-title .iconbtn-text { padding: 2px 10px; font-size: 17px; line-height: 22px; }
+
+/* Help: controls with their icon or key next to a short explanation */
+.help-keys { border-collapse: collapse; width: 100%; margin: 6px 0 12px; font-size: 13px; }
+.help-keys td { padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.help-keys td:first-child { white-space: nowrap; width: 1%; color: var(--text); }
+.help-keys td:last-child { color: var(--muted); }
+.hk-led { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #00c0f0; box-shadow: 0 0 6px #00c0f0; vertical-align: middle; }
+.hk-icon { display: inline-flex; color: var(--accent); vertical-align: middle; }
+.helpbody kbd { font: 12px/1.4 ui-monospace, monospace; padding: 1px 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--panel-2); }

@@ -84,10 +84,18 @@ function markDirty(seq) {
 
 const HISTORY_MAX = 100;
 
+// Pads count only once they differ from the project, so opening the Pads tab is no change
 function projState() {
   return JSON.stringify(proj.data.tracks.map((t) => ({
     sequences: t.sequences, midiinchan: t.midiinchan, midioutchan: t.midioutchan, midiChanged: !!t.midiChanged,
+    pads: padsChanged(t) ? t.padState : null,
   })));
+}
+
+// Pad edits come from the builder's pad editor; slider moves are collected into one step
+function schedulePadHistory() {
+  clearTimeout(proj.padTimer);
+  proj.padTimer = setTimeout(() => { historyPush(); renderProjectHead(); }, 350);
 }
 
 function historyReset() {
@@ -113,12 +121,23 @@ function historyGo(delta) {
   if (pos < 0 || pos >= proj.history.length) return;
   proj.histPos = pos;
   const states = JSON.parse(proj.history[pos]);
-  proj.data.tracks.forEach((t, i) => Object.assign(t, states[i]));
+  proj.data.tracks.forEach((t, i) => {
+    const { pads, ...rest } = states[i];
+    Object.assign(t, rest);
+    if (pads) t.padState = pads;
+    else if (t.padState) t.padState = Object.fromEntries(t.pads.map((p) => [p.slot, structuredClone(p)]));
+  });
+  if (proj.padsOpen) {
+    state.pads = currentTrack().padState || state.pads;
+    if (!state.pads[state.selectedPad]) state.selectedPad = PAD_SLOTS.find((x) => state.pads[x]) ?? 8;
+    builderRenderPads();
+  }
   Object.assign(proj, { selected: null, euclid: null, human: null });
   proj.dirty = proj.history[pos] !== proj.initialState;
   renderProjectHead();
   renderTracks();
   if (proj.tab === "seq") renderSequencer();
+  renderProjectTabs();
   toast(delta < 0 ? "Undo" : "Redo");
 }
 
@@ -126,7 +145,7 @@ document.addEventListener("keydown", (ev) => {
   if (!(ev.ctrlKey || ev.metaKey) || ev.altKey || !proj.data) return;
   const key = ev.key.toLowerCase();
   if (key !== "z" && key !== "y") return;
-  if (!document.getElementById("view-projects").classList.contains("active") || proj.tab === "pads") return;
+  if (!document.getElementById("view-projects").classList.contains("active")) return;
   if (["INPUT", "TEXTAREA", "SELECT"].includes(ev.target.tagName) || document.querySelector("dialog[open]")) return;
   ev.preventDefault();
   historyGo(key === "y" || ev.shiftKey ? 1 : -1);
@@ -203,7 +222,12 @@ function closePads() {
 const builderRenderPads = renderPads;
 renderPads = function renderPadsAndProject(...args) {
   builderRenderPads(...args);
-  if (proj.padsOpen) renderProjectHead();
+  if (proj.padsOpen) { renderProjectHead(); schedulePadHistory(); }
+};
+const builderRefreshPadGraphics = refreshPadGraphics;
+refreshPadGraphics = function refreshPadGraphicsAndProject(...args) {
+  builderRefreshPadGraphics(...args);
+  if (proj.padsOpen) schedulePadHistory();
 };
 
 document.querySelectorAll("nav button").forEach((button) => button.addEventListener("click", () => {

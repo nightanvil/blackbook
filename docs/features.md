@@ -189,7 +189,7 @@ Each pad row starts with an LED in the track color that lights up when the pad s
 
 ### Undo
 
-Every change to sequences and MIDI channels of a project can be undone and redone (↶ and ↷ next to Discard, Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y), up to 100 steps. A paint stroke counts as one step. Undoing back to the loaded state clears "unsaved changes". Saving or discarding starts a new history. Changes in the Pads tab are not part of it; Discard resets them.
+Every change to sequences and MIDI channels of a project can be undone and redone (↶ and ↷ next to Discard, Ctrl+Z, Ctrl+Shift+Z or Ctrl+Y), up to 100 steps. A paint stroke counts as one step. Undoing back to the loaded state clears "unsaved changes". Saving or discarding starts a new history. Changes in the Pads tab are part of it too; slider moves within a third of a second count as one step.
 
 ### Number fields
 
